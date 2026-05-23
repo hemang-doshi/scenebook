@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f0e8;
+  --foreground: #18221d;
+  --muted: #ede4d7;
+  --muted-foreground: #647267;
+  --card: rgba(255, 251, 247, 0.84);
+  --card-strong: rgba(255, 251, 247, 0.96);
+  --border: rgba(77, 91, 81, 0.14);
+  --accent: #1f6b55;
+  --accent-foreground: #f7f5ef;
+  --warm: #c36f3c;
+  --danger: #9b3d3d;
+  --shadow: 0 20px 60px rgba(25, 34, 29, 0.11);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(31, 107, 85, 0.12), transparent 32%),
+    radial-gradient(circle at 85% 12%, rgba(195, 111, 60, 0.18), transparent 24%),
+    linear-gradient(180deg, #f6f1e8 0%, #efe7d8 100%);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.studio-noise {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.25)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231d3528' fill-opacity='0.04'%3E%3Cpath d='M28 21h2v2h-2zm39 17h1v1h-1zm18-16h2v2h-2zM14 98h2v2h-2zm64 10h1v1h-1zm31-48h2v2h-2zm-78 59h1v1h-1z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.glass-card {
+  background: linear-gradient(180deg, var(--card-strong) 0%, var(--card) 100%);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.section-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.editorial-heading {
+  font-family: var(--font-heading), serif;
+  letter-spacing: -0.03em;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(31, 107, 85, 0.18);
+  border-radius: 999px;
+}
