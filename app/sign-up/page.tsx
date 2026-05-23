@@ -19,11 +19,9 @@ export default function SignUpPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <Panel className="w-full max-w-xl rounded-[34px] p-8 lg:p-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Create account
-        </p>
-        <h1 className="editorial-heading mt-4 text-4xl">Bring your studio online</h1>
+      <Panel className="w-full max-w-xl p-8 lg:p-10">
+        <p className="cmd-label">Create account</p>
+        <h1 className="cmd-title mt-4 text-4xl font-semibold">Bring your studio online</h1>
         <div className="mt-8 space-y-4">
           <label className="block text-sm font-medium text-foreground">
             Email
@@ -77,8 +75,8 @@ export default function SignUpPage() {
             Create account
           </Button>
         </div>
-        <p className="mt-6 text-sm text-muted-foreground">
-          Already set up? <Link className="text-accent" href="/sign-in">Sign in</Link>
+        <p className="mt-6 text-sm text-muted">
+          Already set up? <Link className="text-foreground" href="/sign-in">Sign in</Link>
         </p>
       </Panel>
     </div>

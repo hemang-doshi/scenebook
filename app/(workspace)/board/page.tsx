@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import { PageHeading } from "@/components/page-heading";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { Select } from "@/components/ui/select";
@@ -55,11 +56,11 @@ export default function BoardPage() {
     <div>
       <PageHeading
         eyebrow="Board"
-        title="Production board"
-        description="A lightweight creator-native board that shows the content lifecycle without turning into a corporate project manager."
+        title="Production Board"
+        description="A dense status surface for the full content lifecycle: planning, shooting, editing, publishing, and reflection."
       />
 
-      <Panel className="mb-5 flex flex-wrap gap-3">
+      <Panel className="mb-6 flex flex-wrap items-center gap-3">
         <Select value={platformFilter} onChange={(event) => setPlatformFilter(event.target.value)}>
           <option value="all">All platforms</option>
           <option value="instagram">Instagram</option>
@@ -68,6 +69,7 @@ export default function BoardPage() {
           <option value="linkedin">LinkedIn</option>
           <option value="x">X</option>
         </Select>
+
         <Select value={formatFilter} onChange={(event) => setFormatFilter(event.target.value)}>
           <option value="all">All formats</option>
           <option value="reel">Reel</option>
@@ -77,33 +79,37 @@ export default function BoardPage() {
           <option value="post">Post</option>
           <option value="vlog">Vlog</option>
         </Select>
+
         <Link href="/inbox">
           <Button>Capture another idea</Button>
         </Link>
       </Panel>
 
-      <div className="grid gap-4 overflow-x-auto lg:grid-cols-4 2xl:grid-cols-8">
+      <div className="grid gap-4 overflow-x-auto xl:grid-cols-4 2xl:grid-cols-8">
         {boardStatuses.map((status) => {
           const statusCards = cards.filter((card) => card.status === status);
 
           return (
-            <Panel key={status} className="min-h-[320px] min-w-[250px]">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {statusLabels[status]}
-              </p>
+            <div key={status} className="min-w-[270px] rounded-xl border border-border bg-[var(--surface)] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="cmd-label">{statusLabels[status]}</p>
+                <Badge>{statusCards.length}</Badge>
+              </div>
+
               <div className="mt-4 space-y-4">
                 {statusCards.map((card) => (
                   <div
                     key={card.id}
-                    className="rounded-[24px] border border-border bg-white/70 p-4"
+                    className="rounded-xl border border-border bg-black/20 p-4"
                   >
-                    <p className="text-sm font-semibold">{card.title}</p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    <p className="text-sm font-semibold text-foreground">{card.title}</p>
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
                       {card.platform} · {card.format}
                     </p>
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      {card.readiness.label} ({card.readiness.score}%)
+                    <p className="mt-3 text-sm text-muted">
+                      {card.readiness.label} · {card.readiness.score}%
                     </p>
+
                     <Select
                       className="mt-4"
                       data-testid={`card-status-select-${card.id}`}
@@ -124,21 +130,31 @@ export default function BoardPage() {
                         </option>
                       ))}
                     </Select>
-                    <div className="mt-4 flex items-center gap-3">
-                      <Link href={`/cards/${card.id}`}>Card detail</Link>
-                      {isPending ? (
-                        <span className="text-xs text-muted-foreground">Saving...</span>
-                      ) : null}
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link href={`/cards/${card.id}`}>
+                        <Button variant="secondary">Content card</Button>
+                      </Link>
+                      <Link href={`/studio/${card.id}`}>
+                        <Button variant="ghost">Studio</Button>
+                      </Link>
                     </div>
+
+                    {isPending ? (
+                      <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+                        Saving
+                      </p>
+                    ) : null}
                   </div>
                 ))}
+
                 {statusCards.length === 0 ? (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    No cards here yet.
-                  </p>
+                  <div className="rounded-xl border border-dashed border-border p-4">
+                    <p className="text-sm leading-6 text-muted">No cards here yet.</p>
+                  </div>
                 ) : null}
               </div>
-            </Panel>
+            </div>
           );
         })}
       </div>

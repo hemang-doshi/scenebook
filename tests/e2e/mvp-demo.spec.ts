@@ -10,11 +10,9 @@ test("creator can move from idea capture to a learning loop in sample mode", asy
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Enter sample studio" }).click();
 
-  await expect(
-    page.getByRole("heading", { name: "Your creative system" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cinematic OS" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("complementary").getByRole("link", { name: "Inbox" }).click();
   await page.getByLabel("Idea title").fill(inboxTitle);
   await page.getByLabel("Notes").fill(
     "Focus on lighting and cable cleanup as the hero detail.",
@@ -54,10 +52,16 @@ test("creator can move from idea capture to a learning loop in sample mode", asy
   await page.getByLabel("Asset title").fill("Lighting reference");
   await page.getByLabel("Asset URL").fill("https://example.com/lighting-reference");
   await page.getByRole("button", { name: "Attach asset" }).click();
+  await page.getByRole("link", { name: "Open studio editor" }).click();
+  await expect(page.getByText("Project Media")).toBeVisible();
+  await page.getByRole("button", { name: "Back to card" }).click();
 
-  await page.getByRole("link", { name: "Board", exact: true }).click();
+  await page
+    .getByRole("complementary")
+    .getByRole("link", { name: "Board", exact: true })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Production board" }),
+    page.getByRole("heading", { name: "Production Board" }),
   ).toBeVisible();
   await page.locator(`[data-testid="card-status-select-${cardId}"]`).selectOption("posted");
 
