@@ -6,5 +6,5 @@ export function Panel({
   className,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("glass-card rounded-[28px] p-5", className)} {...props} />;
+  return <div className={cn("cmd-panel rounded-xl p-5", className)} {...props} />;
 }

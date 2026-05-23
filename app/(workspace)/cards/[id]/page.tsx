@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useParams } from "next/navigation";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 import { PageHeading } from "@/components/page-heading";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { Panel } from "@/components/ui/panel";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCardDetail } from "@/components/workspace/hooks";
+import { statusLabels } from "@/lib/domain/content";
 import { fetchJson } from "@/lib/fetcher";
 import type { CardDetail } from "@/lib/data/repository";
 
@@ -80,25 +82,33 @@ export default function CardDetailPage() {
   return (
     <div>
       <PageHeading
-        eyebrow="Card detail"
+        eyebrow="Content Card"
         title={card.title}
-        description="The production room for one content idea: script, shoot prep, assets, analytics, and next-step learning."
+        description="Script, shoot prep, assets, and analytics live together here before the card moves into the full studio editor."
       />
 
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Badge>{card.status.replaceAll("_", " ")}</Badge>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Badge>{statusLabels[card.status]}</Badge>
         <Badge>{card.readiness.label}</Badge>
-        <Link href="/board">
-          <Button variant="secondary">Return to production board</Button>
-        </Link>
+        <Badge>{card.platform}</Badge>
+        <Badge>{card.format}</Badge>
       </div>
 
-      <div className="section-grid xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="cmd-grid xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-5">
           <Panel>
-            <h2 className="editorial-heading text-3xl">Script lab</h2>
-            <div className="mt-5 grid gap-4">
-              <label className="text-sm font-medium">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="cmd-label">Script Lab</p>
+                <h2 className="cmd-title mt-3 text-3xl font-semibold">Narrative structure</h2>
+              </div>
+              <Link href={`/studio/${card.id}`}>
+                <Button variant="secondary">Open studio editor</Button>
+              </Link>
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              <label className="text-sm font-medium text-foreground">
                 Hook
                 <Textarea
                   aria-label="Hook"
@@ -109,17 +119,19 @@ export default function CardDetailPage() {
                   }
                 />
               </label>
-              <label className="text-sm font-medium">
+
+              <label className="text-sm font-medium text-foreground">
                 Script
                 <Textarea
                   aria-label="Script"
-                  className="mt-2 min-h-40"
+                  className="mt-2 min-h-48"
                   value={card.scriptLab.script}
                   onChange={(event) =>
                     setCard(syncLocalCard(card, { scriptLab: { script: event.target.value } }))
                   }
                 />
               </label>
+
               <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={() =>
@@ -149,12 +161,14 @@ export default function CardDetailPage() {
           </Panel>
 
           <Panel>
-            <h2 className="editorial-heading text-3xl">Shoot pack</h2>
-            <div className="mt-5 space-y-4">
+            <p className="cmd-label">Shoot Pack</p>
+            <h2 className="cmd-title mt-3 text-3xl font-semibold">Execution checklist</h2>
+
+            <div className="mt-6 space-y-4">
               {card.shootPack.aRoll.map((item) => (
                 <label
                   key={item.id}
-                  className="flex items-center gap-3 rounded-[20px] border border-border bg-white/60 px-4 py-3 text-sm"
+                  className="flex items-center gap-3 rounded-xl border border-border bg-black/20 px-4 py-3 text-sm text-foreground"
                 >
                   <input
                     aria-label={`Checklist ${item.label}`}
@@ -177,11 +191,13 @@ export default function CardDetailPage() {
                   <span>{item.label}</span>
                 </label>
               ))}
+
               <Button variant="secondary" onClick={() => setNewARollItem(" ")}>
                 Add A-roll item
               </Button>
+
               {newARollItem !== "" ? (
-                <div className="rounded-[22px] border border-border bg-white/65 p-4">
+                <div className="rounded-xl border border-border bg-black/20 p-4">
                   <Input
                     aria-label="New A-roll item"
                     value={newARollItem}
@@ -215,6 +231,7 @@ export default function CardDetailPage() {
                   </div>
                 </div>
               ) : null}
+
               <Button
                 onClick={() =>
                   startTransition(async () => {
@@ -229,9 +246,11 @@ export default function CardDetailPage() {
           </Panel>
 
           <Panel>
-            <h2 className="editorial-heading text-3xl">Analytics journal</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="text-sm font-medium">
+            <p className="cmd-label">Analytics Journal</p>
+            <h2 className="cmd-title mt-3 text-3xl font-semibold">Post-publish learning</h2>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <label className="text-sm font-medium text-foreground">
                 Views
                 <Input
                   aria-label="Views"
@@ -247,7 +266,8 @@ export default function CardDetailPage() {
                   }
                 />
               </label>
-              <label className="text-sm font-medium">
+
+              <label className="text-sm font-medium text-foreground">
                 Likes
                 <Input
                   aria-label="Likes"
@@ -263,7 +283,8 @@ export default function CardDetailPage() {
                   }
                 />
               </label>
-              <label className="text-sm font-medium md:col-span-2">
+
+              <label className="text-sm font-medium text-foreground md:col-span-2">
                 Decision
                 <Select
                   aria-label="Decision"
@@ -284,7 +305,8 @@ export default function CardDetailPage() {
                   <option value="retire">Retire</option>
                 </Select>
               </label>
-              <label className="text-sm font-medium md:col-span-2">
+
+              <label className="text-sm font-medium text-foreground md:col-span-2">
                 Follow-up idea
                 <Textarea
                   aria-label="Follow-up idea"
@@ -299,6 +321,7 @@ export default function CardDetailPage() {
                   }
                 />
               </label>
+
               <div className="md:col-span-2">
                 <Button
                   disabled={!canSaveAnalytics}
@@ -320,29 +343,43 @@ export default function CardDetailPage() {
 
         <div className="space-y-5">
           <Panel>
-            <h2 className="editorial-heading text-3xl">AI suggestions</h2>
-            <div className="mt-5 space-y-3">
+            <p className="cmd-label">AI Suggestions</p>
+            <div className="mt-4 space-y-3">
               {card.aiSuggestions.hooks.map((suggestion) => (
                 <div
                   key={suggestion}
-                  className="rounded-[20px] border border-border bg-white/60 p-4 text-sm leading-6"
+                  className="rounded-xl border border-border bg-black/20 p-4 text-sm leading-6 text-foreground"
                 >
                   {suggestion}
                 </div>
               ))}
+
               {card.aiSuggestions.hooks.length === 0 ? (
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Generate hooks, captions, or follow-up ideas without overwriting the
-                  creator draft.
-                </p>
+                <div className="rounded-xl border border-dashed border-border p-4">
+                  <p className="text-sm leading-6 text-muted">
+                    Generate hooks, captions, or next angles without overwriting the working draft.
+                  </p>
+                </div>
               ) : null}
             </div>
           </Panel>
 
           <Panel>
-            <h2 className="editorial-heading text-3xl">Asset library</h2>
-            <div className="mt-5 space-y-4">
-              <label className="text-sm font-medium">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="cmd-label">Asset Library</p>
+                <h2 className="cmd-title mt-3 text-3xl font-semibold">References and media</h2>
+              </div>
+              <Link href={`/studio/${card.id}`}>
+                <Button variant="ghost">
+                  Launch editor
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <label className="text-sm font-medium text-foreground">
                 Asset title
                 <Input
                   aria-label="Asset title"
@@ -351,7 +388,8 @@ export default function CardDetailPage() {
                   onChange={(event) => setAssetTitle(event.target.value)}
                 />
               </label>
-              <label className="text-sm font-medium">
+
+              <label className="text-sm font-medium text-foreground">
                 Asset URL
                 <Input
                   aria-label="Asset URL"
@@ -360,6 +398,7 @@ export default function CardDetailPage() {
                   onChange={(event) => setAssetUrl(event.target.value)}
                 />
               </label>
+
               <Button
                 onClick={() =>
                   startTransition(async () => {
@@ -379,17 +418,37 @@ export default function CardDetailPage() {
               >
                 Attach asset
               </Button>
+
               <div className="space-y-3">
                 {card.assets.map((asset) => (
                   <div
                     key={asset.id}
-                    className="rounded-[20px] border border-border bg-white/60 p-4"
+                    className="rounded-xl border border-border bg-black/20 p-4"
                   >
-                    <p className="text-sm font-semibold">{asset.title}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">{asset.url}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-foreground">{asset.title}</p>
+                      <Badge>{asset.type}</Badge>
+                    </div>
+                    <p className="mt-2 break-all text-sm text-muted">{asset.url}</p>
                   </div>
                 ))}
               </div>
+            </div>
+          </Panel>
+
+          <Panel className="cmd-glow">
+            <p className="cmd-label">Readiness</p>
+            <p className="mt-3 text-4xl font-semibold text-foreground">
+              {card.readiness.score}%
+            </p>
+            <p className="mt-2 text-sm text-muted">{card.readiness.label}</p>
+            <div className="mt-4 space-y-2">
+              {card.readiness.missing.map((item) => (
+                <div key={item} className="flex items-start gap-2 text-sm text-muted">
+                  <Sparkles className="mt-0.5 h-4 w-4 text-accent" />
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
           </Panel>
         </div>

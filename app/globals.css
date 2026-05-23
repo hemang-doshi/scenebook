@@ -1,18 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f0e8;
-  --foreground: #18221d;
-  --muted: #ede4d7;
-  --muted-foreground: #647267;
-  --card: rgba(255, 251, 247, 0.84);
-  --card-strong: rgba(255, 251, 247, 0.96);
-  --border: rgba(77, 91, 81, 0.14);
-  --accent: #1f6b55;
-  --accent-foreground: #f7f5ef;
-  --warm: #c36f3c;
-  --danger: #9b3d3d;
-  --shadow: 0 20px 60px rgba(25, 34, 29, 0.11);
+  --background: #0a0a0b;
+  --foreground: #fafaf9;
+  --surface: rgba(19, 19, 20, 0.94);
+  --surface-soft: rgba(23, 23, 25, 0.72);
+  --surface-strong: #121214;
+  --surface-muted: #1c1b1c;
+  --surface-contrast: #201f20;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --muted: #a1a1aa;
+  --muted-foreground: #71717a;
+  --accent: #d4ff33;
+  --accent-foreground: #171e00;
+  --accent-secondary: #00f0ff;
+  --danger: #ff6b6b;
+  --success: #93f974;
+  --shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
 }
 
 @theme inline {
@@ -20,12 +25,12 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-card: var(--card);
+  --color-card: var(--surface);
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-body);
-  --font-heading: var(--font-heading);
+  --font-mono: var(--font-mono);
 }
 
 * {
@@ -37,10 +42,7 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(31, 107, 85, 0.12), transparent 32%),
-    radial-gradient(circle at 85% 12%, rgba(195, 111, 60, 0.18), transparent 24%),
-    linear-gradient(180deg, #f6f1e8 0%, #efe7d8 100%);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
 }
@@ -57,39 +59,78 @@ textarea {
   font: inherit;
 }
 
-.studio-noise {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.25)),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231d3528' fill-opacity='0.04'%3E%3Cpath d='M28 21h2v2h-2zm39 17h1v1h-1zm18-16h2v2h-2zM14 98h2v2h-2zm64 10h1v1h-1zm31-48h2v2h-2zm-78 59h1v1h-1z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+.cmd-radial {
+  background:
+    radial-gradient(circle at 16% 20%, rgba(212, 255, 51, 0.08), transparent 26%),
+    radial-gradient(circle at 78% 8%, rgba(0, 240, 255, 0.08), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.03), transparent 30%);
 }
 
-.glass-card {
-  background: linear-gradient(180deg, var(--card-strong) 0%, var(--card) 100%);
+.cmd-noise {
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+
+.cmd-panel {
   border: 1px solid var(--border);
+  background: var(--surface);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
 }
 
-.section-grid {
+.cmd-panel-soft {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  backdrop-filter: blur(16px);
+}
+
+.cmd-card {
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+}
+
+.cmd-grid {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
-.editorial-heading {
-  font-family: var(--font-heading), serif;
+.cmd-label {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cmd-title {
   letter-spacing: -0.03em;
+}
+
+.cmd-divider {
+  border-color: var(--border);
+}
+
+.cmd-glow {
+  box-shadow: 0 0 0 1px rgba(212, 255, 51, 0.08), 0 0 22px rgba(212, 255, 51, 0.08);
 }
 
 .scrollbar-thin {
   scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(31, 107, 85, 0.18);
+  background: var(--border-strong);
   border-radius: 999px;
+}
+
+::selection {
+  background: rgba(212, 255, 51, 0.9);
+  color: #101102;
 }

@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SceneBook Cinematic OS
 
-## Getting Started
+SceneBook is a Next.js creator workspace for moving one idea from capture to script, production, editing, publishing, and post-mortem learning. This repo now ships with a dark command-center UI based on the Stitch project `18257923334882431207` and includes a sample-mode studio editor.
 
-First, run the development server:
+## What is in the app
+
+- `Sign In` command-center entry screen with sample-mode access
+- `Home` dashboard with current focus, queue metrics, and pipeline watch
+- `Inbox` capture queue with inline promotion into a content card
+- `Production Board` status surface for the full lifecycle
+- `Content Card` workspace for script, checklist, assets, AI suggestions, and analytics
+- `Studio Editor` route with project media, preview stage, inspector controls, and timeline
+
+## Tech stack
+
+- Next.js 16 App Router
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- Vitest for unit coverage
+- Playwright for end-to-end verification
+- DevDeck for local process control
+- Supabase hooks and API routes for live mode
+
+## Sample mode
+
+Without live environment credentials, SceneBook runs in sample mode with:
+
+- seeded cards, inbox items, and media references
+- a local sample video at `public/media/sample-reel.mp4`
+- in-memory create/update flows used by the UI and tests
+
+This keeps the app runnable and demoable without external services.
+
+## Stitch resources
+
+The source HTML exports and screenshots for the referenced Stitch project are downloaded into `design/stitch/` and intentionally gitignored. They are local implementation references, not committed product assets.
+
+## Local development
+
+Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start the app through DevDeck:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+node ./node_modules/@hemangdoshi/devdeck/dist/index.js start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Check status:
 
-## Learn More
+```bash
+node ./node_modules/@hemangdoshi/devdeck/dist/index.js status
+```
 
-To learn more about Next.js, take a look at the following resources:
+The local app serves on [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Sample mode works with no env file.
 
-## Deploy on Vercel
+For live mode, provide:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY` or the configured AI provider values used by your deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Set those in `.env.local`.
+
+## Verification
+
+Run the full local verification set:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run e2e
+```
+
+## Project structure
+
+```text
+app/
+  (workspace)/
+    board/
+    cards/[id]/
+    home/
+    inbox/
+    settings/
+    studio/[id]/
+  api/
+components/
+lib/
+public/media/
+tests/
+```
+
+## Notes
+
+- The workspace uses a command-center visual system with Geist + JetBrains Mono.
+- The studio editor is sample-mode friendly and falls back to bundled media when a card only has non-previewable link assets.
+- The fetched Stitch exports are for implementation reference only and are not part of the shipped UI bundle.

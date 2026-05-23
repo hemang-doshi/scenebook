@@ -143,13 +143,180 @@ function emptySuggestions(): AISuggestions {
   };
 }
 
+function createInitialSampleStore() {
+  const createdAt = now();
+  const secondDate = new Date(Date.now() - 1000 * 60 * 42).toISOString();
+  const thirdDate = new Date(Date.now() - 1000 * 60 * 95).toISOString();
+
+  const cards: ContentCard[] = [
+    {
+      id: "card-1",
+      ownerId: sampleOwnerId,
+      inboxItemId: null,
+      title: "Sony A7IV Cinematic Settings",
+      status: "editing",
+      format: "short",
+      platform: "youtube",
+      topicTags: ["camera", "workflow"],
+      experimentTags: ["retention", "clarity"],
+      scriptLab: {
+        angle: "Show a practical camera setup without gear-bloat.",
+        hook: "These A7IV settings fixed the muddy look in my talking-head shots.",
+        outline: "Open with the bad frame, show three setting changes, end with before/after.",
+        script: "Start on the flat image. Cut to menu overlays. Finish with the final graded shot and the exact settings.",
+        caption: "Three Sony A7IV settings that instantly made my indoor footage look cleaner.",
+        onScreenText: "PP8 • Zebras 95+ • 1/50 shutter",
+        cta: "Save this before your next indoor shoot.",
+        notes: "Need menu inserts and one clean desk top-down shot.",
+      },
+      shootPack: {
+        aRoll: [
+          { id: "ar-1", label: "Deliver intro line at desk", done: true },
+          { id: "ar-2", label: "Menu walkthrough for picture profile", done: true },
+        ],
+        bRoll: [],
+        screenCaptures: [],
+        props: [],
+        missingAssets: [],
+        locationNotes: "Studio desk with side practical on.",
+        visualNotes: "Keep the camera body hero-lit with a warm rim.",
+      },
+      analyticsJournal: emptyAnalytics(),
+      aiSuggestions: {
+        hooks: [
+          "The A7IV wasn't the problem. My settings were.",
+          "Three menu changes made this camera finally look expensive.",
+        ],
+        captions: [],
+        rewrites: [],
+        shotList: [],
+        followUps: [],
+        performanceSummary: "Lead with the before/after split at frame 0 for a stronger cold open.",
+      },
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      id: "card-2",
+      ownerId: sampleOwnerId,
+      inboxItemId: null,
+      title: "Desk Lighting Reset for Creator Shoots",
+      status: "ready_to_shoot",
+      format: "reel",
+      platform: "instagram",
+      topicTags: ["lighting"],
+      experimentTags: ["setup"],
+      scriptLab: {
+        angle: "Turn a normal desk into a cleaner on-camera environment.",
+        hook: "I stopped buying lights and fixed the placement instead.",
+        outline: "",
+        script: "Walk through key, fill, practical, then the final frame.",
+        caption: "",
+        onScreenText: "",
+        cta: "",
+        notes: "",
+      },
+      shootPack: {
+        aRoll: [{ id: "ar-3", label: "Explain key light placement", done: true }],
+        bRoll: [{ id: "br-1", label: "Desk lamp close-up", done: true }],
+        screenCaptures: [],
+        props: [],
+        missingAssets: [],
+        locationNotes: "",
+        visualNotes: "",
+      },
+      analyticsJournal: emptyAnalytics(),
+      aiSuggestions: emptySuggestions(),
+      createdAt: secondDate,
+      updatedAt: secondDate,
+    },
+    {
+      id: "card-3",
+      ownerId: sampleOwnerId,
+      inboxItemId: null,
+      title: "Audio Chain Cleanup Before Filming",
+      status: "posted",
+      format: "short",
+      platform: "youtube",
+      topicTags: ["audio"],
+      experimentTags: ["retention"],
+      scriptLab: {
+        angle: "",
+        hook: "My mic was fine. My gain staging wasn't.",
+        outline: "",
+        script: "Compare the noisy version to the cleaned chain.",
+        caption: "",
+        onScreenText: "",
+        cta: "",
+        notes: "",
+      },
+      shootPack: emptyShootPack(),
+      analyticsJournal: {
+        ...emptyAnalytics(),
+        views: 14800,
+        likes: 1090,
+        followUpIdea: "",
+      },
+      aiSuggestions: emptySuggestions(),
+      createdAt: thirdDate,
+      updatedAt: thirdDate,
+    },
+  ];
+
+  const inboxItems: InboxItem[] = [
+    {
+      id: "inbox-1",
+      ownerId: sampleOwnerId,
+      title: "BTS of the camera menu workflow",
+      notes: "Could become a carousel or a quick short with step markers.",
+      sourceType: "reference",
+      createdAt,
+      cardId: null,
+    },
+    {
+      id: "inbox-2",
+      ownerId: sampleOwnerId,
+      title: "Voice note about fixing echo with one soft surface",
+      notes: "Needs a stronger visual demo before promotion.",
+      sourceType: "voice",
+      createdAt: secondDate,
+      cardId: null,
+    },
+  ];
+
+  const assets: CardAsset[] = [
+    {
+      id: "asset-1",
+      cardId: "card-1",
+      type: "video",
+      title: "Intro Hook.mp4",
+      url: "/media/sample-reel.mp4",
+      note: "Primary camera reveal clip.",
+    },
+    {
+      id: "asset-2",
+      cardId: "card-1",
+      type: "image",
+      title: "Lighting Grid.jpg",
+      url: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1200&q=80",
+      note: "Reference still for the hero frame.",
+    },
+    {
+      id: "asset-3",
+      cardId: "card-2",
+      type: "thumbnail",
+      title: "Desk-before-after.png",
+      url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+      note: "Thumbnail concept for the split lighting frame.",
+    },
+  ];
+
+  return { inboxItems, cards, assets };
+}
+
 function ensureSampleStore() {
   if (!globalThis.__scenebookSampleStore) {
-    globalThis.__scenebookSampleStore = {
-      inboxItems: [],
-      cards: [],
-      assets: [],
-    };
+    globalThis.__scenebookSampleStore = createInitialSampleStore();
   }
 
   return globalThis.__scenebookSampleStore;

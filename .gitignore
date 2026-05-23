@@ -1,12 +1,15 @@
 AGENTS.md
 Docs/Plans
 Docs/superpowers
+design/stitch/
 .env
 .agents
 .ruflo/
 .worktrees/
 SNAPSHOT.md
 DIFF_CHANGES.md
+.gitignore.codex-landing-revamp-backup
+.tmp-*.png
 node_modules/
 .next/
 coverage/
