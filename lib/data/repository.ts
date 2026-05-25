@@ -1,5 +1,4 @@
-import OpenAI from "openai";
-
+import { generateText } from "@/lib/ai/client";
 import { buildAssistPrompt } from "@/lib/ai/prompts";
 import { getCardReadiness } from "@/lib/domain/content";
 import { env } from "@/lib/env";
@@ -552,17 +551,9 @@ async function generateSuggestionsWithNim(
     return buildFallbackSuggestions(mode, card);
   }
 
-  const client = new OpenAI({
-    apiKey: env.nimApiKey,
-    baseURL: env.nimBaseUrl,
-  });
+  const prompt = buildAssistPrompt(mode, card);
+  const text = await generateText({ prompt });
 
-  const response = await client.responses.create({
-    model: env.nimModel,
-    input: buildAssistPrompt(mode, card),
-  });
-
-  const text = response.output_text;
   return text
     .split("\n")
     .map((line) => line.replace(/^[-*0-9.)\s]+/, "").trim())

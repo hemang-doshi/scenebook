@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowRight, LoaderCircle, Sparkles, TestTube2 } from "lucide-react";
+import { ArrowRight, LoaderCircle, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { env } from "@/lib/env";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -44,7 +43,15 @@ export default function SignInPage() {
           </label>
 
           <label className="block">
-            <span className="cmd-label">Passkey</span>
+            <div className="flex items-center justify-between">
+              <span className="cmd-label">Passkey</span>
+              <Link
+                className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted hover:text-accent transition"
+                href="/forgot-password"
+              >
+                Forgot passkey?
+              </Link>
+            </div>
             <Input
               className="mt-2"
               value={password}
@@ -62,11 +69,6 @@ export default function SignInPage() {
             onClick={(event) => {
               event.preventDefault();
               startTransition(async () => {
-                if (env.isSampleMode) {
-                  router.push("/home");
-                  return;
-                }
-
                 try {
                   const client = createSupabaseBrowserClient();
                   const { error: signInError } = await client.auth.signInWithPassword({
@@ -95,17 +97,7 @@ export default function SignInPage() {
           </Button>
         </form>
 
-        <div className="relative my-6">
-          <div className="border-t border-border" />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--surface)] px-3 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
-            or
-          </span>
-        </div>
 
-        <Button className="w-full" variant="secondary" onClick={() => router.push("/home")}>
-          <TestTube2 className="mr-2 h-4 w-4" />
-          Enter sample studio
-        </Button>
 
         <div className="mt-5 text-center">
           <button

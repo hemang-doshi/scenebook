@@ -8,14 +8,18 @@ const rawEnv = {
   nimApiKey: process.env.NVIDIA_NIM_API_KEY ?? "",
   nimModel:
     process.env.NVIDIA_NIM_MODEL ?? "meta/llama-3.1-70b-instruct",
-  sampleMode: process.env.NEXT_PUBLIC_SAMPLE_MODE,
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
 };
 
 export const env = {
   ...rawEnv,
-  isSampleMode:
-    rawEnv.sampleMode === "true" ||
-    !rawEnv.supabaseUrl ||
-    !rawEnv.supabasePublishableKey,
-  hasAiConfig: Boolean(rawEnv.nimBaseUrl && rawEnv.nimApiKey),
+  isSampleMode: false,
+  hasAiConfig: Boolean(
+    (rawEnv.nimBaseUrl && rawEnv.nimApiKey) ||
+    rawEnv.geminiApiKey ||
+    rawEnv.openrouterApiKey
+  ),
 };
+
+

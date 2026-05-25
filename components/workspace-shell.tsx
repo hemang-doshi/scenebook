@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   Clapperboard,
+  Film,
   Home,
   Inbox,
   Search,
@@ -14,18 +15,17 @@ import {
   Video,
 } from "lucide-react";
 
+import { env } from "@/lib/env";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { AuroraBackground } from "@/components/ui/aurora-background";
+import { RetroGrid } from "@/components/ui/retro-grid";
 
-const items = [
-  { href: "/home", label: "Dashboard", icon: Home },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/board", label: "Board", icon: Clapperboard },
-  { href: "/studio/card-1", label: "Studio", icon: Video, match: ["/studio", "/cards"] },
-  { href: "/settings", label: "Settings", icon: Settings2 },
-];
+
+import { useWorkspaceSnapshot } from "@/components/workspace/hooks";
+import { statusLabels } from "@/lib/domain/content";
 
 export function WorkspaceShell({
   children,
@@ -33,14 +33,34 @@ export function WorkspaceShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { data } = useWorkspaceSnapshot();
+
+  const cardIdMatch = pathname.match(/^\/(cards|studio)\/([^/]+)/);
+  const activeCardId = cardIdMatch ? cardIdMatch[2] : null;
+
+  const items = [
+    { href: "/home", label: "HQ", icon: Home },
+    { href: "/inbox", label: "Inbox", icon: Inbox },
+    { href: "/board", label: "Board", icon: Clapperboard },
+    ...(activeCardId ? [{ href: `/cards/${activeCardId}`, label: "Active Project", icon: Video, match: [`/cards/${activeCardId}`, `/studio/${activeCardId}`] }] : []),
+    { href: "/editor", label: "Editor", icon: Film, match: ["/editor"] },
+    { href: "/playground", label: "Playground", icon: Sparkles },
+    { href: "/settings", label: "Settings", icon: Settings2 },
+  ];
+
+  const currentCard = data?.cards.find((c) => c.id === activeCardId) || data?.cards[0];
+  const projectTitle = currentCard ? currentCard.title : "No active project";
+  const projectStatus = currentCard ? statusLabels[currentCard.status] : "Idle";
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="relative flex min-h-screen bg-background/50 text-foreground overflow-hidden">
+      <AuroraBackground />
+      <RetroGrid className="opacity-20" />
       <motion.aside
         initial={{ opacity: 0, x: -16 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
-        className="cmd-panel-soft hidden w-[260px] shrink-0 border-r lg:flex lg:flex-col"
+        className="relative z-10 cmd-panel-soft hidden w-[260px] shrink-0 border-r lg:flex lg:flex-col"
       >
         <div className="border-b border-border px-6 py-6">
           <p className="text-xl font-semibold tracking-tight text-foreground">SceneBook</p>
@@ -49,12 +69,15 @@ export function WorkspaceShell({
 
         <div className="px-6 py-5">
           <p className="cmd-label">Current Project</p>
-          <p className="mt-3 truncate text-lg font-semibold text-accent">
-            Sony A7IV Cinematic Settings
+          <p className="mt-3 truncate text-lg font-semibold text-accent" title={projectTitle}>
+            {projectTitle}
           </p>
           <p className="mt-2 flex items-center gap-2 text-sm text-muted">
-            <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_10px_rgba(212,255,51,0.55)]" />
-            Editing
+            <span className={cn(
+              "h-2 w-2 rounded-full",
+              currentCard ? "bg-accent shadow-[0_0_10px_rgba(99,102,241,0.55)]" : "bg-zinc-600"
+            )} />
+            {projectStatus}
           </p>
         </div>
 
@@ -63,8 +86,7 @@ export function WorkspaceShell({
             const Icon = item.icon;
             const active =
               pathname === item.href ||
-              pathname.startsWith(`${item.href}/`) ||
-              item.match?.some((match) => pathname.startsWith(match));
+              (item.match && item.match.some((match) => pathname.startsWith(match)));
 
             return (
               <Link
@@ -85,10 +107,12 @@ export function WorkspaceShell({
         </nav>
 
         <div className="mt-auto px-6 pb-4">
-          <Button className="w-full justify-center">
-            <Sparkles className="mr-2 h-4 w-4" />
-            New project
-          </Button>
+          <Link href="/inbox">
+            <Button className="w-full justify-center">
+              <Sparkles className="mr-2 h-4 w-4" />
+              New project
+            </Button>
+          </Link>
         </div>
 
         <div className="border-t border-border px-4 py-4">
@@ -102,7 +126,7 @@ export function WorkspaceShell({
         </div>
       </motion.aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <motion.header
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -128,7 +152,11 @@ export function WorkspaceShell({
             <button className="rounded-full border border-border p-2 text-muted transition hover:bg-white/5 hover:text-foreground">
               <Bell className="h-4 w-4" />
             </button>
-            <Badge>Sample mode</Badge>
+            {env.isSampleMode ? (
+              <Badge>Sample mode</Badge>
+            ) : (
+              <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Supabase Mode</Badge>
+            )}
           </div>
         </motion.header>
 
