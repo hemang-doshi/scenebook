@@ -1,0 +1,202 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+import { env } from "../env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+function isValidApiKey(key: string): boolean {
+  if (!key) return false;
+  const k = key.trim().toLowerCase();
+  return (
+    !k.startsWith("your_") &&
+    !k.includes("placeholder") &&
+    k !== "example" &&
+    k.length > 5
+  );
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  errorMessage: string
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
+export async function generateText({
+  prompt,
+  systemInstruction,
+  modelOverride, // Allow overriding the model dynamically in playground
+}: {
+  prompt: string;
+  systemInstruction?: string;
+  modelOverride?: string;
+}): Promise<string> {
+  let customGeminiKey = "";
+  let customOpenRouterKey = "";
+  let customNimKey = "";
+  let creatorContext = "";
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data } = await (supabase as any)
+        .from("creator_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (data) {
+        customGeminiKey = data.gemini_api_key || "";
+        customOpenRouterKey = data.openrouter_api_key || "";
+        customNimKey = data.nim_api_key || "";
+        creatorContext = data.creator_context || "";
+      }
+    }
+  } catch (err) {
+    console.warn("Could not retrieve custom creator settings from Supabase, using defaults:", err);
+  }
+
+  const activeGeminiKey = customGeminiKey || env.geminiApiKey;
+  const activeOpenRouterKey = customOpenRouterKey || env.openrouterApiKey;
+  const activeNimKey = customNimKey || env.nimApiKey;
+
+  // Append creator context to system instructions for text generation
+  let finalSystemInstruction = systemInstruction || "";
+  if (creatorContext) {
+    finalSystemInstruction = `${finalSystemInstruction}\n\nCreator context & background:\n${creatorContext}`.trim();
+  }
+
+  // 1. Google Gemini API
+  if (isValidApiKey(activeGeminiKey)) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: modelOverride || "gemini-2.5-flash",
+          contents: prompt,
+          config: finalSystemInstruction ? { systemInstruction: finalSystemInstruction } : undefined,
+        }),
+        10000, // Increased timeout to 10s for reliability
+        "Gemini API request timed out"
+      );
+      if (response.text) {
+        return response.text;
+      }
+    } catch (e) {
+      console.error("Gemini AI API error:", e);
+    }
+  }
+
+  // 2. OpenRouter API
+  if (isValidApiKey(activeOpenRouterKey)) {
+    try {
+      const client = new OpenAI({
+        apiKey: activeOpenRouterKey,
+        baseURL: "https://openrouter.ai/api/v1",
+      });
+      const response = await withTimeout(
+        client.chat.completions.create({
+          model: modelOverride || "google/gemini-2.5-flash",
+          messages: [
+            ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+            { role: "user" as const, content: prompt },
+          ],
+          temperature: 0.7,
+        }),
+        10000,
+        "OpenRouter API request timed out"
+      );
+      const text = response.choices[0]?.message?.content;
+      if (text) {
+        return text;
+      }
+    } catch (e) {
+      console.error("OpenRouter API error:", e);
+    }
+  }
+
+  // 3. NVIDIA NIM API
+  if (isValidApiKey(activeNimKey) && env.nimBaseUrl) {
+    try {
+      const client = new OpenAI({
+        apiKey: activeNimKey,
+        baseURL: env.nimBaseUrl,
+      });
+      const response = await withTimeout(
+        client.chat.completions.create({
+          model: modelOverride || env.nimModel || "meta/llama-3.1-70b-instruct",
+          messages: [
+            ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+            { role: "user" as const, content: prompt },
+          ],
+          temperature: 0.7,
+        }),
+        10000,
+        "NVIDIA NIM API request timed out"
+      );
+      const text = response.choices[0]?.message?.content;
+      if (text) {
+        return text;
+      }
+    } catch (e) {
+      console.error("NVIDIA NIM API error:", e);
+    }
+  }
+
+  // Fallback / Mock responses if no key is configured
+  console.warn("No active AI provider API key found. Falling back to mock generator.");
+  return getMockResponse(prompt);
+}
+
+function getMockResponse(prompt: string): string {
+  const lowercasePrompt = prompt.toLowerCase();
+  if (lowercasePrompt.includes("hook")) {
+    return [
+      "The cinematic settings mistake I stopped making.",
+      "Three settings that made my footage look twice as expensive.",
+      "Stop adjusting gain. Fix this instead.",
+      "The lighting hack nobody talks about.",
+      "This single menu change saved my talking-head edits.",
+    ].join("\n");
+  } else if (lowercasePrompt.includes("shot") || lowercasePrompt.includes("b-roll")) {
+    return [
+      "A-Roll desk intro looking directly at camera.",
+      "B-Roll close-up of camera lens ring rotating.",
+      "B-Roll hands typing on keyboard with warm rim light.",
+      "B-Roll adjusting the desk lamp placement.",
+      "A-Roll desk outro with final graded before/after split.",
+    ].join("\n");
+  } else if (lowercasePrompt.includes("caption")) {
+    return [
+      "The camera setup hack I wish I knew sooner.",
+      "Zero dollar lighting upgrade for content creators.",
+      "Gain staging explained in 15 seconds.",
+      "Save this for your next cinematic shoot.",
+    ].join("\n");
+  } else if (lowercasePrompt.includes("rewrite")) {
+    return [
+      "Here is three ways to adjust this tone.",
+      "Alternate Tone 1: Dynamic & Urgent. Let's make it punchy.",
+      "Alternate Tone 2: Educational & Direct. Clear settings, no fluff.",
+      "Alternate Tone 3: Storyteller. Why I spent 3 years doing this wrong.",
+    ].join("\n");
+  } else if (lowercasePrompt.includes("voiceover") || lowercasePrompt.includes("voice over")) {
+    return "So I was looking at my footage, and it looked terrible. I realized it was not the camera, it was just these three settings. Let me show you how to fix it.";
+  } else if (lowercasePrompt.includes("thumbnail")) {
+    return "Split screen before and after, showing a muddy green shot side-by-side with a vibrant warm cinematic shot. Text overlay: 'FIX THIS'.";
+  }
+  return "AI generated placeholder response for: " + prompt.slice(0, 100);
+}

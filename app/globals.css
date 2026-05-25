@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0b;
+  --background: #08080a;
   --foreground: #fafaf9;
-  --surface: rgba(19, 19, 20, 0.94);
-  --surface-soft: rgba(23, 23, 25, 0.72);
-  --surface-strong: #121214;
-  --surface-muted: #1c1b1c;
-  --surface-contrast: #201f20;
-  --border: #27272a;
-  --border-strong: #3f3f46;
+  --surface: rgba(15, 15, 17, 0.94);
+  --surface-soft: rgba(20, 20, 22, 0.72);
+  --surface-strong: #0f0f11;
+  --surface-muted: #161517;
+  --surface-contrast: #1c1b1d;
+  --border: #212124;
+  --border-strong: #333338;
   --muted: #a1a1aa;
   --muted-foreground: #71717a;
-  --accent: #d4ff33;
-  --accent-foreground: #171e00;
+  --accent: #6366f1;
+  --accent-foreground: #ffffff;
   --accent-secondary: #00f0ff;
   --danger: #ff6b6b;
   --success: #93f974;
@@ -61,7 +61,7 @@ textarea {
 
 .cmd-radial {
   background:
-    radial-gradient(circle at 16% 20%, rgba(212, 255, 51, 0.08), transparent 26%),
+    radial-gradient(circle at 16% 20%, rgba(99, 102, 241, 0.08), transparent 26%),
     radial-gradient(circle at 78% 8%, rgba(0, 240, 255, 0.08), transparent 18%),
     radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.03), transparent 30%);
 }
@@ -134,3 +134,88 @@ textarea {
   background: rgba(212, 255, 51, 0.9);
   color: #101102;
 }
+
+@keyframes grid-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(40px);
+  }
+}
+
+/* ── Editor Design System ── */
+.editor {
+  --ed-bg: #08080a;
+  --ed-surface: #0f0f11;
+  --ed-surface-muted: #161517;
+  --ed-surface-raised: #1c1b1d;
+
+  --ed-border: #212124;
+  --ed-border-subtle: #161517;
+
+  --ed-text-primary: #fafaf9;
+  --ed-text-secondary: #a1a1aa;
+  --ed-text-muted: #71717a;
+
+  --ed-accent: #6366f1;
+  --ed-accent-hover: #818cf8;
+  --ed-accent-soft: rgba(99, 102, 241, 0.15);
+
+  --ed-timeline-bg: #0c0c0e;
+  --ed-timeline-track: #151518;
+  --ed-timeline-clip-video: #20243b;
+  --ed-timeline-clip-text: #2f203b;
+  --ed-timeline-clip-audio: #1a3b33;
+  --ed-timeline-playhead: #818cf8;
+
+  --ed-danger: #ef4444;
+  --ed-success: #34d399;
+
+  --ed-radius-sm: 6px;
+  --ed-radius-md: 8px;
+  --ed-radius-lg: 12px;
+  --ed-radius-xl: 16px;
+
+  --ed-font-ui: var(--font-sans), "Inter", system-ui, sans-serif;
+
+  font-family: var(--ed-font-ui);
+  background: var(--ed-bg);
+  color: var(--ed-text-primary);
+}
+
+.editor *::selection {
+  background: rgba(99, 102, 241, 0.4);
+  color: #fff;
+}
+
+.ed-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ed-border) transparent;
+}
+
+.ed-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ed-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--ed-border);
+  border-radius: 999px;
+}
+
+@keyframes ed-fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ed-slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ed-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
