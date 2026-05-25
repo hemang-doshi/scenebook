@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import type { Database } from "@/lib/supabase/types";
 
-const authRoutes = ["/sign-in", "/sign-up", "/auth"];
+const authRoutes = ["/sign-in", "/sign-up", "/auth", "/forgot-password", "/reset-password"];
 
 export async function updateSession(request: NextRequest) {
   if (env.isSampleMode || !env.supabaseUrl || !env.supabasePublishableKey) {

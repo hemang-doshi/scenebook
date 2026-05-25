@@ -15,7 +15,25 @@ export async function fetchJson<T>(
     const payload = (await response.json().catch(() => null)) as
       | { error?: string }
       | null;
-    throw new Error(payload?.error ?? "Request failed.");
+    let message = payload?.error ?? "Request failed.";
+
+    try {
+      if (message.startsWith("[") && message.endsWith("]")) {
+        const parsed = JSON.parse(message);
+        if (Array.isArray(parsed) && parsed.length > 0 && "message" in parsed[0]) {
+          message = (parsed as Array<{ path?: (string | number)[]; message: string }>)
+            .map((issue) => {
+              const field = issue.path?.join(".") || "field";
+              return `${field}: ${issue.message}`;
+            })
+            .join(", ");
+        }
+      }
+    } catch {
+      // Ignored: keep original message
+    }
+
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;

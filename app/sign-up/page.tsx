@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/panel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { env } from "@/lib/env";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -46,11 +45,6 @@ export default function SignUpPage() {
             className="w-full"
             onClick={() =>
               startTransition(async () => {
-                if (env.isSampleMode) {
-                  router.push("/home");
-                  return;
-                }
-
                 try {
                   const client = createSupabaseBrowserClient();
                   const { error: signUpError } = await client.auth.signUp({

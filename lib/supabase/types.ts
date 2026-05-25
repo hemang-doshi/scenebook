@@ -90,6 +90,25 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["card_assets"]["Insert"]>;
       };
+      creator_settings: {
+        Row: {
+          user_id: string;
+          gemini_api_key: string | null;
+          openrouter_api_key: string | null;
+          nim_api_key: string | null;
+          creator_context: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          gemini_api_key?: string | null;
+          openrouter_api_key?: string | null;
+          nim_api_key?: string | null;
+          creator_context?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["creator_settings"]["Insert"]>;
+      };
     };
   };
 };
