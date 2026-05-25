@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { env } from "../env";
+import { getActiveProviderToken, type CreatorSettingsRow } from "@/lib/creator-settings";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function isValidApiKey(key: string): boolean {
@@ -52,17 +52,18 @@ export async function generateText({
     } = await supabase.auth.getUser();
 
     if (user) {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from("creator_settings")
         .select("*")
         .eq("user_id", user.id)
         .single();
 
       if (data) {
-        customGeminiKey = data.gemini_api_key || "";
-        customOpenRouterKey = data.openrouter_api_key || "";
-        customNimKey = data.nim_api_key || "";
-        creatorContext = data.creator_context || "";
+        const row = data as CreatorSettingsRow;
+        customGeminiKey = getActiveProviderToken(row, "gemini");
+        customOpenRouterKey = getActiveProviderToken(row, "openrouter");
+        customNimKey = getActiveProviderToken(row, "nim");
+        creatorContext = row.creator_context || "";
       }
     }
   } catch (err) {

@@ -77,6 +77,12 @@ export type Database = {
           url: string;
           note: string;
           created_at: string;
+          storage_path: string | null;
+          source: string;
+          scene_key: string | null;
+          metadata: Json;
+          generation_id: string | null;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -87,6 +93,12 @@ export type Database = {
           url: string;
           note?: string;
           created_at?: string;
+          storage_path?: string | null;
+          source?: string;
+          scene_key?: string | null;
+          metadata?: Json;
+          generation_id?: string | null;
+          updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["card_assets"]["Insert"]>;
       };
@@ -96,6 +108,10 @@ export type Database = {
           gemini_api_key: string | null;
           openrouter_api_key: string | null;
           nim_api_key: string | null;
+          gemini_api_key_encrypted: string | null;
+          openrouter_api_key_encrypted: string | null;
+          nim_api_key_encrypted: string | null;
+          huggingface_api_key_encrypted: string | null;
           creator_context: string | null;
           updated_at: string;
         };
@@ -104,10 +120,70 @@ export type Database = {
           gemini_api_key?: string | null;
           openrouter_api_key?: string | null;
           nim_api_key?: string | null;
+          gemini_api_key_encrypted?: string | null;
+          openrouter_api_key_encrypted?: string | null;
+          nim_api_key_encrypted?: string | null;
+          huggingface_api_key_encrypted?: string | null;
           creator_context?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["creator_settings"]["Insert"]>;
+      };
+      project_messages: {
+        Row: {
+          id: string;
+          owner_id: string;
+          card_id: string;
+          role: "system" | "user" | "assistant";
+          content: string;
+          provider: string | null;
+          model: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          card_id: string;
+          role: "system" | "user" | "assistant";
+          content: string;
+          provider?: string | null;
+          model?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["project_messages"]["Insert"]>;
+      };
+      generation_records: {
+        Row: {
+          id: string;
+          owner_id: string;
+          card_id: string;
+          provider: string;
+          model: string;
+          modality: "text" | "image" | "audio" | "video";
+          prompt: string;
+          status: "queued" | "completed" | "failed";
+          error_message: string | null;
+          metadata: Json;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          card_id: string;
+          provider: string;
+          model: string;
+          modality: "text" | "image" | "audio" | "video";
+          prompt: string;
+          status: "queued" | "completed" | "failed";
+          error_message?: string | null;
+          metadata?: Json;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["generation_records"]["Insert"]>;
       };
     };
   };

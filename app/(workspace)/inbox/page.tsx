@@ -83,7 +83,7 @@ export default function InboxPage() {
       <PageHeading
         eyebrow="Inbox"
         title="Quick Capture Hub"
-        description="Jot down raw thoughts, links, and angles instantly. Convert them into content cards when ready."
+        description="Jot down raw thoughts, links, and angles instantly. Convert them into projects when ready."
       />
 
       <div className="cmd-grid xl:grid-cols-[0.8fr_1.2fr] gap-6">
@@ -180,7 +180,7 @@ export default function InboxPage() {
                         setConvertError(null);
                       }}
                     >
-                      Convert to Project Card
+                      Convert to Project
                     </Button>
                   </div>
 
@@ -249,7 +249,7 @@ export default function InboxPage() {
                                   },
                                 );
                                 refresh();
-                                router.push(`/cards/${card.id}`);
+                                router.push(`/projects/${card.id}`);
                               } catch (err) {
                                 setConvertError(err instanceof Error ? err.message : "Conversion failed.");
                               }

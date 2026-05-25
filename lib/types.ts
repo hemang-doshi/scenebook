@@ -37,12 +37,21 @@ export const assetTypes = [
 ] as const;
 
 export const learningDecisions = ["repeat", "remix", "retire"] as const;
+export const generationStatuses = ["queued", "completed", "failed"] as const;
 
 export type ContentStatus = (typeof contentStatuses)[number];
 export type ContentFormat = (typeof contentFormats)[number];
 export type ContentPlatform = (typeof contentPlatforms)[number];
 export type AssetType = (typeof assetTypes)[number];
 export type LearningDecision = (typeof learningDecisions)[number];
+export type GenerationStatus = (typeof generationStatuses)[number];
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue | undefined };
 
 export type ChecklistItem = {
   id: string;
@@ -90,6 +99,13 @@ export type CardAsset = {
   title: string;
   url: string;
   note?: string;
+  storagePath?: string | null;
+  source?: "manual" | "generated";
+  sceneKey?: string | null;
+  metadata?: Record<string, JsonValue>;
+  generationId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type AISuggestions = {
@@ -127,4 +143,31 @@ export type InboxItem = {
   sourceType: "text" | "link" | "reference" | "voice";
   createdAt: string;
   cardId?: string | null;
+};
+
+export type ProjectMessage = {
+  id: string;
+  cardId: string;
+  ownerId: string;
+  role: "system" | "user" | "assistant";
+  content: string;
+  provider?: string | null;
+  model?: string | null;
+  metadata?: Record<string, JsonValue>;
+  createdAt: string;
+};
+
+export type GenerationRecord = {
+  id: string;
+  cardId: string;
+  ownerId: string;
+  provider: string;
+  model: string;
+  modality: "text" | "image" | "audio" | "video";
+  prompt: string;
+  status: GenerationStatus;
+  errorMessage?: string | null;
+  metadata?: Record<string, JsonValue>;
+  createdAt: string;
+  completedAt?: string | null;
 };
