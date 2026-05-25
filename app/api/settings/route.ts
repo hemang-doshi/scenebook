@@ -1,6 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import {
+  buildSettingsResponse,
+  buildSettingsUpsertPayload,
+  providerKeys,
+  type CreatorSettingsRow,
+} from "@/lib/creator-settings";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+const requestSchema = z.object({
+  creatorContext: z.string().optional(),
+  providerTokens: z
+    .object(
+      Object.fromEntries(providerKeys.map((provider) => [provider, z.string().nullable().optional()])),
+    )
+    .partial()
+    .optional(),
+});
 
 export async function GET() {
   try {
@@ -13,24 +31,19 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Try to get creator settings
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from("creator_settings")
       .select("*")
       .eq("user_id", user.id)
       .single();
 
-    if (error && error.code !== "PGRST116") { // PGRST116 is code for 0 rows returned
+    if (error && error.code !== "PGRST116") {
       throw error;
     }
 
-    return NextResponse.json({
-      userEmail: user.email,
-      geminiApiKey: data?.gemini_api_key || "",
-      openrouterApiKey: data?.openrouter_api_key || "",
-      nimApiKey: data?.nim_api_key || "",
-      creatorContext: data?.creator_context || "",
-    });
+    return NextResponse.json(
+      buildSettingsResponse(user.email, (data as CreatorSettingsRow | null | undefined) ?? null),
+    );
   } catch (caught) {
     console.error("GET /api/settings error:", caught);
     return NextResponse.json(
@@ -51,16 +64,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { geminiApiKey, openrouterApiKey, nimApiKey, creatorContext } = await request.json();
+    const payload = requestSchema.parse(await request.json());
+    const { data: previous, error: loadError } = await supabase
+      .from("creator_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
 
-    const { error } = await (supabase as any).from("creator_settings").upsert({
-      user_id: user.id,
-      gemini_api_key: geminiApiKey || null,
-      openrouter_api_key: openrouterApiKey || null,
-      nim_api_key: nimApiKey || null,
-      creator_context: creatorContext || null,
-      updated_at: new Date().toISOString(),
-    });
+    if (loadError && loadError.code !== "PGRST116") {
+      throw loadError;
+    }
+
+    const { error } = await (supabase.from("creator_settings") as any).upsert(
+      buildSettingsUpsertPayload(
+        user.id,
+        (previous as CreatorSettingsRow | null | undefined) ?? null,
+        payload,
+      ),
+    );
 
     if (error) {
       throw error;

@@ -21,7 +21,7 @@ const STAGES: ProgressStage[] = [
     description: "Convert capture to card",
     icon: Lightbulb,
     statuses: ["idea"],
-    route: (id) => `/cards/${id}`,
+    route: (id) => `/projects/${id}`,
   },
   {
     id: "script",
@@ -29,7 +29,7 @@ const STAGES: ProgressStage[] = [
     description: "Write outline & checklists",
     icon: FileText,
     statuses: ["scripted", "ready_to_shoot"],
-    route: (id) => `/cards/${id}`,
+    route: (id) => `/projects/${id}?tab=script`,
   },
   {
     id: "edit",
@@ -37,7 +37,7 @@ const STAGES: ProgressStage[] = [
     description: "Studio timeline & effects",
     icon: Edit3,
     statuses: ["shot", "editing"],
-    route: (id) => `/studio/${id}`,
+    route: (id) => `/projects/${id}?tab=editor`,
   },
   {
     id: "publish",
@@ -45,7 +45,7 @@ const STAGES: ProgressStage[] = [
     description: "Live on platform",
     icon: Play,
     statuses: ["posted"],
-    route: (id) => `/cards/${id}`,
+    route: (id) => `/projects/${id}?tab=overview`,
   },
   {
     id: "reflection",
@@ -53,7 +53,7 @@ const STAGES: ProgressStage[] = [
     description: "Analytics & learning",
     icon: Eye,
     statuses: ["analyzed", "archived"],
-    route: (id) => `/cards/${id}`,
+    route: (id) => `/projects/${id}?tab=analytics`,
   },
 ];
 
