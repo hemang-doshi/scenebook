@@ -45,7 +45,7 @@ export default function CanvasStage() {
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-1 items-center justify-center overflow-hidden bg-[var(--ed-surface-muted)]"
+      className="relative flex flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(88,101,242,0.22),transparent_40%),linear-gradient(180deg,rgba(13,17,28,0.96),rgba(6,8,14,1))]"
       onClick={(e) => {
         if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.artboard) {
           deselectAll();
@@ -55,9 +55,25 @@ export default function CanvasStage() {
       {/* Artboard */}
       <div
         data-artboard="true"
-        className="relative overflow-hidden rounded-lg bg-[var(--ed-surface)] shadow-2xl"
+        className="relative overflow-hidden rounded-lg border border-white/10 bg-[linear-gradient(180deg,rgba(20,24,40,0.95),rgba(10,12,20,0.98))] shadow-2xl"
         style={{ width: artboardSize.width, height: artboardSize.height }}
       >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_32%)]" />
+
+        {canvasObjects.length === 0 ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
+            <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-white/45">
+              Live preview
+            </div>
+            <div className="max-w-[320px] space-y-2">
+              <p className="text-lg font-semibold text-white/90">Select an asset to place it on the canvas</p>
+              <p className="text-sm leading-relaxed text-white/50">
+                Storyboard assets arrive here with a live glass-lit stage instead of an empty black frame.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {/* Canvas objects */}
         {canvasObjects.map((obj) => {
           const isSelected = obj.id === selectedObjectId;

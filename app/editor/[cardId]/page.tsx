@@ -2,14 +2,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEditorStore } from "@/lib/editor/editor-store";
 
 function EditorPageInner() {
   const params = useParams<{ cardId: string }>();
+  const searchParams = useSearchParams();
   const setProject = useEditorStore((s) => s.setProject);
   const addClip = useEditorStore((s) => s.addClip);
   const addCanvasObject = useEditorStore((s) => s.addCanvasObject);
+  const resetEditor = useEditorStore((s) => s.resetEditor);
   const tracks = useEditorStore((s) => s.tracks);
   const clips = useEditorStore((s) => s.clips);
 
@@ -18,13 +20,15 @@ function EditorPageInner() {
   useEffect(() => {
     if (!params.cardId || loaded) return;
 
+    resetEditor();
+
     if (params.cardId === "new") {
       setProject("new", "Untitled Project");
       setLoaded(true);
       return;
     }
 
-    fetch(`/api/cards/${params.cardId}`)
+    fetch(`/api/projects/${params.cardId}`)
       .then((r) => r.json())
       .then((card) => {
         setProject(card.id, card.title);
@@ -33,7 +37,15 @@ function EditorPageInner() {
           const videoTrack = tracks.find((t) => t.type === "video");
           const audioTrack = tracks.find((t) => t.type === "audio");
 
-          for (const asset of card.assets) {
+          const focusedAssetId = searchParams.get("asset");
+          const assets = [...card.assets].sort((left: { id: string }, right: { id: string }) => {
+            if (!focusedAssetId) return 0;
+            if (left.id === focusedAssetId) return 1;
+            if (right.id === focusedAssetId) return -1;
+            return 0;
+          });
+
+          for (const asset of assets) {
             const trackId =
               asset.type === "audio"
                 ? audioTrack?.id ?? tracks[0].id
@@ -52,7 +64,7 @@ function EditorPageInner() {
         setProject(params.cardId, "Untitled Project");
         setLoaded(true);
       });
-  }, [params.cardId, loaded, setProject, addClip, addCanvasObject, tracks, clips.length]);
+  }, [params.cardId, loaded, setProject, addClip, addCanvasObject, tracks, clips.length, searchParams, resetEditor]);
 
   if (!loaded) {
     return (

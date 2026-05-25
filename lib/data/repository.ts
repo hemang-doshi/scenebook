@@ -8,12 +8,14 @@ import { mapCardRow } from "@/lib/data/mappers";
 import type {
   AISuggestions,
   AnalyticsJournal,
+  GenerationRecord,
   CardAsset,
   ContentCard,
   ContentFormat,
   ContentPlatform,
   ContentStatus,
   InboxItem,
+  ProjectMessage,
   ScriptLab,
   ShootPack,
 } from "@/lib/types";
@@ -65,6 +67,8 @@ type SupabaseAuthResult = Promise<{ data: { user: { id: string } | null } }>;
 type InboxRow = Database["public"]["Tables"]["inbox_items"]["Row"];
 type ContentCardRow = Database["public"]["Tables"]["content_cards"]["Row"];
 type AssetRow = Database["public"]["Tables"]["card_assets"]["Row"];
+type ProjectMessageRow = Database["public"]["Tables"]["project_messages"]["Row"];
+type GenerationRecordRow = Database["public"]["Tables"]["generation_records"]["Row"];
 type SupabaseInsertChain = PromiseLike<{ error: Error | null }> & {
   select(query: string): {
     single(): SupabaseQueryResult<unknown>;
@@ -86,6 +90,11 @@ type SupabaseRepositoryClient = {
     };
     eq(column: string, value: string): Promise<{ error: Error | null }>;
   };
+};
+
+type ProjectWorkspace = CardDetail & {
+  messages: ProjectMessage[];
+  generations: GenerationRecord[];
 };
 
 function now() {
@@ -613,10 +622,17 @@ async function getSupabaseSnapshot(): Promise<WorkspaceSnapshot> {
         .map((asset) => ({
           id: asset.id,
           cardId: asset.card_id,
-        title: asset.title,
-        url: asset.url,
-        type: asset.type as CardAsset["type"],
-        note: asset.note,
+          title: asset.title,
+          url: asset.url,
+          type: asset.type as CardAsset["type"],
+          note: asset.note,
+          storagePath: asset.storage_path,
+          source: asset.source as CardAsset["source"],
+          sceneKey: asset.scene_key,
+          metadata: asset.metadata as CardAsset["metadata"],
+          generationId: asset.generation_id,
+          createdAt: asset.created_at,
+          updatedAt: asset.updated_at,
         }));
 
       return {
@@ -775,6 +791,71 @@ export async function getCardDetail(cardId: string) {
   return snapshot.cards.find((card) => card.id === cardId) ?? null;
 }
 
+export async function getProjectWorkspace(cardId: string): Promise<ProjectWorkspace | null> {
+  const detail = await getCardDetail(cardId);
+
+  if (!detail || env.isSampleMode) {
+    return detail
+      ? {
+          ...detail,
+          messages: [],
+          generations: [],
+        }
+      : null;
+  }
+
+  const supabase =
+    (await createSupabaseServerClient()) as unknown as SupabaseRepositoryClient;
+  const [
+    { data: messages, error: messagesError },
+    { data: generations, error: generationsError },
+  ] = await Promise.all([
+    supabase.from("project_messages").select("*").order("created_at", { ascending: true }),
+    supabase.from("generation_records").select("*").order("created_at", { ascending: false }),
+  ]);
+
+  if (messagesError ?? generationsError) {
+    throw messagesError ?? generationsError;
+  }
+
+  const mappedMessages = ((messages ?? []) as ProjectMessageRow[])
+    .filter((message) => message.card_id === cardId)
+    .map<ProjectMessage>((message) => ({
+      id: message.id,
+      cardId: message.card_id,
+      ownerId: message.owner_id,
+      role: message.role,
+      content: message.content,
+      provider: message.provider,
+      model: message.model,
+      metadata: message.metadata as ProjectMessage["metadata"],
+      createdAt: message.created_at,
+    }));
+
+  const mappedGenerations = ((generations ?? []) as GenerationRecordRow[])
+    .filter((generation) => generation.card_id === cardId)
+    .map<GenerationRecord>((generation) => ({
+      id: generation.id,
+      cardId: generation.card_id,
+      ownerId: generation.owner_id,
+      provider: generation.provider,
+      model: generation.model,
+      modality: generation.modality,
+      prompt: generation.prompt,
+      status: generation.status,
+      errorMessage: generation.error_message,
+      metadata: generation.metadata as GenerationRecord["metadata"],
+      createdAt: generation.created_at,
+      completedAt: generation.completed_at,
+    }));
+
+  return {
+    ...detail,
+    messages: mappedMessages,
+    generations: mappedGenerations,
+  };
+}
+
 export async function updateCard(cardId: string, patch: CardPatch) {
   if (env.isSampleMode) {
     return updateSampleCard(cardId, patch);
@@ -828,7 +909,8 @@ export async function updateCardStatus(cardId: string, status: ContentStatus) {
 
 export async function addCardAsset(
   cardId: string,
-  asset: Pick<CardAsset, "title" | "url" | "type" | "note">,
+  asset: Pick<CardAsset, "title" | "url" | "type" | "note"> &
+    Partial<Pick<CardAsset, "storagePath" | "source" | "sceneKey" | "metadata" | "generationId">>,
 ) {
   if (env.isSampleMode) {
     await addSampleAsset(cardId, asset);
@@ -858,6 +940,12 @@ export async function addCardAsset(
     title: asset.title,
     url: asset.url,
     note: asset.note ?? "",
+    storage_path: asset.storagePath ?? null,
+    source: asset.source ?? "manual",
+    scene_key: asset.sceneKey ?? null,
+    metadata: asset.metadata ?? {},
+    generation_id: asset.generationId ?? null,
+    updated_at: now(),
   });
 
   if (error) {
@@ -913,4 +1001,4 @@ export async function requestAiAssist(
   return updateCard(cardId, { aiSuggestions: nextSuggestions });
 }
 
-export type { WorkspaceSnapshot, CardPatch, CardDetail };
+export type { WorkspaceSnapshot, CardPatch, CardDetail, ProjectWorkspace };

@@ -117,7 +117,7 @@ export default function BoardPage() {
         <PageHeading
           eyebrow="Pipeline"
           title="Production Board"
-          description="Drag cards across columns to progress them from raw capture to posted and analyzed. Use quick actions to jump straight into editing."
+          description="Drag projects across columns to progress them from raw capture to posted and analyzed. Use quick actions to jump straight into editing."
         />
         <div className="flex items-center gap-2">
           <Link href="/inbox">
@@ -198,7 +198,7 @@ export default function BoardPage() {
 
                   {statusCards.length === 0 && (
                     <div className="rounded-xl border border-dashed border-border/40 p-4 py-8 text-center text-xs text-muted-foreground bg-black/5">
-                      No cards here
+                      No projects here
                     </div>
                   )}
                 </div>
@@ -325,12 +325,12 @@ function DraggableCard({
         onClick={preventDrag}
       >
         <div className="flex gap-1.5">
-          <Link href={`/cards/${card.id}`}>
+          <Link href={`/projects/${card.id}`}>
             <button className="p-1.5 hover:bg-white/5 border border-border rounded text-[10px] text-muted-foreground hover:text-foreground transition cursor-pointer" title="Workspace Details">
               <FileText className="h-3 w-3" />
             </button>
           </Link>
-          <Link href={`/studio/${card.id}`}>
+          <Link href={`/editor/${card.id}`}>
             <button className="p-1.5 hover:bg-white/5 border border-border rounded text-[10px] text-muted-foreground hover:text-foreground transition cursor-pointer" title="Studio Editor">
               <Film className="h-3 w-3" />
             </button>

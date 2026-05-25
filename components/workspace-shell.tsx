@@ -35,16 +35,15 @@ export function WorkspaceShell({
   const pathname = usePathname();
   const { data } = useWorkspaceSnapshot();
 
-  const cardIdMatch = pathname.match(/^\/(cards|studio)\/([^/]+)/);
+  const cardIdMatch = pathname.match(/^\/(cards|studio|projects)\/([^/]+)/);
   const activeCardId = cardIdMatch ? cardIdMatch[2] : null;
 
   const items = [
     { href: "/home", label: "HQ", icon: Home },
     { href: "/inbox", label: "Inbox", icon: Inbox },
     { href: "/board", label: "Board", icon: Clapperboard },
-    ...(activeCardId ? [{ href: `/cards/${activeCardId}`, label: "Active Project", icon: Video, match: [`/cards/${activeCardId}`, `/studio/${activeCardId}`] }] : []),
+    ...(activeCardId ? [{ href: `/projects/${activeCardId}`, label: "Active Project", icon: Video, match: [`/projects/${activeCardId}`, `/cards/${activeCardId}`, `/studio/${activeCardId}`] }] : []),
     { href: "/editor", label: "Editor", icon: Film, match: ["/editor"] },
-    { href: "/playground", label: "Playground", icon: Sparkles },
     { href: "/settings", label: "Settings", icon: Settings2 },
   ];
 
@@ -64,7 +63,7 @@ export function WorkspaceShell({
       >
         <div className="border-b border-border px-6 py-6">
           <p className="text-xl font-semibold tracking-tight text-foreground">SceneBook</p>
-          <p className="cmd-label mt-2">Command Center</p>
+          <p className="cmd-label mt-2">Project Hub</p>
         </div>
 
         <div className="px-6 py-5">
