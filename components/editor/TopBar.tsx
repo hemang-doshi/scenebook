@@ -10,11 +10,13 @@ import {
   Share2,
   Download,
 } from "lucide-react";
+import { AppBreadcrumbs } from "@/components/ui/app-breadcrumbs";
 import { useEditorStore } from "@/lib/editor/editor-store";
 import { ASPECT_RATIOS } from "@/lib/editor/types";
 import type { AspectRatio } from "@/lib/editor/types";
 
 export default function TopBar() {
+  const projectId = useEditorStore((s) => s.projectId);
   const projectTitle = useEditorStore((s) => s.projectTitle);
   const zoom = useEditorStore((s) => s.zoom);
   const setZoom = useEditorStore((s) => s.setZoom);
@@ -22,19 +24,34 @@ export default function TopBar() {
   const setAspectRatio = useEditorStore((s) => s.setAspectRatio);
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const togglePlay = useEditorStore((s) => s.togglePlay);
+  const backHref = projectId && projectId !== "new" ? `/projects/${projectId}/chat` : "/editor";
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--ed-border-subtle)] bg-[var(--ed-surface)] px-3">
       {/* Left */}
       <div className="flex items-center gap-3">
         <Link
-          href="/editor"
+          href={backHref}
           className="flex h-8 w-8 items-center justify-center rounded-[var(--ed-radius-sm)] text-[var(--ed-text-muted)] transition hover:bg-[var(--ed-surface-muted)] hover:text-[var(--ed-text-primary)]"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="h-4 w-px bg-[var(--ed-border)]" />
-        <span className="text-sm font-medium">{projectTitle}</span>
+        <div className="hidden lg:block">
+          <AppBreadcrumbs
+            items={
+              projectId && projectId !== "new"
+                ? [
+                    { label: "Home", href: "/home" },
+                    { label: projectTitle, href: `/projects/${projectId}/chat` },
+                    { label: "Editor" },
+                  ]
+                : [{ label: "Home", href: "/home" }, { label: "Editor" }]
+            }
+            className="[&_ol]:min-h-9 [&_ol]:bg-[var(--ed-surface-muted)] [&_ol]:px-3 [&_ol]:py-1.5 [&_ol]:text-xs [&_ol]:text-[var(--ed-text-secondary)] [&_[data-slot=breadcrumb-page]]:text-[var(--ed-text-primary)]"
+          />
+        </div>
+        <span className="text-sm font-medium lg:hidden">{projectTitle}</span>
         <span className="flex items-center gap-1.5 text-[10px] text-[var(--ed-text-muted)]">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--ed-success)]" />
           Saved
