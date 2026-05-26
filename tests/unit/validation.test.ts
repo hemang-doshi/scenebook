@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  createProjectSchema,
   createInboxItemSchema,
   createNoteCardFromInboxSchema,
   updateContentCardSchema,
@@ -27,6 +28,16 @@ describe("validation", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  test("accepts lightweight project creation input", () => {
+    const result = createProjectSchema.safeParse({
+      title: "Creator operating system teardown",
+      format: "short",
+      platform: "youtube",
+    });
+
+    expect(result.success).toBe(true);
   });
 
   test("accepts a content card update with structured script and analytics fields", () => {

@@ -4,7 +4,7 @@ import { getCardReadiness } from "@/lib/domain/content";
 import { env } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
-import { mapCardRow } from "@/lib/data/mappers";
+import { mapCardRow, mapProjectSummary } from "@/lib/data/mappers";
 import type {
   AISuggestions,
   AnalyticsJournal,
@@ -35,6 +35,18 @@ export type WorkspaceSnapshot = {
     postedAwaitingAnalysis: number;
   };
 };
+
+export type ProjectSummary = {
+  id: string;
+  title: string;
+  status: ContentStatus;
+  format: ContentFormat;
+  platform: ContentPlatform;
+  assetCount: number;
+  updatedAt: string;
+};
+
+export type ProjectShellSummary = Pick<ProjectSummary, "id" | "title" | "status">;
 
 export type CardDetail = WorkspaceSnapshot["cards"][number];
 
@@ -72,6 +84,14 @@ type GenerationRecordRow = Database["public"]["Tables"]["generation_records"]["R
 type SupabaseInsertChain = PromiseLike<{ error: Error | null }> & {
   select(query: string): {
     single(): SupabaseQueryResult<unknown>;
+  };
+};
+type SupabaseEqSelectChain<T> = {
+  select(query: string): {
+    eq(column: string, value: string): {
+      single(): SupabaseQueryResult<T>;
+      order(column: string, options: { ascending: boolean }): SupabaseQueryResult<T[]>;
+    };
   };
 };
 
@@ -379,6 +399,24 @@ function enrichCard(card: ContentCard) {
   };
 }
 
+function mapAssetRow(asset: AssetRow): CardAsset {
+  return {
+    id: asset.id,
+    cardId: asset.card_id,
+    title: asset.title,
+    url: asset.url,
+    type: asset.type as CardAsset["type"],
+    note: asset.note,
+    storagePath: asset.storage_path,
+    source: asset.source as CardAsset["source"],
+    sceneKey: asset.scene_key,
+    metadata: asset.metadata as CardAsset["metadata"],
+    generationId: asset.generation_id,
+    createdAt: asset.created_at,
+    updatedAt: asset.updated_at,
+  };
+}
+
 async function getSampleSnapshot(): Promise<WorkspaceSnapshot> {
   const store = ensureSampleStore();
   const cards = store.cards.map(enrichCard);
@@ -619,21 +657,7 @@ async function getSupabaseSnapshot(): Promise<WorkspaceSnapshot> {
     .map((card: ContentCard) => {
       const cardAssets: CardAsset[] = assetRows
         .filter((asset) => asset.card_id === card.id)
-        .map((asset) => ({
-          id: asset.id,
-          cardId: asset.card_id,
-          title: asset.title,
-          url: asset.url,
-          type: asset.type as CardAsset["type"],
-          note: asset.note,
-          storagePath: asset.storage_path,
-          source: asset.source as CardAsset["source"],
-          sceneKey: asset.scene_key,
-          metadata: asset.metadata as CardAsset["metadata"],
-          generationId: asset.generation_id,
-          createdAt: asset.created_at,
-          updatedAt: asset.updated_at,
-        }));
+        .map(mapAssetRow);
 
       return {
         ...card,
@@ -670,6 +694,66 @@ async function getSupabaseSnapshot(): Promise<WorkspaceSnapshot> {
 
 export async function getWorkspaceSnapshot() {
   return env.isSampleMode ? getSampleSnapshot() : getSupabaseSnapshot();
+}
+
+export async function listProjectSummaries(): Promise<ProjectSummary[]> {
+  if (env.isSampleMode) {
+    const snapshot = await getSampleSnapshot();
+    return snapshot.cards.map((card) =>
+      mapProjectSummary(
+        {
+          id: card.id,
+          title: card.title,
+          status: card.status,
+          format: card.format,
+          platform: card.platform,
+          updated_at: card.updatedAt,
+        },
+        card.assets.length,
+      ),
+    );
+  }
+
+  const supabase =
+    (await createSupabaseServerClient()) as unknown as SupabaseRepositoryClient;
+  const [{ data: rows, error: cardError }, { data: assets, error: assetError }] = await Promise.all([
+    supabase.from("content_cards").select("*").order("updated_at", { ascending: false }),
+    supabase.from("card_assets").select("*").order("created_at", { ascending: true }),
+  ]);
+
+  if (cardError ?? assetError) {
+    throw cardError ?? assetError;
+  }
+
+  const assetCounts = new Map<string, number>();
+  for (const asset of (assets ?? []) as AssetRow[]) {
+    assetCounts.set(asset.card_id, (assetCounts.get(asset.card_id) ?? 0) + 1);
+  }
+
+  return ((rows ?? []) as ContentCardRow[]).map((row) =>
+    mapProjectSummary(
+      {
+        id: row.id,
+        title: row.title,
+        status: row.status as ContentStatus,
+        format: row.format as ContentFormat,
+        platform: row.platform as ContentPlatform,
+        updated_at: row.updated_at,
+      },
+      assetCounts.get(row.id) ?? 0,
+    ),
+  );
+}
+
+export async function getProjectShellSummary(cardId: string): Promise<ProjectShellSummary | null> {
+  const card = await getCardDetail(cardId);
+  return card
+    ? {
+        id: card.id,
+        title: card.title,
+        status: card.status,
+      }
+    : null;
 }
 
 export async function createInboxItem(input: {
@@ -782,13 +866,98 @@ export async function convertInboxItemToCard(input: {
   };
 }
 
+export async function createProject(input: {
+  title: string;
+  format: ContentFormat;
+  platform: ContentPlatform;
+}) {
+  if (env.isSampleMode) {
+    const store = ensureSampleStore();
+    const card = buildSampleCard({
+      title: input.title,
+      format: input.format,
+      platform: input.platform,
+    });
+
+    store.cards.push(card);
+    return enrichCard(card);
+  }
+
+  const supabase =
+    (await createSupabaseServerClient()) as unknown as SupabaseRepositoryClient;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be signed in.");
+  }
+
+  const { data, error } = await supabase
+    .from("content_cards")
+    .insert({
+      owner_id: user.id,
+      inbox_item_id: null,
+      title: input.title,
+      status: "idea",
+      format: input.format,
+      platform: input.platform,
+      topic_tags: [],
+      experiment_tags: [],
+      script_lab: emptyScriptLab(),
+      shoot_pack: emptyShootPack(),
+      analytics_journal: emptyAnalytics(),
+      ai_suggestions: emptySuggestions(),
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Unable to create project.");
+  }
+
+  return enrichCard(mapCardRow(data as ContentCardRow));
+}
+
 export async function getCardDetail(cardId: string) {
   if (env.isSampleMode) {
     return getSampleCard(cardId);
   }
 
-  const snapshot = await getSupabaseSnapshot();
-  return snapshot.cards.find((card) => card.id === cardId) ?? null;
+  const supabase =
+    (await createSupabaseServerClient()) as unknown as SupabaseRepositoryClient;
+  const cardTable = supabase.from("content_cards") as unknown as SupabaseEqSelectChain<ContentCardRow>;
+  const assetsTable = supabase.from("card_assets") as unknown as SupabaseEqSelectChain<AssetRow>;
+
+  const [{ data: row, error: cardError }, { data: assets, error: assetError }] = await Promise.all([
+    cardTable.select("*").eq("id", cardId).single() as Promise<{ data: ContentCardRow | null; error: Error | null }>,
+    assetsTable.select("*").eq("card_id", cardId).order("created_at", { ascending: true }) as Promise<{ data: AssetRow[] | null; error: Error | null }>,
+  ]);
+
+  if (cardError) {
+    throw cardError;
+  }
+
+  if (assetError) {
+    throw assetError;
+  }
+
+  if (!row) {
+    return null;
+  }
+
+  const card = mapCardRow(row);
+  const cardAssets = (assets ?? []).map(mapAssetRow);
+
+  return {
+    ...card,
+    assets: cardAssets,
+    readiness: getCardReadiness({
+      scriptLab: card.scriptLab,
+      shootPack: card.shootPack,
+      assets: cardAssets,
+    }),
+  };
 }
 
 export async function getProjectWorkspace(cardId: string): Promise<ProjectWorkspace | null> {
