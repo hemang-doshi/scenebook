@@ -249,7 +249,7 @@ export default function InboxPage() {
                                   },
                                 );
                                 refresh();
-                                router.push(`/projects/${card.id}`);
+                                router.push(`/projects/${card.id}/chat`);
                               } catch (err) {
                                 setConvertError(err instanceof Error ? err.message : "Conversion failed.");
                               }

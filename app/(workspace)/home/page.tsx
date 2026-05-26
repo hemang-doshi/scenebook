@@ -81,8 +81,11 @@ export default function HomePage() {
           </p>
           {continueProject ? (
             <div className="flex gap-2">
+              <Link href={`/projects/${continueProject.id}/chat`}>
+                <Button>Open chat</Button>
+              </Link>
               <Link href={`/projects/${continueProject.id}`}>
-                <Button>Open workspace</Button>
+                <Button variant="secondary">Project hub</Button>
               </Link>
               <Link href={`/editor/${continueProject.id}`}>
                 <Button variant="secondary">Open editor</Button>
@@ -119,7 +122,7 @@ export default function HomePage() {
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
           {recentProjects.map((project) => (
-            <Link key={project.id} href={`/projects/${project.id}`} className="rounded-xl border border-border/60 bg-black/20 p-4">
+            <Link key={project.id} href={`/projects/${project.id}/chat`} className="rounded-xl border border-border/60 bg-black/20 p-4">
               <div className="flex items-center justify-between">
                 <Badge className="border-border">{statusLabels[project.status]}</Badge>
                 <Film className="h-4 w-4 text-muted" />
@@ -150,7 +153,7 @@ export default function HomePage() {
                   <p className="text-sm text-muted">No projects in this stage.</p>
                 ) : (
                   projects.map((project) => (
-                    <Link key={project.id} href={`/projects/${project.id}`} className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-3 text-sm">
+                    <Link key={project.id} href={`/projects/${project.id}/chat`} className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-3 text-sm">
                       <div>
                         <p className="font-medium">{project.title}</p>
                         <p className="text-xs text-muted">{statusLabels[project.status]}</p>
