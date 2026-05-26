@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { mapCardRow } from "@/lib/data/mappers";
+import { mapCardRow, mapProjectSummary } from "@/lib/data/mappers";
 
 describe("row mappers", () => {
   test("maps a Supabase row into the app card shape", () => {
@@ -38,5 +38,29 @@ describe("row mappers", () => {
     expect(card.topicTags).toEqual(["workflow"]);
     expect(card.analyticsJournal.views).toBe(3200);
     expect(card.aiSuggestions.hooks).toHaveLength(1);
+  });
+
+  test("maps a project summary without full card detail payload", () => {
+    const summary = mapProjectSummary(
+      {
+        id: "card-2",
+        title: "Project-first workspace refresh",
+        status: "editing",
+        format: "short",
+        platform: "youtube",
+        updated_at: "2026-05-26T10:00:00.000Z",
+      },
+      3,
+    );
+
+    expect(summary).toEqual({
+      id: "card-2",
+      title: "Project-first workspace refresh",
+      status: "editing",
+      format: "short",
+      platform: "youtube",
+      assetCount: 3,
+      updatedAt: "2026-05-26T10:00:00.000Z",
+    });
   });
 });
