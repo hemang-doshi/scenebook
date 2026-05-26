@@ -28,7 +28,7 @@ import { CreatorProgress } from "@/components/workspace/creator-progress";
 import { useProjectWorkspace } from "@/components/workspace/hooks";
 import { fetchJson } from "@/lib/fetcher";
 import { statusLabels } from "@/lib/domain/content";
-import { getDefaultMediaModel, getMediaModelPresets, mediaModalities, textModelPresets } from "@/lib/ai/model-registry";
+import { getDefaultMediaModel, getMediaModelPresets, mediaModalities } from "@/lib/ai/model-registry";
 import type { CardAsset, ChecklistItem, ContentStatus } from "@/lib/types";
 
 const tabs = [
@@ -55,8 +55,6 @@ export default function ProjectWorkspacePage() {
   const { project, error, isLoading, refresh, isPending } = useProjectWorkspace(params.id);
 
   const [saving, setSaving] = useState(false);
-  const [chatPrompt, setChatPrompt] = useState("");
-  const [chatModel, setChatModel] = useState<string>(textModelPresets[0].id);
   const [generating, setGenerating] = useState(false);
   const [generationPrompt, setGenerationPrompt] = useState("");
   const [generationTitle, setGenerationTitle] = useState("");
@@ -168,21 +166,6 @@ export default function ProjectWorkspacePage() {
     }
   }
 
-  async function handleProjectChat() {
-    if (!chatPrompt.trim()) return;
-    setGenerating(true);
-    try {
-      await fetchJson(`/api/projects/${projectId}/chat`, {
-        method: "POST",
-        body: JSON.stringify({ prompt: chatPrompt, model: chatModel }),
-      });
-      setChatPrompt("");
-      refresh();
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   async function handleMediaGeneration() {
     if (!generationPrompt.trim()) return;
     setGenerating(true);
@@ -218,6 +201,12 @@ export default function ProjectWorkspacePage() {
           <Badge className="bg-accent/10 text-accent border-accent/20">
             {statusLabels[project.status]}
           </Badge>
+          <Link href={`/projects/${projectId}/chat`}>
+            <Button variant="secondary" className="text-xs">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Open chat
+            </Button>
+          </Link>
             <Link href={`/editor/${projectId}`}>
             <Button className="text-xs">
               Open Editor <ArrowRight className="ml-2 h-4 w-4" />
@@ -229,6 +218,13 @@ export default function ProjectWorkspacePage() {
       <CreatorProgress currentStatus={project.status} cardId={project.id} />
 
       <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/projects/${projectId}/chat`}
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-black/20 px-3 py-2 text-xs text-muted hover:text-foreground"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Chat
+        </Link>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -321,9 +317,9 @@ export default function ProjectWorkspacePage() {
                 Jump back into {project.scriptLab.script ? "generation and asset organization" : "script shaping"}.
               </p>
               <div className="mt-4 flex gap-2">
-                <Button variant="secondary" onClick={() => setActiveTab(project.scriptLab.script ? "generate" : "script")}>
-                  Continue
-                </Button>
+                <Link href={`/projects/${project.id}/chat`}>
+                  <Button variant="secondary">Open chat</Button>
+                </Link>
                 <Link href={`/editor/${project.id}`}>
                   <Button>Launch editor</Button>
                 </Link>
@@ -382,39 +378,18 @@ export default function ProjectWorkspacePage() {
       {activeTab === "generate" && (
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <Panel className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="cmd-label text-accent">Project Copilot</p>
-                <h3 className="mt-1 text-sm font-semibold">Persisted chat history</h3>
+            <div className="rounded-2xl border border-accent/20 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),rgba(10,10,12,0.95))] p-6">
+              <p className="cmd-label text-accent">Project Chat</p>
+              <h3 className="mt-2 text-2xl font-semibold">Chat now lives on its own focused route</h3>
+              <p className="mt-3 max-w-xl text-sm text-muted">
+                Use the dedicated chat screen when you want to shape hooks, tighten transitions, or build the next scene without the rest of the workspace competing for attention.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Link href={`/projects/${projectId}/chat`}>
+                  <Button>Open project chat</Button>
+                </Link>
+                <Badge className="border-border">{project.messages.length} saved turns</Badge>
               </div>
-              <CustomSelect
-                value={chatModel}
-                onChange={(value) => setChatModel(value)}
-                options={textModelPresets.map((model) => ({ value: model.id, label: model.label }))}
-              />
-            </div>
-            <div className="max-h-96 space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-black/20 p-4">
-              {project.messages.length === 0 ? (
-                <p className="text-sm text-muted">No project chat yet.</p>
-              ) : (
-                project.messages.map((message) => (
-                  <div key={message.id} className="rounded-lg border border-border/40 bg-black/20 p-3">
-                    <p className="cmd-label mb-2">{message.role}</p>
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
-            <Textarea
-              value={chatPrompt}
-              onChange={(event) => setChatPrompt(event.target.value)}
-              placeholder="Ask for the next beat, a tighter hook, or a better transition."
-            />
-            <div className="flex justify-end">
-              <Button disabled={generating} onClick={handleProjectChat}>
-                {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
-                Save chat
-              </Button>
             </div>
           </Panel>
 

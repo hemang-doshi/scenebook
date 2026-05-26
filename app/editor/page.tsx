@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Film, Plus, Clock, LayoutTemplate, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
+import { AppBreadcrumbs } from "@/components/ui/app-breadcrumbs";
 import { useEditorStore } from "@/lib/editor/editor-store";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 import { RetroGrid } from "@/components/ui/retro-grid";
@@ -66,7 +67,11 @@ export default function EditorHomePage() {
       >
         <header className="flex items-center justify-between border-b border-border/50 px-8 py-6 bg-black/25 backdrop-blur-md shrink-0">
           <div>
-            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-accent font-semibold">Video Studio</span>
+            <AppBreadcrumbs
+              items={[{ label: "Home", href: "/home" }, { label: "Editor" }]}
+              className="[&_ol]:min-h-9 [&_ol]:bg-black/35 [&_ol]:px-3 [&_ol]:py-1.5 [&_ol]:text-xs"
+            />
+            <span className="mt-4 inline-block text-[10px] font-mono uppercase tracking-[0.15em] text-accent font-semibold">Video Studio</span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground mt-0.5">Project Deck</h1>
           </div>
           <Link 
