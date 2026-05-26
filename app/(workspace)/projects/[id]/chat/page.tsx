@@ -1,27 +1,18 @@
-"use client";
-
-import { Loader2 } from "lucide-react";
-import { useParams } from "next/navigation";
-
-import { ProjectChatPanel } from "@/components/workspace/project-chat-panel";
 import { Panel } from "@/components/ui/panel";
-import { useProjectWorkspace } from "@/components/workspace/hooks";
+import { getProjectWorkspace } from "@/lib/data/repository";
+import { ProjectChatRouteClient } from "@/components/workspace/project-chat-route-client";
 
-export default function ProjectChatPage() {
-  const params = useParams<{ id: string }>();
-  const { project, error, isLoading, refresh } = useProjectWorkspace(params.id);
+export default async function ProjectChatPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const project = await getProjectWorkspace(id);
 
-  if (isLoading) {
-    return (
-      <Panel className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-accent" />
-      </Panel>
-    );
+  if (!project) {
+    return <Panel>Unable to load project chat.</Panel>;
   }
 
-  if (error || !project) {
-    return <Panel>{error ?? "Unable to load project chat."}</Panel>;
-  }
-
-  return <ProjectChatPanel project={project} onRefresh={refresh} />;
+  return <ProjectChatRouteClient project={project} />;
 }

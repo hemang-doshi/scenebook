@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -10,8 +11,8 @@ import {
   ChevronRight,
   Clapperboard,
   Film,
+  FolderKanban,
   Home,
-  Inbox,
   LogOut,
   MessageSquare,
   Search,
@@ -29,12 +30,19 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { AuroraBackground } from "@/components/ui/aurora-background";
-import { RetroGrid } from "@/components/ui/retro-grid";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-import { useWorkspaceSnapshot } from "@/components/workspace/hooks";
+import { fetchJson } from "@/lib/fetcher";
 import { statusLabels } from "@/lib/domain/content";
+
+const AuroraBackground = dynamic(
+  () => import("@/components/ui/aurora-background").then((mod) => mod.AuroraBackground),
+  { ssr: false },
+);
+const RetroGrid = dynamic(
+  () => import("@/components/ui/retro-grid").then((mod) => mod.RetroGrid),
+  { ssr: false },
+);
 
 export function WorkspaceShell({
   children,
@@ -43,27 +51,45 @@ export function WorkspaceShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data, refresh } = useWorkspaceSnapshot();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [currentProject, setCurrentProject] = useState<{
+    id: string;
+    title: string;
+    status: keyof typeof statusLabels;
+  } | null>(null);
 
   const cardIdMatch = pathname.match(/^\/(cards|studio|projects|editor)\/([^/]+)/);
   const activeCardId = cardIdMatch ? cardIdMatch[2] : null;
   const showActiveProject = Boolean(activeCardId && activeCardId !== "new");
 
   const items = [
-    { href: "/home", label: "HQ", icon: Home },
-    { href: "/inbox", label: "Inbox", icon: Inbox },
+    { href: "/home", label: "Projects", icon: Home },
     { href: "/board", label: "Board", icon: Clapperboard },
-    ...(showActiveProject ? [{ href: `/projects/${activeCardId}/chat`, label: "Project Chat", icon: MessageSquare, match: [`/projects/${activeCardId}`, `/projects/${activeCardId}/chat`, `/cards/${activeCardId}`, `/studio/${activeCardId}`, `/editor/${activeCardId}`] }] : []),
+    ...(showActiveProject
+      ? [
+          {
+            href: `/projects/${activeCardId}`,
+            label: "Workspace",
+            icon: FolderKanban,
+            match: [`/projects/${activeCardId}`, `/cards/${activeCardId}`, `/studio/${activeCardId}`],
+          },
+          {
+            href: `/projects/${activeCardId}/chat`,
+            label: "Chat",
+            icon: MessageSquare,
+            match: [`/projects/${activeCardId}/chat`],
+          },
+        ]
+      : []),
     { href: "/editor", label: "Editor", icon: Film, match: ["/editor"] },
     { href: "/settings", label: "Settings", icon: Settings2 },
   ];
 
-  const currentCard = data?.cards.find((c) => c.id === activeCardId) || data?.cards[0];
-  const projectTitle = currentCard ? currentCard.title : "No active project";
-  const projectStatus = currentCard ? statusLabels[currentCard.status] : "Idle";
+  const visibleProject = activeCardId && activeCardId !== "new" ? currentProject : null;
+  const projectTitle = visibleProject ? visibleProject.title : "No active project";
+  const projectStatus = visibleProject ? statusLabels[visibleProject.status] : "Idle";
   const accountLabel = accountEmail ?? "Signed in";
   const accountSubLabel = accountEmail ? "Workspace session" : "Supabase workspace";
 
@@ -77,8 +103,29 @@ export function WorkspaceShell({
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [pathname, refresh]);
+    if (!activeCardId || activeCardId === "new") {
+      return;
+    }
+
+    let active = true;
+    fetchJson<{ id: string; title: string; status: keyof typeof statusLabels }>(
+      `/api/projects/${activeCardId}/summary`,
+    )
+      .then((project) => {
+        if (active) {
+          setCurrentProject(project);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCurrentProject(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeCardId]);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -93,34 +140,33 @@ export function WorkspaceShell({
   }
 
   const breadcrumbItems = useMemo(() => {
-    if (pathname === "/home") return [{ label: "Home" }];
-    if (pathname === "/inbox") return [{ label: "Inbox" }];
+    if (pathname === "/home") return [{ label: "Projects" }];
     if (pathname === "/board") return [{ label: "Board" }];
     if (pathname === "/settings") return [{ label: "Settings" }];
     if (pathname === "/editor") {
-      return [{ label: "Home", href: "/home" }, { label: "Editor" }];
+      return [{ label: "Projects", href: "/home" }, { label: "Editor" }];
     }
     if (pathname.startsWith("/editor/")) {
       if (showActiveProject) {
         return [
-          { label: "Home", href: "/home" },
+          { label: "Projects", href: "/home" },
           { label: projectTitle, href: `/projects/${activeCardId}/chat` },
           { label: "Editor" },
         ];
       }
-      return [{ label: "Home", href: "/home" }, { label: "Editor" }];
+      return [{ label: "Projects", href: "/home" }, { label: "Editor" }];
     }
     if (pathname.startsWith("/projects/") && pathname.endsWith("/chat")) {
       return [
-        { label: "Home", href: "/home" },
+        { label: "Projects", href: "/home" },
         { label: projectTitle, href: `/projects/${activeCardId}` },
-        { label: "Project Chat" },
+        { label: "Chat" },
       ];
     }
     if (pathname.startsWith("/projects/")) {
-      return [{ label: "Home", href: "/home" }, { label: projectTitle }];
+      return [{ label: "Projects", href: "/home" }, { label: projectTitle }];
     }
-    return [{ label: "Home", href: "/home" }];
+    return [{ label: "Projects", href: "/home" }];
   }, [activeCardId, pathname, projectTitle, showActiveProject]);
 
   return (
@@ -165,7 +211,7 @@ export function WorkspaceShell({
                       <span
                         className={cn(
                           "size-2 rounded-full",
-                          currentCard ? "bg-accent shadow-[0_0_12px_rgba(99,102,241,0.55)]" : "bg-zinc-600"
+                          visibleProject ? "bg-accent shadow-[0_0_12px_rgba(99,102,241,0.55)]" : "bg-zinc-600"
                         )}
                       />
                       {projectStatus}
@@ -202,7 +248,7 @@ export function WorkspaceShell({
 
                 <Separator className="bg-border/70" />
 
-                <Link href="/inbox">
+                <Link href="/home?create=1">
                   <Button
                     className={cn(
                       "w-full rounded-[1.25rem] justify-center",
@@ -255,7 +301,7 @@ export function WorkspaceShell({
                 <div className="hidden items-center gap-3 lg:flex">
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                    <Input className="w-72 rounded-full border-border/70 bg-background/75 pl-9" placeholder="Search project..." />
+                    <Input className="w-72 rounded-full border-border/70 bg-background/75 pl-9" placeholder="Search projects..." />
                   </div>
                   <button className="rounded-full border border-border/70 bg-background/75 p-2 text-muted transition hover:bg-white/5 hover:text-foreground">
                     <Bell className="h-4 w-4" />

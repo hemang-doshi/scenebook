@@ -61,6 +61,12 @@ export const createNoteCardFromInboxSchema = z.object({
   platform: z.enum(contentPlatforms),
 });
 
+export const createProjectSchema = z.object({
+  title: requiredText,
+  format: z.enum(contentFormats),
+  platform: z.enum(contentPlatforms),
+});
+
 export const updateContentCardSchema = z.object({
   title: requiredText,
   status: z.enum(contentStatuses),

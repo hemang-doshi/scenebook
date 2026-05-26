@@ -2,6 +2,9 @@ import type {
   AISuggestions,
   AnalyticsJournal,
   ContentCard,
+  ContentFormat,
+  ContentPlatform,
+  ContentStatus,
   ScriptLab,
   ShootPack,
 } from "@/lib/types";
@@ -83,6 +86,15 @@ type CardRow = {
   updated_at: string;
 };
 
+type ProjectSummaryRow = {
+  id: string;
+  title: string;
+  status: ContentStatus;
+  format: ContentFormat;
+  platform: ContentPlatform;
+  updated_at: string;
+};
+
 export function mapCardRow(row: CardRow): ContentCard {
   const status = contentStatuses.includes(row.status as (typeof contentStatuses)[number])
     ? (row.status as (typeof contentStatuses)[number])
@@ -113,6 +125,18 @@ export function mapCardRow(row: CardRow): ContentCard {
       row.ai_suggestions as Partial<AISuggestions> | undefined,
     ),
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapProjectSummary(row: ProjectSummaryRow, assetCount: number) {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    format: row.format,
+    platform: row.platform,
+    assetCount,
     updatedAt: row.updated_at,
   };
 }

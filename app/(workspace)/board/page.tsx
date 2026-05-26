@@ -120,9 +120,9 @@ export default function BoardPage() {
           description="Drag projects across columns to progress them from raw capture to posted and analyzed. Use quick actions to jump straight into editing."
         />
         <div className="flex items-center gap-2">
-          <Link href="/inbox">
+          <Link href="/home?create=1">
             <Button className="font-mono text-[10px] uppercase tracking-wider h-8 px-3">
-              Capture Idea
+              New project
             </Button>
           </Link>
         </div>

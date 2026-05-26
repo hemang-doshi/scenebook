@@ -4,7 +4,6 @@ test("creator can move from idea capture to a learning loop in database mode", a
   page,
 }) => {
   const runId = Date.now().toString();
-  const inboxTitle = `Desk tweaks that improved my filming ${runId}`;
   const projectTitle = `3 desk tweaks that fixed my creator setup ${runId}`;
 
   await page.goto("/sign-up");
@@ -14,23 +13,13 @@ test("creator can move from idea capture to a learning loop in database mode", a
 
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible({ timeout: 20_000 });
 
-  await page.getByRole("complementary").getByRole("link", { name: "Inbox" }).click();
-  await page.getByLabel("Quick capture thought").fill(`${inboxTitle}\nFocus on lighting and cable cleanup as the hero detail.`);
-  await page.getByRole("button", { name: "Capture idea" }).click();
-
-  await expect(page.getByText(inboxTitle)).toBeVisible();
-  await page.locator("div.rounded-xl").filter({ hasText: inboxTitle }).getByRole("button", { name: "Convert to Project" }).first().click();
-  await page.getByLabel("Card Title").fill(projectTitle);
-  
-  // Custom select interactions for Format
+  await page.getByRole("main").getByRole("button", { name: "New project" }).click();
+  await page.getByLabel("Project title").fill(projectTitle);
   await page.getByLabel("Format").click();
   await page.getByRole("button", { name: "SHORT", exact: true }).click();
-
-  // Custom select interactions for Platform
   await page.getByLabel("Platform").click();
   await page.getByRole("button", { name: "YOUTUBE", exact: true }).click();
-
-  await page.getByRole("button", { name: "Promote to Card" }).click();
+  await page.getByRole("button", { name: "Create project" }).click();
 
   await expect(page.getByRole("heading", { name: projectTitle })).toBeVisible({ timeout: 20_000 });
 
@@ -60,13 +49,11 @@ test("creator can move from idea capture to a learning loop in database mode", a
   ).toBeVisible();
 
   // 3. Update status programmatically because Board is drag-and-drop
-  await page.evaluate(async (id) => {
-    await fetch(`/api/cards/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "posted" }),
-    });
-  }, cardId);
+  await page.request.fetch(`/api/cards/${cardId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    data: { status: "posted" },
+  });
 
   await page.goto(projectPath);
   await page.getByRole("button", { name: "Analytics" }).click();
