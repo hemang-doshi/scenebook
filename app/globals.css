@@ -84,6 +84,23 @@ textarea {
   backdrop-filter: blur(16px);
 }
 
+.cmd-island {
+  border: 1px solid color-mix(in srgb, var(--border) 86%, white 14%);
+  background:
+    linear-gradient(180deg, rgba(16, 16, 19, 0.92), rgba(10, 10, 12, 0.88)),
+    radial-gradient(circle at top, rgba(99, 102, 241, 0.16), transparent 42%);
+  box-shadow:
+    0 24px 90px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px);
+}
+
+.cmd-breadcrumb {
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
 .cmd-card {
   border: 1px solid var(--border);
   background: var(--surface-strong);
@@ -218,4 +235,3 @@ textarea {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
-

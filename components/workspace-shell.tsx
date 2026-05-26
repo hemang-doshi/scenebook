@@ -1,28 +1,37 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  ChevronLeft,
+  ChevronRight,
   Clapperboard,
   Film,
   Home,
   Inbox,
+  LogOut,
+  MessageSquare,
   Search,
   Settings2,
   Sparkles,
-  Video,
+  UserCircle2,
 } from "lucide-react";
 
 import { env } from "@/lib/env";
+import { AppBreadcrumbs } from "@/components/ui/app-breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 import { RetroGrid } from "@/components/ui/retro-grid";
-
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import { useWorkspaceSnapshot } from "@/components/workspace/hooks";
 import { statusLabels } from "@/lib/domain/content";
@@ -33,16 +42,21 @@ export function WorkspaceShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { data } = useWorkspaceSnapshot();
+  const router = useRouter();
+  const { data, refresh } = useWorkspaceSnapshot();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const cardIdMatch = pathname.match(/^\/(cards|studio|projects)\/([^/]+)/);
+  const cardIdMatch = pathname.match(/^\/(cards|studio|projects|editor)\/([^/]+)/);
   const activeCardId = cardIdMatch ? cardIdMatch[2] : null;
+  const showActiveProject = Boolean(activeCardId && activeCardId !== "new");
 
   const items = [
     { href: "/home", label: "HQ", icon: Home },
     { href: "/inbox", label: "Inbox", icon: Inbox },
     { href: "/board", label: "Board", icon: Clapperboard },
-    ...(activeCardId ? [{ href: `/projects/${activeCardId}`, label: "Active Project", icon: Video, match: [`/projects/${activeCardId}`, `/cards/${activeCardId}`, `/studio/${activeCardId}`] }] : []),
+    ...(showActiveProject ? [{ href: `/projects/${activeCardId}/chat`, label: "Project Chat", icon: MessageSquare, match: [`/projects/${activeCardId}`, `/projects/${activeCardId}/chat`, `/cards/${activeCardId}`, `/studio/${activeCardId}`, `/editor/${activeCardId}`] }] : []),
     { href: "/editor", label: "Editor", icon: Film, match: ["/editor"] },
     { href: "/settings", label: "Settings", icon: Settings2 },
   ];
@@ -50,116 +64,241 @@ export function WorkspaceShell({
   const currentCard = data?.cards.find((c) => c.id === activeCardId) || data?.cards[0];
   const projectTitle = currentCard ? currentCard.title : "No active project";
   const projectStatus = currentCard ? statusLabels[currentCard.status] : "Idle";
+  const accountLabel = accountEmail ?? "Signed in";
+  const accountSubLabel = accountEmail ? "Workspace session" : "Supabase workspace";
+
+  useEffect(() => {
+    const client = createSupabaseBrowserClient();
+    client.auth.getUser().then(({ data: authData }) => {
+      setAccountEmail(authData.user?.email ?? null);
+    }).catch(() => {
+      setAccountEmail(null);
+    });
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [pathname, refresh]);
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+    try {
+      const client = createSupabaseBrowserClient();
+      await client.auth.signOut();
+      router.replace("/sign-in");
+      router.refresh();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
+  const breadcrumbItems = useMemo(() => {
+    if (pathname === "/home") return [{ label: "Home" }];
+    if (pathname === "/inbox") return [{ label: "Inbox" }];
+    if (pathname === "/board") return [{ label: "Board" }];
+    if (pathname === "/settings") return [{ label: "Settings" }];
+    if (pathname === "/editor") {
+      return [{ label: "Home", href: "/home" }, { label: "Editor" }];
+    }
+    if (pathname.startsWith("/editor/")) {
+      if (showActiveProject) {
+        return [
+          { label: "Home", href: "/home" },
+          { label: projectTitle, href: `/projects/${activeCardId}/chat` },
+          { label: "Editor" },
+        ];
+      }
+      return [{ label: "Home", href: "/home" }, { label: "Editor" }];
+    }
+    if (pathname.startsWith("/projects/") && pathname.endsWith("/chat")) {
+      return [
+        { label: "Home", href: "/home" },
+        { label: projectTitle, href: `/projects/${activeCardId}` },
+        { label: "Project Chat" },
+      ];
+    }
+    if (pathname.startsWith("/projects/")) {
+      return [{ label: "Home", href: "/home" }, { label: projectTitle }];
+    }
+    return [{ label: "Home", href: "/home" }];
+  }, [activeCardId, pathname, projectTitle, showActiveProject]);
 
   return (
-    <div className="relative flex min-h-screen bg-background/50 text-foreground overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-background/50 text-foreground">
       <AuroraBackground />
       <RetroGrid className="opacity-20" />
-      <motion.aside
-        initial={{ opacity: 0, x: -16 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="relative z-10 cmd-panel-soft hidden w-[260px] shrink-0 border-r lg:flex lg:flex-col"
-      >
-        <div className="border-b border-border px-6 py-6">
-          <p className="text-xl font-semibold tracking-tight text-foreground">SceneBook</p>
-          <p className="cmd-label mt-2">Project Hub</p>
-        </div>
-
-        <div className="px-6 py-5">
-          <p className="cmd-label">Current Project</p>
-          <p className="mt-3 truncate text-lg font-semibold text-accent" title={projectTitle}>
-            {projectTitle}
-          </p>
-          <p className="mt-2 flex items-center gap-2 text-sm text-muted">
-            <span className={cn(
-              "h-2 w-2 rounded-full",
-              currentCard ? "bg-accent shadow-[0_0_10px_rgba(99,102,241,0.55)]" : "bg-zinc-600"
-            )} />
-            {projectStatus}
-          </p>
-        </div>
-
-        <nav className="space-y-1 px-4">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const active =
-              pathname === item.href ||
-              (item.match && item.match.some((match) => pathname.startsWith(match)));
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border-r-2 border-transparent px-4 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.08em] transition",
-                  active
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "text-muted hover:bg-white/5 hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto px-6 pb-4">
-          <Link href="/inbox">
-            <Button className="w-full justify-center">
-              <Sparkles className="mr-2 h-4 w-4" />
-              New project
-            </Button>
-          </Link>
-        </div>
-
-        <div className="border-t border-border px-4 py-4">
-          <Link
-            href="/settings"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-white/5 hover:text-foreground"
+      <div className="relative z-10 min-h-screen">
+        <Collapsible open={!isCollapsed} onOpenChange={(open) => setIsCollapsed(!open)}>
+          <motion.aside
+            initial={{ opacity: 0, x: -18 }}
+            animate={{ opacity: 1, x: 0, width: isCollapsed ? 92 : 280 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="cmd-island fixed left-6 top-6 bottom-6 z-30 hidden overflow-hidden rounded-[2rem] lg:flex"
           >
-            <Settings2 className="h-4 w-4" />
-            Preferences
-          </Link>
-        </div>
-      </motion.aside>
+            <div className="flex h-full w-full flex-col justify-between p-3">
+              <div className="flex flex-col gap-4">
+                <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-2 pt-1")}>
+                  {isCollapsed ? null : (
+                    <div>
+                      <p className="text-base font-semibold tracking-tight text-foreground">SceneBook</p>
+                      <p className="cmd-label mt-1">Workspace</p>
+                    </div>
+                  )}
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={isCollapsed ? "Expand navigation" : "Collapse navigation"}
+                      className="flex size-10 items-center justify-center rounded-full border border-border/70 bg-black/20 text-muted transition hover:bg-white/5 hover:text-foreground"
+                    >
+                      {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                    </button>
+                  </CollapsibleTrigger>
+                </div>
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <motion.header
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/80 px-5 py-4 backdrop-blur-xl lg:px-8"
-        >
-          <div className="flex items-center gap-5">
-            <nav className="hidden items-center gap-5 lg:flex">
-              <Link className="cmd-label text-muted transition hover:text-foreground" href="/inbox">
-                Inbox
-              </Link>
-              <Link className="cmd-label text-muted transition hover:text-foreground" href="/board">
-                Board
-              </Link>
-              <span className="cmd-label text-muted">Schedule</span>
-            </nav>
-            <div className="relative hidden lg:block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <Input className="w-72 pl-9" placeholder="Search project..." />
+                <CollapsibleContent forceMount className={cn("overflow-hidden data-[state=closed]:animate-[ed-fadeIn_0.2s_ease-out]", isCollapsed && "hidden")}>
+                  <div className="rounded-[1.5rem] border border-border/60 bg-black/18 px-4 py-4">
+                    <p className="cmd-label">Current Project</p>
+                    <p className="mt-3 truncate text-base font-semibold text-foreground" title={projectTitle}>
+                      {projectTitle}
+                    </p>
+                    <p className="mt-2 flex items-center gap-2 text-sm text-muted">
+                      <span
+                        className={cn(
+                          "size-2 rounded-full",
+                          currentCard ? "bg-accent shadow-[0_0_12px_rgba(99,102,241,0.55)]" : "bg-zinc-600"
+                        )}
+                      />
+                      {projectStatus}
+                    </p>
+                  </div>
+                </CollapsibleContent>
+
+                <nav className="flex flex-col gap-2">
+                  {items.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                      pathname === item.href ||
+                      (item.match && item.match.some((match) => pathname.startsWith(match)));
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center rounded-[1.25rem] border border-transparent px-3 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.08em] transition",
+                          isCollapsed ? "justify-center" : "gap-3",
+                          active
+                            ? "border-accent/20 bg-accent/10 text-accent shadow-[0_0_24px_rgba(99,102,241,0.14)]"
+                            : "text-muted hover:border-border/60 hover:bg-white/5 hover:text-foreground",
+                        )}
+                        title={item.label}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {isCollapsed ? null : <span>{item.label}</span>}
+                      </Link>
+                    );
+                  })}
+                </nav>
+
+                <Separator className="bg-border/70" />
+
+                <Link href="/inbox">
+                  <Button
+                    className={cn(
+                      "w-full rounded-[1.25rem] justify-center",
+                      isCollapsed ? "px-0" : "px-4",
+                    )}
+                    title="New project"
+                  >
+                    <Sparkles className={cn("h-4 w-4", isCollapsed ? "" : "mr-2")} />
+                    {isCollapsed ? null : "New project"}
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Separator className="bg-border/70" />
+                <div className={cn("flex items-center gap-3 rounded-[1.5rem] border border-border/60 bg-black/18 px-3 py-3", isCollapsed && "justify-center px-2")}>
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/5 text-muted">
+                    <UserCircle2 className="h-5 w-5" />
+                  </div>
+                  {isCollapsed ? null : (
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{accountLabel}</p>
+                      <p className="truncate text-xs text-muted">{accountSubLabel}</p>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "h-8 rounded-full border border-border/70 bg-black/20 px-3 text-[10px] text-muted hover:border-border hover:bg-white/5 hover:text-foreground",
+                    isCollapsed ? "justify-center px-0" : "justify-center",
+                  )}
+                  disabled={isSigningOut}
+                  onClick={handleSignOut}
+                  title="Sign out"
+                >
+                  <LogOut className={cn("h-3.5 w-3.5", isCollapsed ? "" : "mr-2")} />
+                  {isCollapsed ? null : isSigningOut ? "Signing out" : "Sign out"}
+                </Button>
+              </div>
+            </div>
+          </motion.aside>
+        </Collapsible>
+
+        <div className={cn("flex min-h-screen flex-col transition-[padding] duration-300 ease-out", isCollapsed ? "lg:pl-[8.5rem]" : "lg:pl-[19rem]")}>
+          <div className="sticky top-0 z-20 px-4 pt-4 lg:px-6 lg:pt-6">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <AppBreadcrumbs items={breadcrumbItems} className="min-w-0" />
+                <div className="hidden items-center gap-3 lg:flex">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <Input className="w-72 rounded-full border-border/70 bg-background/75 pl-9" placeholder="Search project..." />
+                  </div>
+                  <button className="rounded-full border border-border/70 bg-background/75 p-2 text-muted transition hover:bg-white/5 hover:text-foreground">
+                    <Bell className="h-4 w-4" />
+                  </button>
+                  {env.isSampleMode ? (
+                    <Badge>Sample mode</Badge>
+                  ) : (
+                    <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400">Supabase Mode</Badge>
+                  )}
+                </div>
+              </div>
+
+              <ScrollArea className="w-full whitespace-nowrap lg:hidden">
+                <div className="flex gap-2 pb-1">
+                  {items.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                      pathname === item.href ||
+                      (item.match && item.match.some((match) => pathname.startsWith(match)));
+
+                    return (
+                      <Link
+                        key={`${item.href}-mobile`}
+                        href={item.href}
+                        className={cn(
+                          "inline-flex items-center gap-2 rounded-full border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] transition",
+                          active
+                            ? "border-accent/20 bg-accent/10 text-accent"
+                            : "border-border/70 bg-background/75 text-muted",
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="rounded-full border border-border p-2 text-muted transition hover:bg-white/5 hover:text-foreground">
-              <Bell className="h-4 w-4" />
-            </button>
-            {env.isSampleMode ? (
-              <Badge>Sample mode</Badge>
-            ) : (
-              <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Supabase Mode</Badge>
-            )}
-          </div>
-        </motion.header>
 
-        <main className="min-h-0 flex-1 px-5 py-5 lg:px-8">{children}</main>
+          <main className="min-h-0 flex-1 px-4 pb-6 pt-5 lg:px-6 lg:pb-8 lg:pt-6">{children}</main>
+        </div>
       </div>
     </div>
   );

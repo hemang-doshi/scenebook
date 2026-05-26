@@ -6,5 +6,5 @@ export default async function LegacyCardRoute({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/projects/${id}`);
+  redirect(`/projects/${id}/chat`);
 }

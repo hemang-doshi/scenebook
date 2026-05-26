@@ -20,7 +20,7 @@ import type {
   ShootPack,
 } from "@/lib/types";
 
-type WorkspaceSnapshot = {
+export type WorkspaceSnapshot = {
   sampleMode: boolean;
   inboxItems: InboxItem[];
   cards: Array<
@@ -36,7 +36,7 @@ type WorkspaceSnapshot = {
   };
 };
 
-type CardDetail = WorkspaceSnapshot["cards"][number];
+export type CardDetail = WorkspaceSnapshot["cards"][number];
 
 type CardPatch = Partial<
   Pick<
@@ -92,7 +92,7 @@ type SupabaseRepositoryClient = {
   };
 };
 
-type ProjectWorkspace = CardDetail & {
+export type ProjectWorkspace = CardDetail & {
   messages: ProjectMessage[];
   generations: GenerationRecord[];
 };
@@ -1001,4 +1001,4 @@ export async function requestAiAssist(
   return updateCard(cardId, { aiSuggestions: nextSuggestions });
 }
 
-export type { WorkspaceSnapshot, CardPatch, CardDetail, ProjectWorkspace };
+export type { CardPatch };

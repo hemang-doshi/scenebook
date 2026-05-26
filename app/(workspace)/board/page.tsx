@@ -325,7 +325,7 @@ function DraggableCard({
         onClick={preventDrag}
       >
         <div className="flex gap-1.5">
-          <Link href={`/projects/${card.id}`}>
+          <Link href={`/projects/${card.id}/chat`}>
             <button className="p-1.5 hover:bg-white/5 border border-border rounded text-[10px] text-muted-foreground hover:text-foreground transition cursor-pointer" title="Workspace Details">
               <FileText className="h-3 w-3" />
             </button>

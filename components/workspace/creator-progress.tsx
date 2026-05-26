@@ -21,7 +21,7 @@ const STAGES: ProgressStage[] = [
     description: "Convert capture to card",
     icon: Lightbulb,
     statuses: ["idea"],
-    route: (id) => `/projects/${id}`,
+    route: (id) => `/projects/${id}/chat`,
   },
   {
     id: "script",
@@ -29,7 +29,7 @@ const STAGES: ProgressStage[] = [
     description: "Write outline & checklists",
     icon: FileText,
     statuses: ["scripted", "ready_to_shoot"],
-    route: (id) => `/projects/${id}?tab=script`,
+    route: (id) => `/projects/${id}/chat`,
   },
   {
     id: "edit",
