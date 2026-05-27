@@ -5,6 +5,7 @@ export const contentStatuses = [
   "ready_to_shoot",
   "shot",
   "editing",
+  "posting",
   "posted",
   "analyzed",
   "archived",
@@ -90,6 +91,14 @@ export type AnalyticsJournal = {
   reflection: string;
   decision: LearningDecision;
   followUpIdea: string;
+  instagramMediaId?: string;
+  instagramContainerId?: string;
+  instagramPublishingStart?: number;
+  instagramAccountId?: string;
+  permalink?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  media_type?: string;
 };
 
 export type CardAsset = {

@@ -17,6 +17,7 @@ export const statusLabels: Record<ContentStatus, string> = {
   ready_to_shoot: "Ready to Shoot",
   shot: "Shot",
   editing: "Editing",
+  posting: "Posting...",
   posted: "Posted",
   analyzed: "Analyzed",
   archived: "Archived",

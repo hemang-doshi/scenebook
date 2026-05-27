@@ -31,6 +31,24 @@ import { statusLabels } from "@/lib/domain/content";
 import { getDefaultMediaModel, getMediaModelPresets, mediaModalities } from "@/lib/ai/model-registry";
 import type { CardAsset, ChecklistItem, ContentStatus } from "@/lib/types";
 
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
 const tabs = [
   { id: "overview", label: "Overview", icon: FolderKanban },
   { id: "script", label: "Script", icon: FileText },
@@ -53,6 +71,22 @@ export default function ProjectWorkspacePage() {
   const initialTab = (searchParams.get("tab") as TabId | null) ?? "overview";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const { project, error, isLoading, refresh, isPending } = useProjectWorkspace(params.id);
+
+  interface ConnectedSocialAccount {
+    id: string;
+    platform: string;
+    account_name: string;
+    account_username: string;
+    profile_picture_url: string | null;
+    created_at: string;
+  }
+
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [socialAccounts, setSocialAccounts] = useState<ConnectedSocialAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [customCaption, setCustomCaption] = useState("");
+  const [publishingState, setPublishingState] = useState<"idle" | "uploading" | "processing" | "success" | "error">("idle");
+  const [publishError, setPublishError] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -109,7 +143,77 @@ export default function ProjectWorkspacePage() {
       followUpIdea: project.analyticsJournal.followUpIdea,
       watchTimeNote: project.analyticsJournal.watchTimeNote,
     });
+    setCustomCaption(project.scriptLab.caption);
   }, [project]);
+
+  useEffect(() => {
+    if (isPublishModalOpen) {
+      setPublishingState("idle");
+      setPublishError("");
+      fetchJson<ConnectedSocialAccount[]>("/api/instagram/accounts")
+        .then((data) => {
+          setSocialAccounts(data);
+          if (data[0]) {
+            setSelectedAccountId(data[0].id);
+          }
+        })
+        .catch((err) => console.error("Failed to load accounts:", err));
+    }
+  }, [isPublishModalOpen]);
+
+  async function handlePublish() {
+    if (!selectedAccountId) return;
+    setPublishingState("uploading");
+    setPublishError("");
+
+    try {
+      const res = await fetchJson<{ success: boolean; containerId: string }>(
+        `/api/projects/${params.id}/publish`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            socialAccountId: selectedAccountId,
+            caption: customCaption || project?.scriptLab.caption || "",
+          }),
+        }
+      );
+
+      setPublishingState("processing");
+
+      // Start Polling container status
+      const pollInterval = setInterval(async () => {
+        try {
+          const pollRes = await fetchJson<{ status: string; error?: string }>(
+            `/api/projects/${params.id}/publish?containerId=${res.containerId}&socialAccountId=${selectedAccountId}`
+          );
+
+          if (pollRes.status === "FINISHED") {
+            clearInterval(pollInterval);
+            setPublishingState("success");
+            refresh();
+            setTimeout(() => {
+              setIsPublishModalOpen(false);
+            }, 1500);
+          } else if (pollRes.status === "ERROR") {
+            clearInterval(pollInterval);
+            setPublishError(pollRes.error || "Meta video processing failed.");
+            setPublishingState("error");
+            refresh();
+          }
+        } catch (pollErr) {
+          clearInterval(pollInterval);
+          const errorMsg = pollErr instanceof Error ? pollErr.message : "Polling failed.";
+          setPublishError(errorMsg);
+          setPublishingState("error");
+          refresh();
+        }
+      }, 2000);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to initiate publishing.";
+      setPublishError(errorMsg);
+      setPublishingState("error");
+    }
+  }
 
   useEffect(() => {
     const nextTab = searchParams.get("tab") as TabId | null;
@@ -201,13 +305,30 @@ export default function ProjectWorkspacePage() {
           <Badge className="bg-accent/10 text-accent border-accent/20">
             {statusLabels[project.status]}
           </Badge>
+          
+          {project.status === "posting" ? (
+            <Button disabled className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/10">
+              <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" />
+              Publishing...
+            </Button>
+          ) : project.status === "posted" || project.status === "analyzed" ? (
+            <Button disabled className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10">
+              Published to IG
+            </Button>
+          ) : (
+            <Button className="text-xs bg-pink-600 hover:bg-pink-700 text-white" onClick={() => setIsPublishModalOpen(true)}>
+              <InstagramIcon className="mr-2 h-4 w-4" />
+              Publish to IG
+            </Button>
+          )}
+
           <Link href={`/projects/${projectId}/chat`}>
             <Button variant="secondary" className="text-xs">
               <MessageSquare className="mr-2 h-4 w-4" />
               Open chat
             </Button>
           </Link>
-            <Link href={`/editor/${projectId}`}>
+          <Link href={`/editor/${projectId}`}>
             <Button className="text-xs">
               Open Editor <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -593,6 +714,115 @@ export default function ProjectWorkspacePage() {
         <div className="fixed bottom-6 right-6 rounded-full border border-border bg-background/90 px-4 py-2 text-xs text-muted shadow-lg">
           <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />
           Saving project updates
+        </div>
+      )}
+      {/* Instagram Publishing Modal */}
+      {isPublishModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Panel className="w-full max-w-md space-y-4 border border-border p-6 shadow-2xl bg-zinc-950/95">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <InstagramIcon className="h-5 w-5 text-pink-500" />
+                Publish to Instagram
+              </h2>
+              <button
+                type="button"
+                onClick={() => publishingState !== "uploading" && publishingState !== "processing" && setIsPublishModalOpen(false)}
+                className="text-muted hover:text-foreground text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="h-px bg-border/40" />
+
+            {publishingState === "success" ? (
+              <div className="flex flex-col items-center gap-3 py-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                  ✓
+                </div>
+                <p className="text-sm font-semibold text-emerald-400">Published successfully!</p>
+                <p className="text-xs text-muted">Project status updated to Posted.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {socialAccounts.length === 0 ? (
+                  <div className="py-4 text-center space-y-2">
+                    <p className="text-xs text-muted">No social connections found.</p>
+                    <Link href="/settings">
+                      <Button variant="secondary" className="text-xs mt-2">
+                        Configure in Settings
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-xs text-muted block">
+                      Select Connected Account
+                      <CustomSelect
+                        className="mt-2"
+                        value={selectedAccountId}
+                        onChange={(val) => setSelectedAccountId(val)}
+                        options={socialAccounts.map((acc) => ({
+                          value: acc.id,
+                          label: `@${acc.account_username} (${acc.account_name})`,
+                        }))}
+                      />
+                    </label>
+
+                    <label className="text-xs text-muted block">
+                      Caption
+                      <Textarea
+                        className="mt-2 min-h-24 text-xs"
+                        value={customCaption}
+                        onChange={(e) => setCustomCaption(e.target.value)}
+                        placeholder="Write your Instagram Reel caption..."
+                      />
+                    </label>
+
+                    {publishingState === "uploading" && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5 text-xs text-accent">
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                        <span>Uploading video file to Meta servers...</span>
+                      </div>
+                    )}
+
+                    {publishingState === "processing" && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400">
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                        <span>Meta is processing the Reel video. Polling status...</span>
+                      </div>
+                    )}
+
+                    {publishingState === "error" && (
+                      <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/5 text-xs text-rose-400 space-y-1">
+                        <p className="font-semibold">Publishing Failed:</p>
+                        <p className="text-[10px] text-muted-foreground">{publishError}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setIsPublishModalOpen(false)}
+                        disabled={publishingState === "uploading" || publishingState === "processing"}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handlePublish}
+                        disabled={!selectedAccountId || publishingState === "uploading" || publishingState === "processing"}
+                      >
+                        {publishingState === "uploading" || publishingState === "processing" ? "Publishing..." : "Publish Reel"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </Panel>
         </div>
       )}
     </div>

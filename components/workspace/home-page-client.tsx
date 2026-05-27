@@ -70,7 +70,8 @@ export function HomePageClient({
           }),
         });
         setTitle("");
-        closeCreateForm();
+        setIsCreateOpen(false);
+        setCreateError(null);
         router.push(`/projects/${project.id}`);
       } catch (caught) {
         setCreateError(caught instanceof Error ? caught.message : "Unable to create project.");

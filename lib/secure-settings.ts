@@ -39,15 +39,20 @@ export function decryptSecret(secret: string | null | undefined) {
     return secret;
   }
 
-  const decipher = createDecipheriv(ALGORITHM, getDerivedKey(), Buffer.from(ivPart, "base64"));
-  decipher.setAuthTag(Buffer.from(tagPart, "base64"));
+  try {
+    const decipher = createDecipheriv(ALGORITHM, getDerivedKey(), Buffer.from(ivPart, "base64"));
+    decipher.setAuthTag(Buffer.from(tagPart, "base64"));
 
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(payloadPart, "base64")),
-    decipher.final(),
-  ]);
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(payloadPart, "base64")),
+      decipher.final(),
+    ]);
 
-  return decrypted.toString("utf8");
+    return decrypted.toString("utf8");
+  } catch (err) {
+    console.error("Failed to decrypt secret (encryption key may have changed):", err);
+    return "";
+  }
 }
 
 export function maskSecret(secret: string | null | undefined) {

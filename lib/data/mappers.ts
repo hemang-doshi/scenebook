@@ -52,6 +52,10 @@ function defaultAnalyticsJournal(
     reflection: value?.reflection ?? "",
     decision: value?.decision ?? "repeat",
     followUpIdea: value?.followUpIdea ?? "",
+    instagramMediaId: value?.instagramMediaId,
+    instagramContainerId: value?.instagramContainerId,
+    instagramPublishingStart: value?.instagramPublishingStart,
+    instagramAccountId: value?.instagramAccountId,
   };
 }
 
