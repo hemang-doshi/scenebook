@@ -10,7 +10,6 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
-  Clapperboard,
   Film,
   FolderKanban,
   Home,
@@ -67,18 +66,17 @@ export function WorkspaceShell({
 
   const items = [
     { href: "/home", label: "Projects", icon: Home },
-    { href: "/board", label: "Board", icon: Clapperboard },
     ...(showActiveProject
       ? [
           {
             href: `/projects/${activeCardId}`,
-            label: "Workspace",
+            label: "Project Hub",
             icon: FolderKanban,
-            match: [`/projects/${activeCardId}`, `/cards/${activeCardId}`, `/studio/${activeCardId}`],
+            match: [`/cards/${activeCardId}`, `/studio/${activeCardId}`],
           },
           {
             href: `/projects/${activeCardId}/chat`,
-            label: "Chat",
+            label: "Agent",
             icon: MessageSquare,
             match: [`/projects/${activeCardId}/chat`],
           },
@@ -143,7 +141,6 @@ export function WorkspaceShell({
 
   const breadcrumbItems = useMemo(() => {
     if (pathname === "/home") return [{ label: "Projects" }];
-    if (pathname === "/board") return [{ label: "Board" }];
     if (pathname === "/analytics") return [{ label: "Analytics" }];
     if (pathname === "/settings") return [{ label: "Settings" }];
     if (pathname === "/editor") {
@@ -163,7 +160,7 @@ export function WorkspaceShell({
       return [
         { label: "Projects", href: "/home" },
         { label: projectTitle, href: `/projects/${activeCardId}` },
-        { label: "Chat" },
+        { label: "Agent" },
       ];
     }
     if (pathname.startsWith("/projects/")) {

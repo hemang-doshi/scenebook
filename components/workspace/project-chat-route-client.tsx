@@ -1,8 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
-import { ProjectChatPanel } from "@/components/workspace/project-chat-panel";
+import { AgentChatIsland } from "@/components/agent/agent-chat-island";
 import type { ProjectWorkspace } from "@/lib/data/repository";
 
 export function ProjectChatRouteClient({
@@ -10,7 +8,5 @@ export function ProjectChatRouteClient({
 }: {
   project: ProjectWorkspace;
 }) {
-  const router = useRouter();
-
-  return <ProjectChatPanel project={project} onRefresh={() => router.refresh()} />;
+  return <AgentChatIsland project={project} />;
 }

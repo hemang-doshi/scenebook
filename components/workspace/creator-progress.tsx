@@ -37,7 +37,7 @@ const STAGES: ProgressStage[] = [
     description: "Studio timeline & effects",
     icon: Edit3,
     statuses: ["shot", "editing"],
-    route: (id) => `/projects/${id}?tab=editor`,
+    route: (id) => `/editor/${id}`,
   },
   {
     id: "publish",
@@ -45,7 +45,7 @@ const STAGES: ProgressStage[] = [
     description: "Live on platform",
     icon: Play,
     statuses: ["posted"],
-    route: (id) => `/projects/${id}?tab=overview`,
+    route: (id) => `/projects/${id}`,
   },
   {
     id: "reflection",
@@ -53,7 +53,7 @@ const STAGES: ProgressStage[] = [
     description: "Analytics & learning",
     icon: Eye,
     statuses: ["analyzed", "archived"],
-    route: (id) => `/projects/${id}?tab=analytics`,
+    route: () => "/analytics",
   },
 ];
 

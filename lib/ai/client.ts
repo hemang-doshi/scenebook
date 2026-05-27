@@ -162,6 +162,140 @@ export async function generateText({
   return getMockResponse(prompt);
 }
 
+export async function* generateTextStream({
+  prompt,
+  systemInstruction,
+  modelOverride,
+}: {
+  prompt: string;
+  systemInstruction?: string;
+  modelOverride?: string;
+}): AsyncGenerator<string, void, unknown> {
+  let customGeminiKey = "";
+  let customOpenRouterKey = "";
+  let customNimKey = "";
+  let creatorContext = "";
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data } = await supabase
+        .from("creator_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (data) {
+        const row = data as CreatorSettingsRow;
+        customGeminiKey = getActiveProviderToken(row, "gemini");
+        customOpenRouterKey = getActiveProviderToken(row, "openrouter");
+        customNimKey = getActiveProviderToken(row, "nim");
+        creatorContext = row.creator_context || "";
+      }
+    }
+  } catch (err) {
+    console.warn("Could not retrieve custom creator settings from Supabase, using defaults:", err);
+  }
+
+  const activeGeminiKey = customGeminiKey || env.geminiApiKey;
+  const activeOpenRouterKey = customOpenRouterKey || env.openrouterApiKey;
+  const activeNimKey = customNimKey || env.nimApiKey;
+
+  let finalSystemInstruction = systemInstruction || "";
+  if (creatorContext) {
+    finalSystemInstruction = `${finalSystemInstruction}\n\nCreator context & background:\n${creatorContext}`.trim();
+  }
+
+  // 1. Google Gemini API (Streaming)
+  if (isValidApiKey(activeGeminiKey)) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
+      const responseStream = await ai.models.generateContentStream({
+        model: modelOverride || "gemini-2.5-flash",
+        contents: prompt,
+        config: finalSystemInstruction ? { systemInstruction: finalSystemInstruction } : undefined,
+      });
+      for await (const chunk of responseStream) {
+        if (chunk.text) {
+          yield chunk.text;
+        }
+      }
+      return;
+    } catch (e) {
+      console.error("Gemini AI API error in stream:", e);
+    }
+  }
+
+  // 2. OpenRouter API (Streaming)
+  if (isValidApiKey(activeOpenRouterKey)) {
+    try {
+      const client = new OpenAI({
+        apiKey: activeOpenRouterKey,
+        baseURL: "https://openrouter.ai/api/v1",
+      });
+      const responseStream = await client.chat.completions.create({
+        model: modelOverride || "google/gemini-2.5-flash",
+        messages: [
+          ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+          { role: "user" as const, content: prompt },
+        ],
+        temperature: 0.7,
+        stream: true,
+      });
+      for await (const chunk of responseStream) {
+        const text = chunk.choices[0]?.delta?.content;
+        if (text) {
+          yield text;
+        }
+      }
+      return;
+    } catch (e) {
+      console.error("OpenRouter API error in stream:", e);
+    }
+  }
+
+  // 3. NVIDIA NIM API (Streaming)
+  if (isValidApiKey(activeNimKey) && env.nimBaseUrl) {
+    try {
+      const client = new OpenAI({
+        apiKey: activeNimKey,
+        baseURL: env.nimBaseUrl,
+      });
+      const responseStream = await client.chat.completions.create({
+        model: modelOverride || env.nimModel || "meta/llama-3.1-70b-instruct",
+        messages: [
+          ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+          { role: "user" as const, content: prompt },
+        ],
+        temperature: 0.7,
+        stream: true,
+      });
+      for await (const chunk of responseStream) {
+        const text = chunk.choices[0]?.delta?.content;
+        if (text) {
+          yield text;
+        }
+      }
+      return;
+    } catch (e) {
+      console.error("NVIDIA NIM API error in stream:", e);
+    }
+  }
+
+  // Fallback / Mock responses if no key is configured (Stream simulation)
+  console.warn("No active AI provider API key found. Falling back to mock generator.");
+  const mockText = getMockResponse(prompt);
+  const words = mockText.split(" ");
+  for (const word of words) {
+    yield word + " ";
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+}
+
 function getMockResponse(prompt: string): string {
   const lowercasePrompt = prompt.toLowerCase();
   if (lowercasePrompt.includes("hook")) {

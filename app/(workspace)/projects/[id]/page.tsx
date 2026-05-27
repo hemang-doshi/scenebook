@@ -1,35 +1,60 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   ArrowRight,
   BarChart3,
+  Bot,
   Clapperboard,
-  FileText,
   Film,
-  FolderKanban,
+  FolderOpen,
   Loader2,
-  MessageSquare,
-  PlayCircle,
   Sparkles,
 } from "lucide-react";
 
-import { PageHeading } from "@/components/page-heading";
-import { Panel } from "@/components/ui/panel";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { CustomSelect } from "@/components/ui/custom-select";
+import { Button } from "@/components/ui/button";
+import { Panel } from "@/components/ui/panel";
 import { CreatorProgress } from "@/components/workspace/creator-progress";
 import { useProjectWorkspace } from "@/components/workspace/hooks";
+import type { ProjectAssetLibrary } from "@/lib/assets/asset-folders";
+import type { ProjectWorkspace } from "@/lib/data/repository";
 import { fetchJson } from "@/lib/fetcher";
-import { statusLabels } from "@/lib/domain/content";
-import { getDefaultMediaModel, getMediaModelPresets, mediaModalities } from "@/lib/ai/model-registry";
-import type { CardAsset, ChecklistItem, ContentStatus } from "@/lib/types";
+
+type AgentHistoryResponse = {
+  threadId: string | null;
+  messages: Array<{
+    id: string;
+    role: "user" | "assistant" | "system";
+    content: string;
+    created_at?: string;
+  }>;
+  toolCalls: Array<{
+    id: string;
+    tool_name: string;
+    command?: string | null;
+    status: string;
+    created_at?: string;
+  }>;
+};
+
+type ActivityEntry =
+  | {
+      id: string;
+      type: "message";
+      label: string;
+      detail: string;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: "tool";
+      label: string;
+      detail: string;
+      createdAt: string;
+    };
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -49,199 +74,174 @@ function InstagramIcon({ className }: { className?: string }) {
   );
 }
 
-const tabs = [
-  { id: "overview", label: "Overview", icon: FolderKanban },
-  { id: "script", label: "Script", icon: FileText },
-  { id: "generate", label: "Generate", icon: Sparkles },
-  { id: "story-assets", label: "Story/Assets", icon: Clapperboard },
-  { id: "tasks", label: "Tasks", icon: PlayCircle },
-  { id: "editor", label: "Editor", icon: Film },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
-] as const;
-
-type TabId = (typeof tabs)[number]["id"];
-
-function getAssetGroupLabel(asset: CardAsset) {
-  return asset.sceneKey?.trim() || "Ungrouped";
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
-export default function ProjectWorkspacePage() {
-  const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as TabId | null) ?? "overview";
-  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
-  const { project, error, isLoading, refresh, isPending } = useProjectWorkspace(params.id);
+function createActivityEntries(history: AgentHistoryResponse): ActivityEntry[] {
+  const messages = history.messages.map((message) => ({
+    id: message.id,
+    type: "message" as const,
+    label: message.role === "assistant" ? "Agent reply" : message.role === "user" ? "Prompt" : "System",
+    detail: message.content.trim(),
+    createdAt: message.created_at ?? new Date().toISOString(),
+  }));
+  const tools = history.toolCalls.map((toolCall) => ({
+    id: toolCall.id,
+    type: "tool" as const,
+    label: toolCall.command ? `/${toolCall.command}` : toolCall.tool_name,
+    detail: `${toolCall.tool_name} · ${toolCall.status.toLowerCase()}`,
+    createdAt: toolCall.created_at ?? new Date().toISOString(),
+  }));
 
-  interface ConnectedSocialAccount {
-    id: string;
-    platform: string;
-    account_name: string;
-    account_username: string;
-    profile_picture_url: string | null;
-    created_at: string;
+  return [...messages, ...tools]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, 5);
+}
+
+function buildNextActions(project: ProjectWorkspace, assetCount: number) {
+  const suggestions: Array<{ title: string; command: string; detail: string }> = [];
+  const hasScript = Boolean(project.scriptLab.script.trim() || project.scriptLab.caption.trim() || project.scriptLab.hook.trim());
+  const hasTimeline = ["editing", "posting", "posted", "analyzed", "archived"].includes(project.status);
+  const isPosted = project.status === "posted" || project.status === "analyzed";
+
+  if (!hasScript) {
+    suggestions.push({
+      title: "Draft the first script pass",
+      command: "/script",
+      detail: "Use Agent to lock the hook, script, caption, and CTA.",
+    });
   }
 
-  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
-  const [socialAccounts, setSocialAccounts] = useState<ConnectedSocialAccount[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [customCaption, setCustomCaption] = useState("");
-  const [publishingState, setPublishingState] = useState<"idle" | "uploading" | "processing" | "success" | "error">("idle");
-  const [publishError, setPublishError] = useState("");
-
-  const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [generationPrompt, setGenerationPrompt] = useState("");
-  const [generationTitle, setGenerationTitle] = useState("");
-  const [generationSceneKey, setGenerationSceneKey] = useState("");
-  const [generationModality, setGenerationModality] = useState<(typeof mediaModalities)[number]>("image");
-  const [generationModelId, setGenerationModelId] = useState(getDefaultMediaModel("image").id);
-  const [generationCustomModelId, setGenerationCustomModelId] = useState("");
-
-  const [overviewForm, setOverviewForm] = useState({
-    title: "",
-    status: "idea" as ContentStatus,
-    format: "short",
-    platform: "youtube",
-  });
-  const [scriptForm, setScriptForm] = useState({
-    angle: "",
-    hook: "",
-    outline: "",
-    script: "",
-    caption: "",
-    onScreenText: "",
-    cta: "",
-    notes: "",
-  });
-  const [analyticsForm, setAnalyticsForm] = useState({
-    reflection: "",
-    followUpIdea: "",
-    watchTimeNote: "",
-  });
-
-  useEffect(() => {
-    if (!project) return;
-
-    setOverviewForm({
-      title: project.title,
-      status: project.status,
-      format: project.format,
-      platform: project.platform,
+  if (assetCount === 0) {
+    suggestions.push({
+      title: "Build the generation brief",
+      command: "/form-json-prompt",
+      detail: "Generate the structured prompt bundle before producing assets.",
     });
-    setScriptForm({
-      angle: project.scriptLab.angle,
-      hook: project.scriptLab.hook,
-      outline: project.scriptLab.outline,
-      script: project.scriptLab.script,
-      caption: project.scriptLab.caption,
-      onScreenText: project.scriptLab.onScreenText,
-      cta: project.scriptLab.cta,
-      notes: project.scriptLab.notes,
-    });
-    setAnalyticsForm({
-      reflection: project.analyticsJournal.reflection,
-      followUpIdea: project.analyticsJournal.followUpIdea,
-      watchTimeNote: project.analyticsJournal.watchTimeNote,
-    });
-    setCustomCaption(project.scriptLab.caption);
-  }, [project]);
-
-  useEffect(() => {
-    if (isPublishModalOpen) {
-      setPublishingState("idle");
-      setPublishError("");
-      fetchJson<ConnectedSocialAccount[]>("/api/instagram/accounts")
-        .then((data) => {
-          setSocialAccounts(data);
-          if (data[0]) {
-            setSelectedAccountId(data[0].id);
-          }
-        })
-        .catch((err) => console.error("Failed to load accounts:", err));
-    }
-  }, [isPublishModalOpen]);
-
-  async function handlePublish() {
-    if (!selectedAccountId) return;
-    setPublishingState("uploading");
-    setPublishError("");
-
-    try {
-      const res = await fetchJson<{ success: boolean; containerId: string }>(
-        `/api/projects/${params.id}/publish`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            socialAccountId: selectedAccountId,
-            caption: customCaption || project?.scriptLab.caption || "",
-          }),
-        }
-      );
-
-      setPublishingState("processing");
-
-      // Start Polling container status
-      const pollInterval = setInterval(async () => {
-        try {
-          const pollRes = await fetchJson<{ status: string; error?: string }>(
-            `/api/projects/${params.id}/publish?containerId=${res.containerId}&socialAccountId=${selectedAccountId}`
-          );
-
-          if (pollRes.status === "FINISHED") {
-            clearInterval(pollInterval);
-            setPublishingState("success");
-            refresh();
-            setTimeout(() => {
-              setIsPublishModalOpen(false);
-            }, 1500);
-          } else if (pollRes.status === "ERROR") {
-            clearInterval(pollInterval);
-            setPublishError(pollRes.error || "Meta video processing failed.");
-            setPublishingState("error");
-            refresh();
-          }
-        } catch (pollErr) {
-          clearInterval(pollInterval);
-          const errorMsg = pollErr instanceof Error ? pollErr.message : "Polling failed.";
-          setPublishError(errorMsg);
-          setPublishingState("error");
-          refresh();
-        }
-      }, 2000);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to initiate publishing.";
-      setPublishError(errorMsg);
-      setPublishingState("error");
-    }
   }
 
-  useEffect(() => {
-    const nextTab = searchParams.get("tab") as TabId | null;
-    if (nextTab) {
-      setActiveTab(nextTab);
-    }
-  }, [searchParams]);
+  if (!hasTimeline) {
+    suggestions.push({
+      title: "Prepare the editor handoff",
+      command: "/import-to-editor",
+      detail: "Use Agent to package the project into an editor-ready rough cut.",
+    });
+  }
 
-  const groupedAssets = useMemo(() => {
-    if (!project) return [];
-    const groups = new Map<string, CardAsset[]>();
-    for (const asset of project.assets) {
-      const key = getAssetGroupLabel(asset);
-      groups.set(key, [...(groups.get(key) ?? []), asset]);
-    }
-    return Array.from(groups.entries());
-  }, [project]);
+  if (isPosted) {
+    suggestions.push({
+      title: "Close the learning loop",
+      command: "/analyze",
+      detail: "Reflect on results and decide the next experiment.",
+    });
+  }
 
-  const availableMediaModels = useMemo(
-    () => getMediaModelPresets(generationModality),
-    [generationModality],
+  if (suggestions.length === 0) {
+    suggestions.push({
+      title: "Keep momentum in Agent",
+      command: "/storyboard",
+      detail: "Ask for the next concrete production step from the hub.",
+    });
+  }
+
+  return suggestions;
+}
+
+function OverviewCard({
+  title,
+  eyebrow,
+  children,
+  className = "",
+}: {
+  title: string;
+  eyebrow?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Panel className={`rounded-[1.75rem] border border-border/70 bg-black/20 p-5 ${className}`}>
+      {eyebrow ? <p className="cmd-label text-accent">{eyebrow}</p> : null}
+      <h2 className="mt-2 text-lg font-semibold text-foreground">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </Panel>
   );
+}
+
+export default function ProjectHubPage() {
+  const params = useParams<{ id: string }>();
+  const { project, error, isLoading } = useProjectWorkspace(params.id);
+  const [assetLibrary, setAssetLibrary] = useState<ProjectAssetLibrary | null>(null);
+  const [assetError, setAssetError] = useState<string | null>(null);
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
 
   useEffect(() => {
-    const fallback = getDefaultMediaModel(generationModality);
-    setGenerationModelId(fallback.id);
-    setGenerationCustomModelId("");
-  }, [generationModality]);
+    let active = true;
+
+    async function loadAssets() {
+      setIsLoadingAssets(true);
+      try {
+        const library = await fetchJson<ProjectAssetLibrary>(`/api/projects/${params.id}/assets`);
+        if (active) {
+          setAssetLibrary(library);
+          setAssetError(null);
+        }
+      } catch (caught) {
+        if (active) {
+          setAssetLibrary(null);
+          setAssetError(caught instanceof Error ? caught.message : "Unable to load asset library.");
+        }
+      } finally {
+        if (active) {
+          setIsLoadingAssets(false);
+        }
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        const history = await fetchJson<AgentHistoryResponse>(`/api/projects/${params.id}/agent`);
+        if (active) {
+          setActivity(createActivityEntries(history));
+        }
+      } catch {
+        if (active) {
+          setActivity([]);
+        }
+      }
+    }
+
+    void loadAssets();
+    void loadHistory();
+
+    return () => {
+      active = false;
+    };
+  }, [params.id]);
+
+  const assetCount = useMemo(() => {
+    if (assetLibrary) {
+      return (
+        assetLibrary.looseAssets.length +
+        assetLibrary.folders.reduce((total, folder) => total + folder.assets.length, 0)
+      );
+    }
+
+    return project?.assets.length ?? 0;
+  }, [assetLibrary, project]);
+
+  const generatedAssets = useMemo(
+    () =>
+      project?.assets.filter((asset) => asset.source === "generated").slice(0, 3) ??
+      [],
+    [project],
+  );
 
   if (isLoading) {
     return (
@@ -255,576 +255,294 @@ export default function ProjectWorkspacePage() {
     return <Panel>{error ?? "Unable to load project."}</Panel>;
   }
 
-  const projectId = project.id;
-
-  async function saveProjectPatch(patch: Record<string, unknown>) {
-    setSaving(true);
-    try {
-      await fetchJson(`/api/projects/${projectId}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-      refresh();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleMediaGeneration() {
-    if (!generationPrompt.trim()) return;
-    setGenerating(true);
-    try {
-      await fetchJson(`/api/projects/${projectId}/generations`, {
-        method: "POST",
-        body: JSON.stringify({
-          prompt: generationPrompt,
-          modality: generationModality,
-          title: generationTitle || undefined,
-          sceneKey: generationSceneKey || undefined,
-          modelId: generationCustomModelId || generationModelId,
-          provider: availableMediaModels.find((item) => item.id === generationModelId)?.provider,
-        }),
-      });
-      setGenerationPrompt("");
-      setGenerationTitle("");
-      refresh();
-    } finally {
-      setGenerating(false);
-    }
-  }
+  const scriptPreview = project.scriptLab.script.trim() || project.scriptLab.caption.trim() || project.scriptLab.hook.trim();
+  const publishingState = project.analyticsJournal.permalink
+    ? "Published"
+    : project.analyticsJournal.instagramContainerId
+      ? "Processing on Instagram"
+      : project.analyticsJournal.instagramAccountId
+        ? "Ready to publish"
+        : "Not connected";
+  const nextActions = buildNextActions(project, assetCount);
+  const lastActivity = activity[0];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeading
-          eyebrow="Project Workspace"
-          title={project.title}
-          description="One project hub for script decisions, generation history, storyboard assets, and editor handoff."
-        />
-        <div className="flex items-center gap-2">
-          <Badge className="bg-accent/10 text-accent border-accent/20">
-            {statusLabels[project.status]}
-          </Badge>
-          
-          {project.status === "posting" ? (
-            <Button disabled className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/10">
-              <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" />
-              Publishing...
-            </Button>
-          ) : project.status === "posted" || project.status === "analyzed" ? (
-            <Button disabled className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10">
-              Published to IG
-            </Button>
-          ) : (
-            <Button className="text-xs bg-pink-600 hover:bg-pink-700 text-white" onClick={() => setIsPublishModalOpen(true)}>
-              <InstagramIcon className="mr-2 h-4 w-4" />
-              Publish to IG
-            </Button>
-          )}
-
-          <Link href={`/projects/${projectId}/chat`}>
-            <Button variant="secondary" className="text-xs">
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Open chat
-            </Button>
-          </Link>
-          <Link href={`/editor/${projectId}`}>
-            <Button className="text-xs">
-              Open Editor <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
+    <div className="space-y-6 pb-10">
+      <Panel className="rounded-[2rem] border border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(212,255,51,0.14),transparent_28%),rgba(9,9,11,0.78)] p-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="cmd-label text-accent">Project hub</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{project.title}</h1>
+            <p className="mt-3 max-w-2xl text-sm text-muted">
+              Use this page as the overview layer. Agent owns generation and planning, editor owns the rough cut, and analytics stays one click away.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="border-accent/20 bg-accent/10 text-accent">{project.status.replaceAll("_", " ")}</Badge>
+              <Badge className="border-border/70 bg-black/20 text-muted">{project.format}</Badge>
+              <Badge className="border-border/70 bg-black/20 text-muted">{project.platform}</Badge>
+              <Badge className="border-border/70 bg-black/20 text-muted">Updated {formatDate(project.updatedAt)}</Badge>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href={`/projects/${project.id}/chat`}>
+              <Button className="rounded-full px-4">
+                Open Agent
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href={`/editor/${project.id}`}>
+              <Button variant="secondary" className="rounded-full px-4">
+                Open Editor
+              </Button>
+            </Link>
+            <Link href="/analytics">
+              <Button variant="secondary" className="rounded-full px-4">
+                View Analytics
+              </Button>
+            </Link>
+          </div>
         </div>
-      </div>
+      </Panel>
 
       <CreatorProgress currentStatus={project.status} cardId={project.id} />
 
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/projects/${projectId}/chat`}
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-black/20 px-3 py-2 text-xs text-muted hover:text-foreground"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          Chat
-        </Link>
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
-                active
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border bg-black/20 text-muted hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
+        <OverviewCard title="Continue in Agent" eyebrow="Primary CTA">
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              {lastActivity
+                ? `${lastActivity.label}: ${lastActivity.detail}`
+                : "No agent run yet. Start in Agent for scripts, structured prompts, tasks, generation, or analysis."}
+            </p>
+            <div className="flex items-center justify-between rounded-[1.25rem] border border-border/70 bg-black/25 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent/20 bg-accent/10 text-accent">
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Real work now happens in Agent</p>
+                  <p className="text-xs text-muted">Use slash commands there instead of jumping between old workspace tabs.</p>
+                </div>
+              </div>
+              <Link href={`/projects/${project.id}/chat`}>
+                <Button className="rounded-full px-4">Open Agent</Button>
+              </Link>
+            </div>
+          </div>
+        </OverviewCard>
+
+        <OverviewCard title="Project summary" eyebrow="Overview">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="cmd-label">Script</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{scriptPreview ? "Ready to refine" : "Not started"}</p>
+              <p className="mt-2 text-sm text-muted">
+                {scriptPreview ? "There is already a draft hook or script to continue from." : "Kick this off in Agent with `/script`."}
+              </p>
+            </div>
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="cmd-label">Assets</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{assetCount}</p>
+              <p className="mt-2 text-sm text-muted">
+                {assetLibrary ? `${assetLibrary.folders.length} folders tracked through the asset library.` : "Assets and folders will appear here once loaded."}
+              </p>
+            </div>
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="cmd-label">Editor</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{["editing", "posting", "posted", "analyzed", "archived"].includes(project.status) ? "In progress" : "Not started"}</p>
+              <p className="mt-2 text-sm text-muted">Continue the rough cut in the standalone editor.</p>
+            </div>
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="cmd-label">Publishing</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{publishingState}</p>
+              <p className="mt-2 text-sm text-muted">
+                {project.analyticsJournal.permalink ? "The Instagram permalink is already attached." : "Publishing status is derived from the existing Instagram integration state."}
+              </p>
+            </div>
+          </div>
+        </OverviewCard>
       </div>
 
-      {activeTab === "overview" && (
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <Panel className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-xs text-muted">
-                Project title
-                <Input
-                  className="mt-2"
-                  value={overviewForm.title}
-                  onChange={(event) => setOverviewForm((current) => ({ ...current, title: event.target.value }))}
-                />
-              </label>
-              <label className="text-xs text-muted">
-                Status
-                <CustomSelect
-                  className="mt-2"
-                  value={overviewForm.status}
-                  onChange={(value) =>
-                    setOverviewForm((current) => ({ ...current, status: value as ContentStatus }))
-                  }
-                  options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))}
-                />
-              </label>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <OverviewCard title="Latest script / caption preview" eyebrow="Script">
+          <p className="text-sm leading-6 text-muted">
+            {scriptPreview || "No script or caption preview yet. Use `/script` in Agent to draft the first pass."}
+          </p>
+          {project.scriptLab.caption.trim() ? (
+            <div className="mt-4 rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="cmd-label">Caption</p>
+              <p className="mt-2 text-sm text-foreground">{project.scriptLab.caption}</p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-xs text-muted">
-                Format
-                <Input
-                  className="mt-2"
-                  value={overviewForm.format}
-                  onChange={(event) => setOverviewForm((current) => ({ ...current, format: event.target.value }))}
-                />
-              </label>
-              <label className="text-xs text-muted">
-                Platform
-                <Input
-                  className="mt-2"
-                  value={overviewForm.platform}
-                  onChange={(event) => setOverviewForm((current) => ({ ...current, platform: event.target.value }))}
-                />
-              </label>
-            </div>
-            <div className="flex justify-end">
-              <Button disabled={saving} onClick={() => saveProjectPatch(overviewForm)}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save overview
-              </Button>
-            </div>
-          </Panel>
+          ) : null}
+        </OverviewCard>
 
-          <Panel className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <p className="cmd-label">Assets</p>
-                <p className="mt-2 text-3xl font-semibold">{project.assets.length}</p>
-              </div>
-              <div>
-                <p className="cmd-label">Chat Turns</p>
-                <p className="mt-2 text-3xl font-semibold">{project.messages.length}</p>
-              </div>
-              <div>
-                <p className="cmd-label">Generations</p>
-                <p className="mt-2 text-3xl font-semibold">{project.generations.length}</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-black/20 p-4">
-              <p className="cmd-label text-accent">Continue</p>
-              <p className="mt-2 text-sm text-muted">
-                Jump back into {project.scriptLab.script ? "generation and asset organization" : "script shaping"}.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Link href={`/projects/${project.id}/chat`}>
-                  <Button variant="secondary">Open chat</Button>
-                </Link>
-                <Link href={`/editor/${project.id}`}>
-                  <Button>Launch editor</Button>
-                </Link>
-              </div>
-            </div>
-          </Panel>
-        </div>
-      )}
-
-      {activeTab === "script" && (
-        <Panel className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-xs text-muted">
-              Angle
-              <Textarea className="mt-2" value={scriptForm.angle} onChange={(event) => setScriptForm((current) => ({ ...current, angle: event.target.value }))} />
-            </label>
-            <label className="text-xs text-muted">
-              Hook
-              <Textarea className="mt-2" value={scriptForm.hook} onChange={(event) => setScriptForm((current) => ({ ...current, hook: event.target.value }))} />
-            </label>
-          </div>
-          <label className="text-xs text-muted">
-            Outline
-            <Textarea className="mt-2 min-h-28" value={scriptForm.outline} onChange={(event) => setScriptForm((current) => ({ ...current, outline: event.target.value }))} />
-          </label>
-          <label className="text-xs text-muted">
-            Script
-            <Textarea className="mt-2 min-h-40" value={scriptForm.script} onChange={(event) => setScriptForm((current) => ({ ...current, script: event.target.value }))} />
-          </label>
-          <div className="grid gap-4 md:grid-cols-3">
-            <label className="text-xs text-muted">
-              Caption
-              <Textarea className="mt-2" value={scriptForm.caption} onChange={(event) => setScriptForm((current) => ({ ...current, caption: event.target.value }))} />
-            </label>
-            <label className="text-xs text-muted">
-              On-screen text
-              <Textarea className="mt-2" value={scriptForm.onScreenText} onChange={(event) => setScriptForm((current) => ({ ...current, onScreenText: event.target.value }))} />
-            </label>
-            <label className="text-xs text-muted">
-              CTA
-              <Textarea className="mt-2" value={scriptForm.cta} onChange={(event) => setScriptForm((current) => ({ ...current, cta: event.target.value }))} />
-            </label>
-          </div>
-          <label className="text-xs text-muted">
-            Notes
-            <Textarea className="mt-2" value={scriptForm.notes} onChange={(event) => setScriptForm((current) => ({ ...current, notes: event.target.value }))} />
-          </label>
-          <div className="flex justify-end">
-            <Button disabled={saving} onClick={() => saveProjectPatch({ scriptLab: scriptForm })}>
-              Save script
-            </Button>
-          </div>
-        </Panel>
-      )}
-
-      {activeTab === "generate" && (
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <Panel className="space-y-4">
-            <div className="rounded-2xl border border-accent/20 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),rgba(10,10,12,0.95))] p-6">
-              <p className="cmd-label text-accent">Project Chat</p>
-              <h3 className="mt-2 text-2xl font-semibold">Chat now lives on its own focused route</h3>
-              <p className="mt-3 max-w-xl text-sm text-muted">
-                Use the dedicated chat screen when you want to shape hooks, tighten transitions, or build the next scene without the rest of the workspace competing for attention.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Link href={`/projects/${projectId}/chat`}>
-                  <Button>Open project chat</Button>
-                </Link>
-                <Badge className="border-border">{project.messages.length} saved turns</Badge>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel className="space-y-4">
-            <div>
-              <p className="cmd-label text-accent">Media Generation</p>
-              <h3 className="mt-1 text-sm font-semibold">Hugging Face image, audio, and video outputs</h3>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-xs text-muted">
-                Modality
-                <CustomSelect
-                  className="mt-2"
-                  value={generationModality}
-                  onChange={(value) => setGenerationModality(value as (typeof mediaModalities)[number])}
-                  options={mediaModalities.map((value) => ({ value, label: value.toUpperCase() }))}
-                />
-              </label>
-              <label className="text-xs text-muted">
-                Preset model
-                <CustomSelect
-                  className="mt-2"
-                  value={generationModelId}
-                  onChange={(value) => setGenerationModelId(value)}
-                  options={availableMediaModels.map((model) => ({ value: model.id, label: model.label }))}
-                />
-              </label>
-            </div>
-            <label className="text-xs text-muted">
-              Custom model ID
-              <Input className="mt-2" value={generationCustomModelId} onChange={(event) => setGenerationCustomModelId(event.target.value)} placeholder="Optional Hugging Face model id" />
-            </label>
-            <label className="text-xs text-muted">
-              Prompt
-              <Textarea className="mt-2 min-h-32" value={generationPrompt} onChange={(event) => setGenerationPrompt(event.target.value)} />
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-xs text-muted">
-                Asset title
-                <Input className="mt-2" value={generationTitle} onChange={(event) => setGenerationTitle(event.target.value)} />
-              </label>
-              <label className="text-xs text-muted">
-                Beat / scene
-                <Input className="mt-2" value={generationSceneKey} onChange={(event) => setGenerationSceneKey(event.target.value)} placeholder="Intro beat" />
-              </label>
-            </div>
-            <div className="flex justify-end">
-              <Button disabled={generating} onClick={handleMediaGeneration}>
-                {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Generate asset
-              </Button>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border/60 bg-black/20 p-4">
-              {project.generations.map((generation) => (
-                <div key={generation.id} className="flex items-center justify-between text-sm">
+        <OverviewCard title="Generated Assets" eyebrow="Asset API">
+          {isLoadingAssets ? (
+            <p className="text-sm text-muted">Loading asset library…</p>
+          ) : assetError ? (
+            <p className="text-sm text-muted">{assetError}</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-[1.25rem] border border-border/70 bg-black/25 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <FolderOpen className="h-4 w-4 text-accent" />
                   <div>
-                    <p>{generation.modality.toUpperCase()} · {generation.model}</p>
-                    <p className="text-xs text-muted">{generation.status}</p>
+                    <p className="text-sm font-medium text-foreground">{assetLibrary?.folders.length ?? 0} folders</p>
+                    <p className="text-xs text-muted">{assetCount} assets tracked</p>
                   </div>
-                  <Badge className="border-border">{generation.provider}</Badge>
+                </div>
+                <Link href={`/projects/${project.id}/chat`}>
+                  <Button variant="ghost" className="h-8 rounded-full px-3 text-[10px]">Use Agent</Button>
+                </Link>
+              </div>
+              {generatedAssets.length > 0 ? (
+                <div className="grid gap-3">
+                  {generatedAssets.map((asset) => (
+                    <div key={asset.id} className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+                      <p className="text-sm font-medium text-foreground">{asset.title}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.08em] text-muted">{asset.type}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">No generated assets yet. Start with `/form-json-prompt` or `/generate` in Agent.</p>
+              )}
+            </div>
+          )}
+        </OverviewCard>
+
+        <OverviewCard title="Editor Rough Cut" eyebrow="Editor">
+          <div className="space-y-4">
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <div className="flex items-center gap-3">
+                <Film className="h-4 w-4 text-accent" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Timeline status</p>
+                  <p className="text-xs text-muted">
+                    {["editing", "posting", "posted", "analyzed", "archived"].includes(project.status)
+                      ? "Project is already in the editing or delivery phase."
+                      : "No synced timeline status is available yet."}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-black/15 p-4 text-sm text-muted">
+              Export state is not surfaced here yet, so this stays as an empty rough-cut handoff until the editor exposes timeline metadata.
+            </div>
+            <Link href={`/editor/${project.id}`}>
+              <Button variant="secondary" className="rounded-full px-4">Open Editor</Button>
+            </Link>
+          </div>
+        </OverviewCard>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <OverviewCard title="Instagram Publishing" eyebrow="Delivery">
+          <div className="space-y-4">
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <div className="flex items-center gap-3">
+                <InstagramIcon className="h-4 w-4 text-accent" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{publishingState}</p>
+                  <p className="text-xs text-muted">
+                    {project.analyticsJournal.instagramAccountId
+                      ? "Instagram account is already associated with this project."
+                      : "No connected Instagram publishing account is attached yet."}
+                  </p>
+                </div>
+              </div>
+            </div>
+            {project.analyticsJournal.permalink ? (
+              <a
+                href={project.analyticsJournal.permalink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-accent hover:underline"
+              >
+                View live post
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
+            ) : (
+              <Link href="/settings">
+                <Button variant="secondary" className="rounded-full px-4">Open Settings</Button>
+              </Link>
+            )}
+          </div>
+        </OverviewCard>
+
+        <OverviewCard title="Analytics reflection preview" eyebrow="Learning">
+          <div className="space-y-4">
+            <p className="text-sm leading-6 text-muted">
+              {project.analyticsJournal.reflection.trim() || "No reflection captured yet. When the post is live, use `/analyze` from Agent or review the analytics page."}
+            </p>
+            {project.analyticsJournal.followUpIdea.trim() ? (
+              <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+                <p className="cmd-label">Follow-up idea</p>
+                <p className="mt-2 text-sm text-foreground">{project.analyticsJournal.followUpIdea}</p>
+              </div>
+            ) : null}
+          </div>
+        </OverviewCard>
+
+        <OverviewCard title="Recent agent activity" eyebrow="Thread">
+          {activity.length > 0 ? (
+            <div className="space-y-3">
+              {activity.map((entry) => (
+                <div key={entry.id} className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-foreground">{entry.label}</p>
+                    <span className="text-[11px] text-muted">{formatDate(entry.createdAt)}</span>
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-sm text-muted">{entry.detail}</p>
                 </div>
               ))}
             </div>
-          </Panel>
-        </div>
-      )}
+          ) : (
+            <p className="text-sm text-muted">No agent activity yet. Open Agent to start the working session for this project.</p>
+          )}
+        </OverviewCard>
+      </div>
 
-      {activeTab === "story-assets" && (
-        <div className="space-y-6">
-          {groupedAssets.map(([group, assets]) => (
-            <Panel key={group} className="space-y-4">
-              <div className="flex items-center justify-between">
+      <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <OverviewCard title="Next Best Actions" eyebrow="Static rules">
+          <div className="space-y-3">
+            {nextActions.map((action) => (
+              <div key={action.command} className="flex items-start justify-between gap-4 rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
                 <div>
-                  <p className="cmd-label text-accent">Beat</p>
-                  <h3 className="mt-1 text-sm font-semibold">{group}</h3>
+                  <p className="text-sm font-medium text-foreground">{action.title}</p>
+                  <p className="mt-1 text-sm text-muted">{action.detail}</p>
                 </div>
-                <Badge className="border-border">{assets.length} assets</Badge>
+                <span className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-accent">
+                  {action.command}
+                </span>
               </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {assets.map((asset) => (
-                  <div key={asset.id} className="rounded-xl border border-border/60 bg-black/20 p-4">
-                    <p className="text-sm font-semibold">{asset.title}</p>
-                    <p className="mt-1 text-xs text-muted">{asset.type}</p>
-                    <p className="mt-3 text-sm text-muted whitespace-pre-wrap">{asset.note}</p>
-                    <div className="mt-4 flex gap-2">
-                      <Link href={`/editor/${projectId}?asset=${asset.id}`}>
-                        <Button variant="secondary" className="text-xs">Send to editor</Button>
-                      </Link>
-                      {asset.url.startsWith("http") ? (
-                        <a href={asset.url} target="_blank" rel="noreferrer" className="inline-flex items-center text-xs text-accent">
-                          Preview
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        </OverviewCard>
 
-      {activeTab === "tasks" && (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {([
-            { label: "A-Roll", items: project.shootPack.aRoll },
-            { label: "B-Roll", items: project.shootPack.bRoll },
-            { label: "Screen Captures", items: project.shootPack.screenCaptures },
-            { label: "Props", items: project.shootPack.props },
-            { label: "Missing Assets", items: project.shootPack.missingAssets },
-          ] as Array<{ label: string; items: ChecklistItem[] }>).map(({ label, items }) => (
-            <Panel key={label} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">{label}</h3>
-                <Badge className="border-border">{items.length}</Badge>
-              </div>
-              {items.length === 0 ? (
-                <p className="text-sm text-muted">No items yet.</p>
-              ) : (
-                items.map((item) => (
-                  <label key={item.id} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2 text-sm">
-                    <input type="checkbox" checked={item.done} readOnly />
-                    <span>{item.label}</span>
-                  </label>
-                ))
-              )}
-            </Panel>
-          ))}
-        </div>
-      )}
-
-      {activeTab === "editor" && (
-        <Panel className="space-y-4">
-          <div className="rounded-2xl border border-accent/20 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.24),rgba(10,10,12,0.95))] p-8">
-            <p className="cmd-label text-accent">Editor handoff</p>
-            <h3 className="mt-2 text-2xl font-semibold">Open the live editor with project assets ready</h3>
-            <p className="mt-3 max-w-2xl text-sm text-muted">
-              SceneBook now opens the editor with project media already available and lets you focus a specific storyboard asset from the Story/Assets tab.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-                <Link href={`/editor/${projectId}`}>
-                  <Button>Open editor</Button>
-                </Link>
-              {project.assets[0] ? (
-                <Link href={`/editor/${projectId}?asset=${project.assets[0].id}`}>
-                  <Button variant="secondary">Open with first asset</Button>
-                </Link>
-              ) : null}
+        <OverviewCard title="Hub direction" eyebrow="Flow">
+          <div className="space-y-4 text-sm text-muted">
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="flex items-center gap-2 text-foreground">
+                <Sparkles className="h-4 w-4 text-accent" />
+                Agent handles script, prompt, generation, tasks, and analysis commands.
+              </p>
+            </div>
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="flex items-center gap-2 text-foreground">
+                <Clapperboard className="h-4 w-4 text-accent" />
+                Editor owns the rough cut and export work once assets are ready.
+              </p>
+            </div>
+            <div className="rounded-[1.25rem] border border-border/70 bg-black/25 p-4">
+              <p className="flex items-center gap-2 text-foreground">
+                <BarChart3 className="h-4 w-4 text-accent" />
+                Analytics remains a separate page and is intentionally not redesigned in this pass.
+              </p>
             </div>
           </div>
-        </Panel>
-      )}
-
-      {activeTab === "analytics" && (
-        <Panel className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <Panel className="bg-black/20">
-              <p className="cmd-label">Views</p>
-              <p className="mt-2 text-3xl font-semibold">{project.analyticsJournal.views}</p>
-            </Panel>
-            <Panel className="bg-black/20">
-              <p className="cmd-label">Likes</p>
-              <p className="mt-2 text-3xl font-semibold">{project.analyticsJournal.likes}</p>
-            </Panel>
-            <Panel className="bg-black/20">
-              <p className="cmd-label">Shares</p>
-              <p className="mt-2 text-3xl font-semibold">{project.analyticsJournal.shares}</p>
-            </Panel>
-          </div>
-          <label className="text-xs text-muted">
-            Reflection
-            <Textarea className="mt-2" value={analyticsForm.reflection} onChange={(event) => setAnalyticsForm((current) => ({ ...current, reflection: event.target.value }))} />
-          </label>
-          <label className="text-xs text-muted">
-            Watch-time note
-            <Textarea className="mt-2" value={analyticsForm.watchTimeNote} onChange={(event) => setAnalyticsForm((current) => ({ ...current, watchTimeNote: event.target.value }))} />
-          </label>
-          <label className="text-xs text-muted">
-            Follow-up idea
-            <Textarea className="mt-2" value={analyticsForm.followUpIdea} onChange={(event) => setAnalyticsForm((current) => ({ ...current, followUpIdea: event.target.value }))} />
-          </label>
-          <div className="flex justify-end">
-            <Button
-              disabled={saving}
-              onClick={() =>
-                saveProjectPatch({
-                  analyticsJournal: {
-                    ...project.analyticsJournal,
-                    ...analyticsForm,
-                  },
-                })
-              }
-            >
-              Save analytics
-            </Button>
-          </div>
-        </Panel>
-      )}
-
-      {(saving || isPending) && (
-        <div className="fixed bottom-6 right-6 rounded-full border border-border bg-background/90 px-4 py-2 text-xs text-muted shadow-lg">
-          <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />
-          Saving project updates
-        </div>
-      )}
-      {/* Instagram Publishing Modal */}
-      {isPublishModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <Panel className="w-full max-w-md space-y-4 border border-border p-6 shadow-2xl bg-zinc-950/95">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <InstagramIcon className="h-5 w-5 text-pink-500" />
-                Publish to Instagram
-              </h2>
-              <button
-                type="button"
-                onClick={() => publishingState !== "uploading" && publishingState !== "processing" && setIsPublishModalOpen(false)}
-                className="text-muted hover:text-foreground text-sm"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="h-px bg-border/40" />
-
-            {publishingState === "success" ? (
-              <div className="flex flex-col items-center gap-3 py-6 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                  ✓
-                </div>
-                <p className="text-sm font-semibold text-emerald-400">Published successfully!</p>
-                <p className="text-xs text-muted">Project status updated to Posted.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {socialAccounts.length === 0 ? (
-                  <div className="py-4 text-center space-y-2">
-                    <p className="text-xs text-muted">No social connections found.</p>
-                    <Link href="/settings">
-                      <Button variant="secondary" className="text-xs mt-2">
-                        Configure in Settings
-                      </Button>
-                    </Link>
-                  </div>
-                ) : (
-                  <>
-                    <label className="text-xs text-muted block">
-                      Select Connected Account
-                      <CustomSelect
-                        className="mt-2"
-                        value={selectedAccountId}
-                        onChange={(val) => setSelectedAccountId(val)}
-                        options={socialAccounts.map((acc) => ({
-                          value: acc.id,
-                          label: `@${acc.account_username} (${acc.account_name})`,
-                        }))}
-                      />
-                    </label>
-
-                    <label className="text-xs text-muted block">
-                      Caption
-                      <Textarea
-                        className="mt-2 min-h-24 text-xs"
-                        value={customCaption}
-                        onChange={(e) => setCustomCaption(e.target.value)}
-                        placeholder="Write your Instagram Reel caption..."
-                      />
-                    </label>
-
-                    {publishingState === "uploading" && (
-                      <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5 text-xs text-accent">
-                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                        <span>Uploading video file to Meta servers...</span>
-                      </div>
-                    )}
-
-                    {publishingState === "processing" && (
-                      <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400">
-                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                        <span>Meta is processing the Reel video. Polling status...</span>
-                      </div>
-                    )}
-
-                    {publishingState === "error" && (
-                      <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/5 text-xs text-rose-400 space-y-1">
-                        <p className="font-semibold">Publishing Failed:</p>
-                        <p className="text-[10px] text-muted-foreground">{publishError}</p>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => setIsPublishModalOpen(false)}
-                        disabled={publishingState === "uploading" || publishingState === "processing"}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={handlePublish}
-                        disabled={!selectedAccountId || publishingState === "uploading" || publishingState === "processing"}
-                      >
-                        {publishingState === "uploading" || publishingState === "processing" ? "Publishing..." : "Publish Reel"}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </Panel>
-        </div>
-      )}
+        </OverviewCard>
+      </div>
     </div>
   );
 }

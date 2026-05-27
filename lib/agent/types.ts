@@ -77,6 +77,12 @@ export type AgentToolCallRecord = {
   completed_at?: string | null;
 };
 
+export type AgentHistory = {
+  thread: AgentThreadRecord | null;
+  messages: AgentMessageRecord[];
+  toolCalls: AgentToolCallRecord[];
+};
+
 export type ParsedSlashCommand = {
   command: AgentCommand | null;
   input: string;

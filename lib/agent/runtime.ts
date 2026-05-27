@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
+  AgentHistory,
   AgentMessageRecord,
   AgentMessageRole,
   AgentModelsSelection,
@@ -62,6 +63,80 @@ export async function createOrLoadThread(projectId: string, threadId?: string) {
   }
 
   return data as AgentThreadRecord;
+}
+
+export async function getAgentHistory(projectId: string, threadId?: string): Promise<AgentHistory> {
+  const { supabase, user } = await requireUser();
+  let thread: AgentThreadRecord | null = null;
+
+  if (threadId) {
+    const { data, error } = await supabase
+      .from("agent_threads")
+      .select("*")
+      .eq("owner_id", user.id)
+      .eq("project_id", projectId)
+      .eq("id", threadId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+    thread = data as AgentThreadRecord | null;
+  } else {
+    const { data, error } = await supabase
+      .from("agent_threads")
+      .select("*")
+      .eq("owner_id", user.id)
+      .eq("project_id", projectId)
+      .eq("status", "active")
+      .order("updated_at", { ascending: false })
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+    thread = data as AgentThreadRecord | null;
+  }
+
+  if (!thread) {
+    return {
+      thread: null,
+      messages: [],
+      toolCalls: [],
+    };
+  }
+
+  const { data: messages, error: messagesError } = await supabase
+    .from("agent_messages")
+    .select("*")
+    .eq("owner_id", user.id)
+    .eq("thread_id", thread.id)
+    .order("created_at", { ascending: true });
+
+  if (messagesError) {
+    throw messagesError;
+  }
+
+  const { data: toolCalls, error: toolCallsError } = await supabase
+    .from("agent_tool_calls")
+    .select("*")
+    .eq("owner_id", user.id)
+    .eq("thread_id", thread.id)
+    .order("created_at", { ascending: true });
+
+  if (toolCallsError) {
+    throw toolCallsError;
+  }
+
+  return {
+    thread: thread as AgentThreadRecord,
+    messages: (messages ?? []) as AgentMessageRecord[],
+    toolCalls: (toolCalls ?? []) as AgentToolCallRecord[],
+  };
+}
+
+export async function getLatestAgentHistory(projectId: string): Promise<AgentHistory> {
+  return getAgentHistory(projectId);
 }
 
 export async function appendAgentMessage(input: {
@@ -241,4 +316,20 @@ export async function failAgentToolCall(toolCallId: string, errorMessage: string
   if (error) {
     throw error;
   }
+}
+
+export async function listAgentThreads(projectId: string): Promise<AgentThreadRecord[]> {
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("agent_threads")
+    .select("*")
+    .eq("owner_id", user.id)
+    .eq("project_id", projectId)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as AgentThreadRecord[];
 }
