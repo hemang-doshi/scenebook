@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/secure-settings";
+import { normalizeInstagramInsightError } from "@/lib/domain/instagram-analytics";
 
 function calculateTrendsFromPosts(posts: any[], currentFollowers: number) {
   const dates: string[] = [];
@@ -126,15 +127,7 @@ export async function POST(request: Request) {
     let insightsResults: any[] = [];
     if (posts.length > 0) {
       const insightsPromises = posts.map(async (post: any) => {
-        const isReel = post.media_product_type === "REELS";
-        const isVideo = post.media_type === "VIDEO";
-        
-        let metrics = "impressions,reach,saved";
-        if (isReel) {
-          metrics = "plays,reach,saved,shares";
-        } else if (isVideo) {
-          metrics = "video_views,reach,saved,shares";
-        }
+        const metrics = "views,reach,saved,shares";
 
         const url = `https://graph.instagram.com/${post.id}/insights?metric=${metrics}&access_token=${accessToken}`;
         try {
@@ -154,7 +147,7 @@ export async function POST(request: Request) {
       let reach: number | null = null;
       let saves: number | null = null;
       let shares: number | null = null;
-      let impressions: number | null = null;
+      const impressions: number | null = null;
       let postError: string | null = null;
 
       const likes = post.like_count || 0;
@@ -165,20 +158,13 @@ export async function POST(request: Request) {
         if (result.status !== 200 || result.data?.error || result.error) {
           const errMsg = result.data?.error?.message || result.error || "Unsupported metric or access restricted";
           console.warn(`Meta Graph API insights error for post ${post.id} (Status ${result.status}): ${errMsg}.`);
-          
-          if (errMsg.toLowerCase().includes("before the most recent time") || 
-              errMsg.toLowerCase().includes("converted to a business account") ||
-              errMsg.toLowerCase().includes("converted to a creator account")) {
-            postError = "This post was created prior to converting to a creator/professional account, so detailed metrics are unavailable.";
-          } else {
-            postError = errMsg;
-          }
+          postError = normalizeInstagramInsightError(errMsg);
         } else {
           try {
             const metricsList = result.data.data || [];
             metricsList.forEach((m: any) => {
               const val = m.values?.[0]?.value || 0;
-              if (m.name === "plays" || m.name === "video_views") {
+              if (m.name === "views") {
                 views = val;
               } else if (m.name === "reach") {
                 reach = val;
@@ -186,8 +172,6 @@ export async function POST(request: Request) {
                 saves = val;
               } else if (m.name === "shares") {
                 shares = val;
-              } else if (m.name === "impressions") {
-                impressions = val;
               }
             });
           } catch (e: any) {

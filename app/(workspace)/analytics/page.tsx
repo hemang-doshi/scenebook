@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { fetchJson } from "@/lib/fetcher";
+import { getInstagramInsightIssueLabel } from "@/lib/domain/instagram-analytics";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -728,7 +729,7 @@ export default function AnalyticsDashboard() {
 
                         {post.error && (
                           <div className="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-md line-clamp-2" title={post.error}>
-                            ⚠️ Pre-conversion post (detailed metrics unavailable)
+                            {getInstagramInsightIssueLabel(post.error)}
                           </div>
                         )}
 
@@ -786,7 +787,7 @@ export default function AnalyticsDashboard() {
                               <div className="font-medium truncate">{post.title}</div>
                               {post.error && (
                                 <div className="text-[9px] text-amber-400 font-mono truncate" title={post.error}>
-                                  ⚠️ Pre-conversion
+                                  {getInstagramInsightIssueLabel(post.error)}
                                 </div>
                               )}
                             </td>
@@ -1011,7 +1012,7 @@ export default function AnalyticsDashboard() {
                     <div className="rounded-xl border border-dashed border-border/60 bg-black/10 p-5 text-center">
                       <p className="text-xs text-muted">
                         {selectedPost.metrics.views === null
-                          ? "AI Auditing is unavailable because this post was created prior to becoming a professional account."
+                          ? `${getInstagramInsightIssueLabel(selectedPost.error)}: AI auditing requires view metrics for this post.`
                           : "Audit this post to diagnose hook pacing and get iteration script recommendations."}
                       </p>
                     </div>
