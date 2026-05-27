@@ -184,22 +184,27 @@ export async function createGeneratedAssetRecord(
   const supabase = await createSupabaseServerClient();
   const user = await requireUser(supabase);
 
-  const { error } = await (supabase.from("card_assets") as any).insert({
-    owner_id: user.id,
-    card_id: cardId,
-    title: asset.title,
-    type: asset.type,
-    url: asset.url,
-    note: asset.note ?? "",
-    storage_path: asset.storagePath,
-    source: "generated",
-    scene_key: asset.sceneKey ?? null,
-    generation_id: asset.generationId,
-    metadata: asset.metadata ?? {},
-    updated_at: new Date().toISOString(),
-  });
+  const { data, error } = await (supabase.from("card_assets") as any)
+    .insert({
+      owner_id: user.id,
+      card_id: cardId,
+      title: asset.title,
+      type: asset.type,
+      url: asset.url,
+      note: asset.note ?? "",
+      storage_path: asset.storagePath,
+      source: "generated",
+      scene_key: asset.sceneKey ?? null,
+      generation_id: asset.generationId,
+      metadata: asset.metadata ?? {},
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
 
-  if (error) {
-    throw error;
+  if (error || !data) {
+    throw error ?? new Error("Unable to create generated asset record.");
   }
+
+  return data as Database["public"]["Tables"]["card_assets"]["Row"];
 }

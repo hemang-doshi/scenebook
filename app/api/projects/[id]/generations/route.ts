@@ -5,6 +5,10 @@ import { generateMediaWithHuggingFace } from "@/lib/ai/huggingface";
 import { getDefaultMediaModel, mediaModalities } from "@/lib/ai/model-registry";
 import { getActiveProviderToken, type CreatorSettingsRow } from "@/lib/creator-settings";
 import {
+  ensureAssetInDefaultFolder,
+  moveAssetToFolder,
+} from "@/lib/assets/asset-folders";
+import {
   createGeneratedAssetRecord,
   createGenerationRecord,
   loadCreatorSettingsRow,
@@ -20,6 +24,7 @@ const requestSchema = z.object({
   provider: z.string().trim().min(1).optional(),
   title: z.string().trim().min(1).optional(),
   sceneKey: z.string().trim().min(1).optional(),
+  folderId: z.string().uuid().optional(),
 });
 
 export async function POST(
@@ -59,6 +64,8 @@ export async function POST(
     });
 
     const title = body.title ?? `${body.modality} concept`;
+    const assetType =
+      body.modality === "image" ? "image" : body.modality === "audio" ? "audio" : "video";
     const upload = await uploadGeneratedAsset({
       supabase,
       userId: user.id,
@@ -69,9 +76,9 @@ export async function POST(
       extension: generated.extension,
     });
 
-    await createGeneratedAssetRecord(id, {
+    const asset = await createGeneratedAssetRecord(id, {
       title,
-      type: body.modality === "image" ? "image" : body.modality === "audio" ? "audio" : "video",
+      type: assetType,
       url: upload.publicUrl,
       note: body.prompt,
       storagePath: upload.path,
@@ -85,14 +92,28 @@ export async function POST(
       },
     });
 
+    if (body.folderId) {
+      await moveAssetToFolder(id, asset.id, body.folderId);
+    } else {
+      await ensureAssetInDefaultFolder({
+        projectId: id,
+        assetId: asset.id,
+        type: assetType,
+        title,
+        modality: body.modality,
+      });
+    }
+
     await markGenerationCompleted(generation.id, {
       provider: body.provider ?? fallbackModel.provider ?? null,
       assetPath: upload.path,
       assetUrl: upload.publicUrl,
+      assetId: asset.id,
     });
 
     return NextResponse.json({
       generationId: generation.id,
+      assetId: asset.id,
       url: upload.publicUrl,
       path: upload.path,
     });
