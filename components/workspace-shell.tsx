@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   Bell,
   ChevronLeft,
   ChevronRight,
@@ -84,6 +85,7 @@ export function WorkspaceShell({
         ]
       : []),
     { href: "/editor", label: "Editor", icon: Film, match: ["/editor"] },
+    { href: "/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/settings", label: "Settings", icon: Settings2 },
   ];
 
@@ -142,6 +144,7 @@ export function WorkspaceShell({
   const breadcrumbItems = useMemo(() => {
     if (pathname === "/home") return [{ label: "Projects" }];
     if (pathname === "/board") return [{ label: "Board" }];
+    if (pathname === "/analytics") return [{ label: "Analytics" }];
     if (pathname === "/settings") return [{ label: "Settings" }];
     if (pathname === "/editor") {
       return [{ label: "Projects", href: "/home" }, { label: "Editor" }];

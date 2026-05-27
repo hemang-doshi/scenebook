@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0b0c10;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #12131a;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #00f0ff;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      color: #ffffff;
+    }
+    p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #9ca3af;
+      margin-bottom: 24px;
+    }
+    .btn {
+      display: inline-block;
+      background-color: #00f0ff;
+      color: #0b0c10 !important;
+      text-decoration: none;
+      padding: 12px 28px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 6px;
+      margin: 20px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: 11px;
+      color: #4b5563;
+      border-top: 1px solid #1f2937;
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">SceneBook</div>
+    <h1>Confirm new email address</h1>
+    <p>A request was made to change your SceneBook account email. Please click the button below to confirm the new email address.</p>
+    <a class="btn" href="{{ .ConfirmationURL }}">Confirm Email Change</a>
+    <div class="footer">
+      If you did not request this change, you can safely ignore this email.
+    </div>
+  </div>
+</body>
+</html>
