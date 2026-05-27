@@ -13,9 +13,16 @@ const failAgentRun = vi.fn();
 const failAgentToolCall = vi.fn();
 const generateText = vi.fn();
 const getProjectWorkspace = vi.fn();
+const getAgentHistory = vi.fn();
+const listAgentThreads = vi.fn();
+const generateProjectMedia = vi.fn();
 
 vi.mock("@/lib/ai/client", () => ({
   generateText,
+}));
+
+vi.mock("@/lib/generation/generate-media", () => ({
+  generateProjectMedia,
 }));
 
 vi.mock("@/lib/agent/runtime", () => ({
@@ -27,6 +34,8 @@ vi.mock("@/lib/agent/runtime", () => ({
   createOrLoadThread,
   failAgentRun,
   failAgentToolCall,
+  getAgentHistory,
+  listAgentThreads,
 }));
 
 vi.mock("@/lib/data/repository", () => ({
@@ -124,6 +133,9 @@ describe("agent tools", () => {
     failAgentToolCall.mockReset();
     generateText.mockReset();
     getProjectWorkspace.mockReset();
+    getAgentHistory.mockReset();
+    listAgentThreads.mockReset();
+    generateProjectMedia.mockReset();
   });
 
   test("/form-json-prompt creates the expected structured JSON shape", async () => {
@@ -182,6 +194,135 @@ describe("agent tools", () => {
     });
   });
 
+  test("/generate executes successfully with parsed modality", async () => {
+    createAuthSupabase();
+    generateProjectMedia.mockResolvedValue({
+      generationId: "gen-123",
+      assetId: "asset-123",
+      url: "https://example.com/asset.png",
+      folderId: "folder-123",
+      folderName: "MockFolder",
+      model: "flux",
+      provider: "huggingface",
+      prompt: "neon product hero frame with studio lighting",
+    });
+
+    const { generateTool } = await import("@/lib/agent/tools/generate");
+    const result = await generateTool.handler(
+      {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        rawInput: "/generate image neon product hero frame with studio lighting",
+        project: baseProject,
+        selectedModel: "gemini-2.5-flash",
+      },
+      { prompt: "image neon product hero frame with studio lighting" },
+    );
+
+    expect(generateProjectMedia).toHaveBeenCalledWith({
+      projectId: "project-1",
+      userId: "user-1",
+      prompt: "neon product hero frame with studio lighting",
+      modality: "image",
+      modelId: "gemini-2.5-flash",
+    });
+
+    expect(result).toMatchObject({
+      output: {
+        assetId: "asset-123",
+        generationId: "gen-123",
+        url: "https://example.com/asset.png",
+        modality: "image",
+      },
+    });
+  });
+
+  test("agent generate tool validates missing modality", async () => {
+    const { generateTool } = await import("@/lib/agent/tools/generate");
+    const result = await generateTool.handler(
+      {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        rawInput: "/generate neon product hero frame with studio lighting",
+        project: baseProject,
+      },
+      { prompt: "neon product hero frame with studio lighting" },
+    );
+
+    expect(result.output).toMatchObject({
+      missingModality: true,
+      prompt: "neon product hero frame with studio lighting",
+    });
+    expect(generateProjectMedia).not.toHaveBeenCalled();
+  });
+
+  test("agent generate tool calls generation service with selected model", async () => {
+    createAuthSupabase();
+    generateProjectMedia.mockResolvedValue({
+      generationId: "gen-123",
+      assetId: "asset-123",
+      url: "https://example.com/asset.png",
+      folderId: "folder-123",
+      folderName: "MockFolder",
+      model: "flux-custom",
+      provider: "huggingface",
+      prompt: "neon product hero frame with studio lighting",
+    });
+
+    const { generateTool } = await import("@/lib/agent/tools/generate");
+    await generateTool.handler(
+      {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        rawInput: "/generate image neon product hero frame with studio lighting",
+        project: baseProject,
+        selectedModel: "gemini-2.5-flash",
+        selectedModels: {
+          image: "flux-custom",
+        },
+      },
+      { prompt: "image neon product hero frame with studio lighting" },
+    );
+
+    expect(generateProjectMedia).toHaveBeenCalledWith({
+      projectId: "project-1",
+      userId: "user-1",
+      prompt: "neon product hero frame with studio lighting",
+      modality: "image",
+      modelId: "flux-custom",
+    });
+  });
+
+  test("/storyboard is a registered deterministic tool", async () => {
+    const { storyboardTool } = await import("@/lib/agent/tools/storyboard");
+
+    generateText.mockResolvedValue(JSON.stringify({
+      title: "Bronze watch hero reel",
+      shots: ["Opening frame: establish tactile close-up sequence.", "Proof shot", "Motion beat", "Payoff shot"]
+    }));
+
+    const result = await storyboardTool.handler(
+      {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        rawInput: "/storyboard tactile close-up sequence",
+        project: baseProject,
+        selectedModel: null,
+      },
+      { prompt: "tactile close-up sequence" },
+    );
+
+    expect(result).toMatchObject({
+      output: {
+        shots: expect.arrayContaining([expect.stringContaining("Opening frame")]),
+      },
+    });
+  });
+
   test("supported tool commands dispatch through the agent route and log approval-mode tool calls", async () => {
     createAuthSupabase();
     createOrLoadThread.mockResolvedValue({ id: "thread-1" });
@@ -209,6 +350,8 @@ describe("agent tools", () => {
     const payload = await response.json();
     expect(payload.tool).toMatchObject({
       type: "tool_result",
+      id: "tool-call-1",
+      status: "awaiting_approval",
       requiresApproval: true,
       toolName: "Form JSON Prompt",
     });
@@ -250,5 +393,26 @@ describe("agent tools", () => {
       error: expect.stringContaining("/script"),
     });
     expect(createOrLoadThread).not.toHaveBeenCalled();
+  });
+
+  test("GET returns the latest thread history shape for the project", async () => {
+    createAuthSupabase();
+    getAgentHistory.mockResolvedValue({
+      thread: { id: "thread-2" },
+      messages: [{ id: "message-1", role: "assistant", content: "hello", metadata: {} }],
+      toolCalls: [{ id: "tool-1", tool_name: "Script Builder", status: "completed" }],
+    });
+
+    const { GET } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await GET(new Request("http://localhost/api/projects/project-1/agent"), {
+      params: Promise.resolve({ id: "project-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      threadId: "thread-2",
+      messages: [{ id: "message-1", content: "hello" }],
+      toolCalls: [{ id: "tool-1", status: "completed" }],
+    });
   });
 });

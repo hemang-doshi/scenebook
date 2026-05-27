@@ -17,6 +17,7 @@ export type AgentToolContext = {
   rawInput: string;
   project: ProjectWorkspace | null;
   selectedModel?: string | null;
+  selectedModels?: Record<string, string> | null;
 };
 
 export type AgentToolResult = {

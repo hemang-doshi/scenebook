@@ -133,4 +133,80 @@ describe("agent runtime", () => {
     );
     expect(runUpdateBuilder.update).toHaveBeenCalled();
   });
+
+  test("getLatestAgentHistory returns the latest active thread with messages and tool calls", async () => {
+    const threadBuilder = createBuilder({
+      data: {
+        id: "thread-2",
+        project_id: "project-1",
+        owner_id: "user-1",
+        title: "Latest thread",
+        status: "active",
+        metadata: {},
+      },
+      error: null,
+    });
+    const messageBuilder = createBuilder({
+      data: [
+        { id: "message-1", thread_id: "thread-2", role: "user", content: "hello", metadata: {} },
+      ],
+      error: null,
+    });
+    (messageBuilder as { order: ReturnType<typeof vi.fn> }).order = vi.fn(async () => ({
+      data: [
+        { id: "message-1", thread_id: "thread-2", role: "user", content: "hello", metadata: {} },
+      ],
+      error: null,
+    }));
+    const toolCallBuilder = createBuilder({
+      data: [
+        {
+          id: "tool-1",
+          thread_id: "thread-2",
+          tool_name: "Script Builder",
+          status: "completed",
+          input: {},
+          output: {},
+          requires_approval: false,
+        },
+      ],
+      error: null,
+    });
+    (toolCallBuilder as { order: ReturnType<typeof vi.fn> }).order = vi.fn(async () => ({
+      data: [
+        {
+          id: "tool-1",
+          thread_id: "thread-2",
+          tool_name: "Script Builder",
+          status: "completed",
+          input: {},
+          output: {},
+          requires_approval: false,
+        },
+      ],
+      error: null,
+    }));
+
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "agent_threads") return threadBuilder;
+        if (table === "agent_messages") return messageBuilder;
+        if (table === "agent_tool_calls") return toolCallBuilder;
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    };
+
+    createSupabaseServerClient.mockResolvedValue(supabase);
+
+    const { getLatestAgentHistory } = await import("@/lib/agent/runtime");
+    const history = await getLatestAgentHistory("project-1");
+
+    expect(history.thread?.id).toBe("thread-2");
+    expect(history.messages).toHaveLength(1);
+    expect(history.toolCalls).toHaveLength(1);
+  });
 });
