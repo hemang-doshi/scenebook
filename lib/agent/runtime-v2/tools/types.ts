@@ -16,6 +16,7 @@ export type AgentRuntimeToolContext = {
   projectId: string;
   threadId?: string;
   runId?: string;
+  toolCallId?: string;
   rawInput?: string;
   project: ProjectWorkspace | null;
   selectedModel?: string | null;
