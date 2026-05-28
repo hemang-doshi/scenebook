@@ -68,8 +68,15 @@ For live mode, provide:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENAI_API_KEY` or the configured AI provider values used by your deployment
+- `AGENT_RUNTIME_V2_ENABLED=true` to enable SceneBook Agent Runtime v2
 
 Set those in `.env.local`.
+
+## SceneBook Agent Runtime v2
+
+SceneBook Agent Runtime v2 makes SceneBook Agent behave like a creative producer and workspace operator. It supports brainstorm, plan, goal, execute, review, and ask modes; visible Tool Calls; approval-gated publishing/destructive actions; Creative Brief extraction; Active Goal tracking; and natural-language Workspace Updates.
+
+See [docs/agent-runtime-v2.md](docs/agent-runtime-v2.md) for runtime behavior and [docs/agent-runtime-v2-qa.md](docs/agent-runtime-v2-qa.md) for the manual QA checklist.
 
 ## Verification
 
