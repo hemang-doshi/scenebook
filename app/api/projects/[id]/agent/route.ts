@@ -22,6 +22,20 @@ import { createProjectArtifact } from "@/lib/agent/artifacts";
 import { createMemorySnapshot } from "@/lib/agent/memory";
 import { getAgentTool, listSupportedAgentCommands } from "@/lib/agent/tools/registry";
 import { extractCreativeBrief, type CreativeBrief } from "@/lib/agent/runtime-v2/creative-brief";
+import { buildAgentWorkspaceContext } from "@/lib/agent/runtime-v2/context-loader";
+import {
+  completeGoalStep,
+  createAgentGoal,
+  formatGoalFinalResponse,
+  getActiveAgentGoal,
+  getGoalNextAction,
+  getGoalStage,
+  summarizeAgentGoalForClient,
+  updateAgentGoal,
+  type AgentGoalRecord,
+  type AgentGoalStage,
+} from "@/lib/agent/runtime-v2/goals";
+import { selectAgentMode, type AgentModeDecision } from "@/lib/agent/runtime-v2/mode-selector";
 import { buildAgentPlan, type AgentPlan } from "@/lib/agent/runtime-v2/planner";
 import { getToolByName as getRuntimeV2ToolByName } from "@/lib/agent/runtime-v2/tools/registry";
 import type { AgentRuntimeToolResult } from "@/lib/agent/runtime-v2/tools/types";
@@ -376,6 +390,186 @@ function summarizeRuntimeV2Script(input: {
   ].join("\n");
 }
 
+function titleFromGoalRequest(message: string, project: Awaited<ReturnType<typeof getProjectWorkspace>>) {
+  const cleaned = message
+    .replace(/^\/[^\s]+\s*/, "")
+    .replace(/\b(help me|please|end-to-end|end to end|full workflow|go through|from idea to publish)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length > 8) {
+    return cleaned.slice(0, 96);
+  }
+
+  return project?.title ? `Finish ${project.title}` : "Finish this creative project";
+}
+
+function nextActionsForGoalStage(stage: AgentGoalStage) {
+  switch (stage) {
+    case "briefing":
+      return ["Lock the creative brief and audience promise.", "Move into the script draft."];
+    case "scripting":
+      return ["Draft or save the script package.", "Review the hook, caption, and CTA."];
+    case "asset_planning":
+      return ["Plan the shot list and required assets.", "Generate or attach the first production asset."];
+    case "generating_assets":
+      return ["Generate the next image, video, or audio asset.", "Attach the approved asset to the project."];
+    case "editing":
+      return ["Assemble the edit and check pacing.", "Prepare the publish package."];
+    case "publishing":
+      return ["Prepare the caption, thumbnail, and posting checklist.", "Publish or schedule the post."];
+    case "analyzing":
+      return ["Review performance signals.", "Choose the next iteration."];
+    case "complete":
+      return ["Review the completed project summary."];
+    case "ideating":
+    default:
+      return ["Clarify the creative brief.", "Draft the first script package."];
+  }
+}
+
+function goalStageChanged(previous: AgentGoalRecord, nextStage: AgentGoalStage | undefined) {
+  return nextStage && getGoalStage(previous) !== nextStage;
+}
+
+async function buildGoalAwareSystemInstruction(input: {
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+  projectId: string;
+  threadId: string;
+  command: AgentCommand | null;
+  activeGoal: AgentGoalRecord | null;
+}) {
+  const baseInstruction = buildAgentSystemInstruction({
+    project: input.project,
+    command: input.command,
+  });
+
+  if (!input.activeGoal) {
+    return baseInstruction;
+  }
+
+  const history = await getAgentHistory(input.projectId, input.threadId).catch(() => ({
+    thread: null,
+    messages: [],
+    toolCalls: [],
+  }));
+  const workspaceContext = buildAgentWorkspaceContext(
+    input.project ?? {
+      title: "Untitled",
+      format: "N/A",
+      platform: "N/A",
+      status: "N/A",
+    },
+    history.messages,
+    history.toolCalls,
+    null,
+    input.activeGoal,
+  );
+
+  return [
+    baseInstruction,
+    workspaceContext,
+    "An active project goal is present. Keep the response aligned to that goal and end with current goal, current stage, what changed, and next suggested action.",
+  ].join("\n\n");
+}
+
+function createRuntimeV2GoalStream(input: {
+  body: z.infer<typeof requestSchema>;
+  projectId: string;
+  threadId: string;
+  runId: string;
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+  activeGoal: AgentGoalRecord | null;
+  modeDecision: AgentModeDecision;
+}) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (type: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(encodeSse(type, payload)));
+      };
+
+      try {
+        emit("meta", {
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+
+        let goal = input.activeGoal;
+        let whatChanged = "Loaded the active goal and kept it attached to this conversation.";
+        const requestedStage = input.modeDecision.goalStageUpdate;
+
+        if (!goal) {
+          goal = await createAgentGoal({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            title: titleFromGoalRequest(input.body.message, input.project),
+            stage: requestedStage ?? "ideating",
+            nextActions: nextActionsForGoalStage(requestedStage ?? "ideating"),
+            metadata: {
+              source: "runtime-v2-goal-mode",
+              originalRequest: input.body.message,
+            },
+          });
+          whatChanged = "Created a persistent active goal for this project.";
+        } else if (goalStageChanged(goal, requestedStage) && requestedStage) {
+          goal = await updateAgentGoal({
+            goalId: goal.id,
+            stage: requestedStage,
+            nextActions: nextActionsForGoalStage(requestedStage),
+            metadata: {
+              lastUserAdvance: input.body.message,
+            },
+          });
+          whatChanged = `Moved the active goal to ${requestedStage.replaceAll("_", " ")}.`;
+        }
+
+        emit("goal", { activeGoal: summarizeAgentGoalForClient(goal) });
+        const finalMessage = formatGoalFinalResponse({
+          goal,
+          whatChanged,
+          nextAction: getGoalNextAction(goal),
+        });
+
+        emit("chunk", { text: finalMessage });
+        await appendAgentMessage({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          role: "assistant",
+          content: finalMessage,
+          model: input.body.models?.chat ?? null,
+          provider: "agent-runtime-v2",
+          metadata: {
+            mode: "goal",
+            goalId: goal.id,
+            goalStage: getGoalStage(goal),
+          },
+        });
+        await completeAgentRun(input.runId, {
+          mode: "goal",
+          respondedWith: "runtime-v2:goal",
+          goalId: goal.id,
+          goalStage: getGoalStage(goal),
+        });
+        controller.close();
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "Unable to update goal mode.";
+        await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
+        emit("error", { error: message });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
 function createRuntimeV2ScriptStream(input: {
   body: z.infer<typeof requestSchema>;
   projectId: string;
@@ -384,6 +578,7 @@ function createRuntimeV2ScriptStream(input: {
   project: Awaited<ReturnType<typeof getProjectWorkspace>>;
   prompt: string;
   parsedSlashCommand?: string | null;
+  activeGoal?: AgentGoalRecord | null;
 }) {
   const encoder = new TextEncoder();
   const creativeBrief = buildRuntimeV2ScriptBrief(input.prompt, input.project);
@@ -526,10 +721,22 @@ function createRuntimeV2ScriptStream(input: {
         });
 
         if (plan.intent === "ask_questions") {
-          const message = [
+          const messageParts = [
             "Before I write this, I need a little more direction:",
             ...plan.questions.map((question, index) => `${index + 1}. ${question}`),
-          ].join("\n");
+          ];
+          if (input.activeGoal) {
+            emit("goal", { activeGoal: summarizeAgentGoalForClient(input.activeGoal) });
+            messageParts.push(
+              "",
+              formatGoalFinalResponse({
+                goal: input.activeGoal,
+                whatChanged: "Kept the active goal in place while collecting missing script direction.",
+                nextAction: plan.questions[0] ?? getGoalNextAction(input.activeGoal),
+              }),
+            );
+          }
+          const message = messageParts.join("\n");
 
           emit("chunk", { text: message });
           await appendAgentMessage({
@@ -619,12 +826,34 @@ function createRuntimeV2ScriptStream(input: {
           reason: "script_generated",
         });
 
-        const finalMessage = summarizeRuntimeV2Script({
+        let finalMessage = summarizeRuntimeV2Script({
           packageOutput,
           scriptLabOutput: updateResult.output as Record<string, any>,
           critiqueOutput: critiqueResult.output as Record<string, any>,
           statusOutput: statusResult.output as Record<string, any>,
         });
+        let updatedGoal = input.activeGoal ?? null;
+        if (updatedGoal) {
+          updatedGoal = await completeGoalStep({
+            goalId: updatedGoal.id,
+            step: "Script package saved to Script Lab.",
+            stage: "asset_planning",
+            nextActions: nextActionsForGoalStage("asset_planning"),
+            metadata: {
+              lastCompletedWorkflow: "script",
+            },
+          });
+          emit("goal", { activeGoal: summarizeAgentGoalForClient(updatedGoal) });
+          finalMessage = [
+            finalMessage,
+            "",
+            formatGoalFinalResponse({
+              goal: updatedGoal,
+              whatChanged: "Completed the scripting step and moved the goal to asset planning.",
+              nextAction: getGoalNextAction(updatedGoal),
+            }),
+          ].join("\n");
+        }
 
         emit("chunk", { text: finalMessage });
         await appendAgentMessage({
@@ -637,11 +866,13 @@ function createRuntimeV2ScriptStream(input: {
           metadata: {
             workflow: "script",
             plan: encodeRuntimeV2Plan(plan),
+            ...(updatedGoal ? { goalId: updatedGoal.id, goalStage: getGoalStage(updatedGoal) } : {}),
           },
         });
         await completeAgentRun(input.runId, {
           command: "script",
           respondedWith: "runtime-v2:script",
+          ...(updatedGoal ? { goalId: updatedGoal.id, goalStage: getGoalStage(updatedGoal) } : {}),
         });
         controller.close();
       } catch (caught) {
@@ -693,11 +924,13 @@ export async function GET(
     }
 
     const history = await getAgentHistory(projectId, selectedThreadId);
+    const activeGoal = await getActiveAgentGoal(projectId, history.thread?.id ?? selectedThreadId ?? null);
 
     return NextResponse.json({
       threadId: history.thread?.id ?? null,
       messages: history.messages,
       toolCalls: history.toolCalls,
+      activeGoal: summarizeAgentGoalForClient(activeGoal),
     });
   } catch (caught) {
     if (isAgentPersistenceUnavailable(caught)) {
@@ -782,6 +1015,28 @@ export async function POST(
     runIdForResponse = run.id;
 
     const effectiveCommand = (parsed.command ?? pendingCommand?.command ?? null) as AgentCommand | null;
+    const activeGoal = isRuntimeV2Enabled()
+      ? await getActiveAgentGoal(projectId, threadId)
+      : null;
+    const modeDecision = isRuntimeV2Enabled()
+      ? selectAgentMode({
+          rawMessage: body.message,
+          parsedSlashCommand: parsed.command ?? null,
+          activeGoal,
+        })
+      : null;
+
+    if (isRuntimeV2Enabled() && !effectiveCommand && modeDecision?.mode === "goal") {
+      return createRuntimeV2GoalStream({
+        body,
+        projectId,
+        threadId,
+        runId: runIdForResponse,
+        project,
+        activeGoal,
+        modeDecision,
+      });
+    }
 
     if (effectiveCommand) {
       if (isRuntimeV2Enabled() && effectiveCommand === "script" && !pendingCommand) {
@@ -793,6 +1048,7 @@ export async function POST(
           project,
           prompt: scriptPromptFromMessage(body.message, parsed.input),
           parsedSlashCommand: "script",
+          activeGoal,
         });
       }
 
@@ -851,9 +1107,12 @@ export async function POST(
       };
 
       if (streamingCommandSet.has(effectiveCommand)) {
-        const systemInstruction = buildAgentSystemInstruction({
+        const systemInstruction = await buildGoalAwareSystemInstruction({
           project,
+          projectId,
+          threadId,
           command: effectiveCommand,
+          activeGoal,
         });
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
@@ -917,17 +1176,37 @@ export async function POST(
                 controller.enqueue(encoder.encode(encodeSse("chunk", { text: accumulatedText })));
               }
 
+              let finalText = accumulatedText;
+              if (activeGoal) {
+                const goalFooter = formatGoalFinalResponse({
+                  goal: activeGoal,
+                  whatChanged: "Continued the command with the active goal in context.",
+                  nextAction: getGoalNextAction(activeGoal),
+                });
+                const footerChunk = `${accumulatedText.trim() ? "\n\n" : ""}${goalFooter}`;
+                finalText = `${accumulatedText.trim()}${footerChunk}`;
+                controller.enqueue(encoder.encode(encodeSse("chunk", { text: footerChunk })));
+                controller.enqueue(
+                  encoder.encode(
+                    encodeSse("goal", {
+                      activeGoal: summarizeAgentGoalForClient(activeGoal),
+                    }),
+                  ),
+                );
+              }
+
               if (runId) {
                 await appendAgentMessage({
                   projectId,
                   threadId,
                   role: "assistant",
-                  content: accumulatedText,
+                  content: finalText,
                   model: body.models?.chat ?? null,
                   provider: "agent-runtime",
                   metadata: {
                     command: effectiveCommand,
                     toolName: tool.name,
+                    ...(activeGoal ? { goalId: activeGoal.id, goalStage: getGoalStage(activeGoal) } : {}),
                   },
                 });
               }
@@ -941,6 +1220,7 @@ export async function POST(
                 await completeAgentRun(runId, {
                   command: effectiveCommand,
                   respondedWith: `stream:${tool.command}`,
+                  ...(activeGoal ? { goalId: activeGoal.id, goalStage: getGoalStage(activeGoal) } : {}),
                 });
               }
 
@@ -1030,6 +1310,7 @@ export async function POST(
         runId: runIdForResponse,
         message: toolResult.message,
         command: effectiveCommand,
+        activeGoal: summarizeAgentGoalForClient(activeGoal),
         tool: {
           type: "tool_result",
           id: toolCallIdForResponse,
@@ -1052,6 +1333,7 @@ export async function POST(
           project,
           prompt: "",
           parsedSlashCommand: null,
+          activeGoal,
         });
       }
 
@@ -1063,12 +1345,16 @@ export async function POST(
         project,
         prompt: scriptPromptFromMessage(body.message),
         parsedSlashCommand: null,
+        activeGoal,
       });
     }
 
-    const systemInstruction = buildAgentSystemInstruction({
+    const systemInstruction = await buildGoalAwareSystemInstruction({
       project,
+      projectId,
+      threadId,
       command: null,
+      activeGoal,
     });
 
     const encoder = new TextEncoder();
@@ -1110,19 +1396,47 @@ export async function POST(
             }
           }
 
+          let finalText = accumulatedText;
+          if (activeGoal) {
+            const goalFooter = formatGoalFinalResponse({
+              goal: activeGoal,
+              whatChanged: "Continued the conversation with the active goal in context.",
+              nextAction: getGoalNextAction(activeGoal),
+            });
+            const footerChunk = `${accumulatedText.trim() ? "\n\n" : ""}${goalFooter}`;
+            finalText = `${accumulatedText.trim()}${footerChunk}`;
+            sentText += footerChunk;
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "chunk",
+                  text: footerChunk,
+                })}\n\n`
+              )
+            );
+            controller.enqueue(
+              encoder.encode(
+                encodeSse("goal", {
+                  activeGoal: summarizeAgentGoalForClient(activeGoal),
+                }),
+              ),
+            );
+          }
+
           if (runId) {
             await appendAgentMessage({
               projectId,
               threadId,
               role: "assistant",
-              content: accumulatedText,
+              content: finalText,
               model: body.models?.chat ?? null,
               provider: "agent-runtime",
-              metadata: {},
+              metadata: activeGoal ? { goalId: activeGoal.id, goalStage: getGoalStage(activeGoal) } : {},
             });
             await completeAgentRun(runId, {
               command: null,
               respondedWith: "generateTextStream",
+              ...(activeGoal ? { goalId: activeGoal.id, goalStage: getGoalStage(activeGoal) } : {}),
             });
           }
 

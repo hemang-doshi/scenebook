@@ -49,6 +49,36 @@ describe("Agent Mode Selector", () => {
     expect(decision.shouldUseTools).toBe(false);
   });
 
+  test("end-to-end request selects persistent goal mode", () => {
+    const decision = selectAgentMode({
+      rawMessage: "Help me make this reel end-to-end from idea to publish",
+    });
+
+    expect(decision.mode).toBe("goal");
+    expect(decision.goalStageUpdate).toBe("ideating");
+    expect(decision.shouldUseTools).toBe(false);
+  });
+
+  test("active goal progress message suggests asset planning stage", () => {
+    const decision = selectAgentMode({
+      rawMessage: "The script is done and saved.",
+      activeGoal: {
+        id: "goal-1",
+        owner_id: "user-1",
+        project_id: "project-1",
+        thread_id: "thread-1",
+        title: "Launch reel",
+        status: "active",
+        completed_steps: [],
+        next_actions: [],
+        metadata: { stage: "scripting" },
+      },
+    });
+
+    expect(decision.mode).toBe("goal");
+    expect(decision.goalStageUpdate).toBe("asset_planning");
+  });
+
   test("“save this to script lab” executes", () => {
     const decision = selectAgentMode({
       rawMessage: "save this outline to the script lab",

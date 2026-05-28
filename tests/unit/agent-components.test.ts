@@ -222,6 +222,39 @@ describe("agent UI components", () => {
     expect(screen.getByText("Studio Product")).toBeInTheDocument();
   });
 
+  test("active goal card renders compact project goal state", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return {
+        threadId: "thread-1",
+        messages: [{ id: "m1", role: "assistant", content: "hello" }],
+        toolCalls: [],
+        activeGoal: {
+          id: "goal-1",
+          title: "Launch the desk lighting reel",
+          status: "active",
+          stage: "asset_planning",
+          nextActions: ["Plan the shot list and required assets."],
+          nextSuggestedAction: "Plan the shot list and required assets.",
+          completedStepCount: 2,
+        },
+      };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    expect(await screen.findByText("Active Goal")).toBeInTheDocument();
+    expect(screen.getByText("Launch the desk lighting reel")).toBeInTheDocument();
+    expect(screen.getByText("asset planning")).toBeInTheDocument();
+    expect(screen.getByText("2 done")).toBeInTheDocument();
+    expect(screen.getByText("Plan the shot list and required assets.")).toBeInTheDocument();
+  });
+
   test("new conversation stays empty when no persisted thread exists", async () => {
     fetchJson.mockImplementation(async (url: string) => {
       if (url.includes("listThreads=true")) {

@@ -164,7 +164,7 @@ describe("Context Loader", () => {
       status: "active",
       completed_steps: ["Outline the hook"],
       next_actions: ["Draft body paragraphs", "Add CTA"],
-      metadata: {},
+      metadata: { stage: "scripting" },
     };
 
     const context = buildAgentWorkspaceContext(
@@ -182,6 +182,7 @@ describe("Context Loader", () => {
     expect(context).toContain("tone: technical");
     expect(context).toContain("=== ACTIVE GOAL ===");
     expect(context).toContain("Goal: Write final script draft");
+    expect(context).toContain("Stage: scripting");
     expect(context).toContain("Completed Steps: [\"Outline the hook\"]");
     expect(context).toContain("=== RECENT MESSAGES ===");
     expect(context).toContain("[user]: Hi agent!");
