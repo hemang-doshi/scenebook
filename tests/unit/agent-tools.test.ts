@@ -145,6 +145,97 @@ function createAuthSupabase() {
   });
 }
 
+function createGoalSupabase(options: {
+  activeGoal?: Record<string, unknown> | null;
+  insertedGoal?: Record<string, unknown>;
+}) {
+  const goalUpdates: Record<string, unknown>[] = [];
+  let currentGoal = options.activeGoal
+    ? { ...options.activeGoal }
+    : null;
+  let insertedGoal = options.insertedGoal
+    ? { ...options.insertedGoal }
+    : null;
+
+  const createGoalBuilder = () => {
+    const builder = {
+      select: vi.fn(() => builder),
+      insert: vi.fn((payload: Record<string, unknown>) => {
+        insertedGoal = {
+          id: "goal-created",
+          created_at: "2026-05-28T10:00:00.000Z",
+          updated_at: "2026-05-28T10:00:00.000Z",
+          ...payload,
+        };
+        currentGoal = insertedGoal;
+        return builder;
+      }),
+      update: vi.fn((payload: Record<string, unknown>) => {
+        goalUpdates.push(payload);
+        currentGoal = {
+          ...(currentGoal ?? {}),
+          ...payload,
+        };
+        return builder;
+      }),
+      eq: vi.fn(() => builder),
+      order: vi.fn(() => builder),
+      limit: vi.fn(async () => ({ data: currentGoal ? [currentGoal] : [], error: null })),
+      single: vi.fn(async () => ({ data: currentGoal ?? insertedGoal, error: null })),
+      maybeSingle: vi.fn(async () => ({ data: currentGoal, error: null })),
+    };
+
+    return builder;
+  };
+
+  const fallbackBuilder = {
+    select: vi.fn(() => fallbackBuilder),
+    eq: vi.fn(() => fallbackBuilder),
+    order: vi.fn(() => fallbackBuilder),
+    limit: vi.fn(async () => ({ data: [], error: null })),
+    maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+  };
+
+  const supabase = {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: {
+          user: { id: "user-1" },
+        },
+      }),
+    },
+    from: vi.fn((table: string) => {
+      if (table === "agent_goals") {
+        return createGoalBuilder();
+      }
+      if (table === "agent_memory_snapshots") {
+        return fallbackBuilder;
+      }
+
+      return {
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        }),
+      };
+    }),
+  };
+
+  createSupabaseServerClient.mockResolvedValue(supabase);
+
+  return {
+    supabase,
+    goalUpdates,
+    get currentGoal() {
+      return currentGoal;
+    },
+    get insertedGoal() {
+      return insertedGoal;
+    },
+  };
+}
+
 describe("agent tools", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -602,6 +693,81 @@ describe("agent tools", () => {
     }));
   });
 
+  test("runtime-v2 script completion advances active goal to asset planning", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    const goalStore = createGoalSupabase({
+      activeGoal: {
+        id: "goal-1",
+        owner_id: "user-1",
+        project_id: "project-1",
+        thread_id: "thread-1",
+        title: "Launch the desk lighting reel",
+        status: "active",
+        completed_steps: ["Creative brief locked."],
+        next_actions: ["Draft the script package."],
+        metadata: { stage: "scripting" },
+      },
+    });
+    const ideaProject = { ...baseProject, status: "idea" as const };
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-generate" })
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-update" })
+      .mockResolvedValueOnce({ id: "tool-call-artifact" })
+      .mockResolvedValueOnce({ id: "tool-call-status" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    createProjectArtifact.mockResolvedValue({ id: "artifact-1" });
+    getProjectWorkspace.mockResolvedValue(ideaProject);
+    updateCard.mockResolvedValue({ ...ideaProject, status: "scripted" });
+    generateText.mockResolvedValue(`{"hook":"Stop lighting your desk like a cave.","outline":["Hook","Mistake","Fix","CTA"],"script":"Open on the flat desk shot, then move the key light and practical into frame.","caption":"A simple desk lighting reset.","cta":"Save this before your next shoot.","onScreenText":["Move the key","Add practicals"]}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/script make a 30 sec technical Instagram talking-head reel about fixing desk lighting and save it",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+
+    expect(goalStore.goalUpdates.at(-1)).toMatchObject({
+      completed_steps: ["Creative brief locked.", "Script package saved to Script Lab."],
+      next_actions: [
+        "Plan the shot list and required assets.",
+        "Generate or attach the first production asset.",
+      ],
+      metadata: expect.objectContaining({
+        stage: "asset_planning",
+        lastCompletedWorkflow: "script",
+      }),
+    });
+    expect(events.find((event) => event.type === "goal")).toMatchObject({
+      activeGoal: {
+        id: "goal-1",
+        stage: "asset_planning",
+        completedStepCount: 2,
+      },
+    });
+    expect(finalText).toContain("Current goal: Launch the desk lighting reel");
+    expect(finalText).toContain("Current stage: asset planning");
+    expect(finalText).toContain("Next suggested action: Plan the shot list and required assets.");
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      respondedWith: "runtime-v2:script",
+      goalStage: "asset_planning",
+    }));
+  });
+
   test("runtime-v2 vague /script asks questions and does not update Script Lab", async () => {
     vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
     createAuthSupabase();
@@ -610,6 +776,7 @@ describe("agent tools", () => {
     appendAgentMessage.mockResolvedValue({ id: "message-1" });
     completeAgentRun.mockResolvedValue({});
     getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
 
     const { POST } = await import("@/app/api/projects/[id]/agent/route");
     const response = await POST(
@@ -635,6 +802,105 @@ describe("agent tools", () => {
     expect(updateCard).not.toHaveBeenCalled();
     expect(createProjectArtifact).not.toHaveBeenCalled();
     expect(generateText).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 goal request creates a persistent active goal", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    const goalStore = createGoalSupabase({ activeGoal: null });
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "Help me make this reel end-to-end from idea to publish",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+
+    expect(goalStore.insertedGoal).toMatchObject({
+      owner_id: "user-1",
+      project_id: "project-1",
+      thread_id: "thread-1",
+      status: "active",
+      metadata: expect.objectContaining({
+        stage: "ideating",
+        source: "runtime-v2-goal-mode",
+      }),
+    });
+    expect(events.find((event) => event.type === "goal")).toMatchObject({
+      activeGoal: {
+        id: "goal-created",
+        stage: "ideating",
+        completedStepCount: 0,
+      },
+    });
+    expect(finalText).toContain("Current goal:");
+    expect(finalText).toContain("Current stage: ideating");
+    expect(finalText).toContain("Next suggested action: Clarify the creative brief.");
+    expect(generateTextStream).not.toHaveBeenCalled();
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      respondedWith: "runtime-v2:goal",
+      goalStage: "ideating",
+    }));
+  });
+
+  test("runtime-v2 active goal is loaded into plain chat context and final response", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createGoalSupabase({
+      activeGoal: {
+        id: "goal-1",
+        owner_id: "user-1",
+        project_id: "project-1",
+        thread_id: "thread-1",
+        title: "Launch the desk lighting reel",
+        status: "active",
+        completed_steps: ["Creative brief locked."],
+        next_actions: ["Draft the opening shot options."],
+        metadata: { stage: "scripting" },
+      },
+    });
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "Brainstorm a better opening shot",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const events = await readSseEvents(response);
+    const systemInstruction = generateTextStream.mock.calls[0]?.[0]?.systemInstruction;
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+
+    expect(systemInstruction).toContain("=== ACTIVE GOAL ===");
+    expect(systemInstruction).toContain("Goal: Launch the desk lighting reel");
+    expect(systemInstruction).toContain("Stage: scripting");
+    expect(finalText).toContain("Current goal: Launch the desk lighting reel");
+    expect(finalText).toContain("Next suggested action: Draft the opening shot options.");
   });
 
   test("runtime-v2 natural-language save request updates Script Lab", async () => {

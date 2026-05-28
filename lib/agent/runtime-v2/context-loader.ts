@@ -1,5 +1,10 @@
 import type { CreativeBrief } from "./creative-brief";
-import type { AgentGoalRecord } from "./conversation-state";
+import {
+  getGoalCompletedSteps,
+  getGoalNextActions,
+  getGoalStage,
+  type AgentGoalRecord,
+} from "./goals";
 
 export function buildAgentWorkspaceContext(
   project: {
@@ -42,8 +47,9 @@ Status: ${project.status || "N/A"}`);
     sections.push(`=== ACTIVE GOAL ===
 Goal: ${activeGoal.title}
 Status: ${activeGoal.status}
-Completed Steps: ${JSON.stringify(activeGoal.completed_steps || [])}
-Next Actions: ${JSON.stringify(activeGoal.next_actions || [])}`);
+Stage: ${getGoalStage(activeGoal)}
+Completed Steps: ${JSON.stringify(getGoalCompletedSteps(activeGoal))}
+Next Actions: ${JSON.stringify(getGoalNextActions(activeGoal))}`);
   }
 
   // Recent Messages

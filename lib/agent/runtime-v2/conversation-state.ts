@@ -1,22 +1,8 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAgentHistory } from "@/lib/agent/runtime";
 import type { AgentMessageRecord, AgentToolCallRecord, AgentThreadRecord } from "@/lib/agent/types";
-import type { JsonValue } from "@/lib/types";
 import type { CreativeBrief } from "./creative-brief";
-
-export interface AgentGoalRecord {
-  id: string;
-  owner_id: string;
-  project_id: string;
-  thread_id: string | null;
-  title: string;
-  status: string;
-  completed_steps: JsonValue;
-  next_actions: JsonValue;
-  metadata: Record<string, JsonValue | undefined>;
-  created_at?: string;
-  updated_at?: string;
-}
+import { getActiveAgentGoal, type AgentGoalRecord } from "./goals";
 
 export interface ConversationState {
   thread: AgentThreadRecord | null;
@@ -42,22 +28,15 @@ export async function loadConversationState(
     .eq("project_id", projectId)
     .maybeSingle();
 
-  // Load active goal
-  const { data: goalData } = await supabase
-    .from("agent_goals")
-    .select("*")
-    .eq("project_id", projectId)
-    .eq("status", "active")
-    .order("updated_at", { ascending: false })
-    .limit(1);
-
-  const activeGoal = goalData && goalData.length > 0 ? goalData[0] : null;
+  const activeGoal = await getActiveAgentGoal(projectId, history.thread?.id ?? threadId ?? null);
 
   return {
     thread: history.thread,
     messages: history.messages,
     toolCalls: history.toolCalls,
     creativeBrief: briefData ? (briefData.brief as CreativeBrief) : null,
-    activeGoal: activeGoal as AgentGoalRecord | null,
+    activeGoal,
   };
 }
+
+export type { AgentGoalRecord };

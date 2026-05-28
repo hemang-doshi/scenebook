@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Library, FolderKanban, Bot, Sparkles } from "lucide-react";
+import { Library, Bot, Target } from "lucide-react";
 
 import { AgentComposer, type Attachment } from "@/components/agent/agent-composer";
 import { ApprovalCard } from "@/components/agent/approval-card";
@@ -42,6 +42,16 @@ export type AgentUiToolCall = {
 
 type AgentUiEntry = AgentUiMessage | AgentUiToolCall;
 
+type AgentActiveGoal = {
+  id: string;
+  title: string;
+  status: string;
+  stage: string;
+  nextActions: string[];
+  nextSuggestedAction: string | null;
+  completedStepCount: number;
+};
+
 type AgentHistoryResponse = {
   threadId: string | null;
   messages: Array<{
@@ -61,6 +71,7 @@ type AgentHistoryResponse = {
     error_message?: string | null;
     created_at?: string;
   }>;
+  activeGoal?: AgentActiveGoal | null;
 };
 
 type AgentPostResponse = {
@@ -77,6 +88,7 @@ type AgentPostResponse = {
       output: unknown;
     };
   };
+  activeGoal?: AgentActiveGoal | null;
 };
 
 type ActivityState = {
@@ -131,6 +143,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityState>({ label: "done" });
+  const [activeGoal, setActiveGoal] = useState<AgentActiveGoal | null>(null);
 
   const [library, setLibrary] = useState<ProjectAssetLibrary | null>(null);
   const [isAssetDrawerOpen, setIsAssetDrawerOpen] = useState(false);
@@ -299,6 +312,8 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                     ])
                   );
                 }
+              } else if (data.type === "goal") {
+                setActiveGoal(data.activeGoal ?? null);
               }
             } catch (err) {
               console.warn("Failed to parse stream packet:", rawData, err);
@@ -311,6 +326,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
       } else {
         const data = (await response.json()) as AgentPostResponse;
         setThreadId(data.threadId);
+        setActiveGoal((current) => data.activeGoal ?? current);
         lastFetchedThreadId.current = data.threadId;
         void loadThreadsList();
         if (data.tool?.status === "awaiting_input") {
@@ -419,6 +435,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         }
 
         setEntries(history.messages.length > 0 || history.toolCalls.length > 0 ? toAgentEntries(history) : []);
+        setActiveGoal(history.activeGoal ?? null);
         const pendingTool = [...history.toolCalls].reverse().find((toolCall) => toolCall.status === "awaiting_input");
         setActivity(pendingTool ? { label: "awaiting input", tone: "warning" } : { label: "done" });
       } catch (caught) {
@@ -464,6 +481,8 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
           >
             + New Conversation
           </Button>
+
+          <ActiveGoalCard goal={activeGoal} />
 
           <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2 shrink-0">Recent Conversations</span>
           <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
@@ -601,6 +620,40 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ActiveGoalCard({ goal }: { goal: AgentActiveGoal | null }) {
+  if (!goal) {
+    return null;
+  }
+
+  const stageLabel = goal.stage.replaceAll("_", " ");
+  const nextAction = goal.nextSuggestedAction ?? goal.nextActions[0] ?? "Choose the next production step.";
+
+  return (
+    <div className="mb-4 rounded-md border border-[var(--hairline)] bg-[var(--canvas)] p-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="mb-2 flex items-center gap-2">
+        <Target className="h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
+        <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--muted)]">
+          Active Goal
+        </span>
+      </div>
+      <p className="line-clamp-2 text-xs font-semibold leading-snug text-[var(--ink)]">
+        {goal.title}
+      </p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="truncate rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--surface-soft)] px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider text-[var(--ink)]">
+          {stageLabel}
+        </span>
+        <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-[var(--muted)]">
+          {goal.completedStepCount} done
+        </span>
+      </div>
+      <p className="mt-2 line-clamp-2 text-[10px] leading-snug text-[var(--ink)]/70">
+        {nextAction}
+      </p>
     </div>
   );
 }
