@@ -149,6 +149,7 @@ describe("agent tools", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     appendAgentMessage.mockReset();
     completeAgentRun.mockReset();
     completeAgentToolCall.mockReset();
@@ -483,6 +484,354 @@ describe("agent tools", () => {
       toolName: "Script Builder",
     });
     expect(createAgentToolCall).toHaveBeenCalledWith(expect.objectContaining({ command: "script" }));
+  });
+
+  test("runtime-v2 detailed /script creates plan and updates Script Lab", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    const ideaProject = {
+      ...baseProject,
+      status: "idea" as const,
+      scriptLab: {
+        ...baseProject.scriptLab,
+        hook: "Existing hook",
+        notes: "Keep the product tactile.",
+      },
+    };
+    const scriptedProject = {
+      ...ideaProject,
+      status: "scripted" as const,
+      scriptLab: {
+        ...ideaProject.scriptLab,
+        hook: "Stop lighting your desk like a cave.",
+        outline: "Hook\nMistake\nFix\nCTA",
+        script: "Open on the flat desk shot, then move the key light and practical into frame.",
+        caption: "A simple desk lighting reset.",
+        cta: "Save this before your next shoot.",
+        onScreenText: "Move the key\nAdd practicals",
+      },
+    };
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-generate" })
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-update" })
+      .mockResolvedValueOnce({ id: "tool-call-artifact" })
+      .mockResolvedValueOnce({ id: "tool-call-status" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    createProjectArtifact.mockResolvedValue({ id: "artifact-1" });
+    getProjectWorkspace.mockResolvedValue(ideaProject);
+    updateCard
+      .mockResolvedValueOnce({ ...ideaProject, scriptLab: scriptedProject.scriptLab })
+      .mockResolvedValueOnce(scriptedProject);
+    generateText.mockResolvedValue(`{"hook":"Stop lighting your desk like a cave.","outline":["Hook","Mistake","Fix","CTA"],"script":"Open on the flat desk shot, then move the key light and practical into frame.","caption":"A simple desk lighting reset.","cta":"Save this before your next shoot.","onScreenText":["Move the key","Add practicals"]}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/script make a 30 sec technical Instagram talking-head reel about fixing desk lighting and save it",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("text/event-stream");
+    const events = await readSseEvents(response);
+    expect(events[0]).toMatchObject({ type: "meta", threadId: "thread-1", runId: "run-1" });
+    expect(events[1]).toMatchObject({
+      type: "plan",
+      plan: {
+        workflow: "script",
+        steps: [
+          "generate_script_package",
+          "critique_script",
+          "update_script_lab",
+          "create_project_artifact",
+          "update_project_status",
+        ],
+      },
+    });
+    expect(events.find((event) => event.type === "chunk")?.text).toContain("Script package created");
+    expect(events.find((event) => event.type === "tool" && event.tool?.toolName === "Update Script Lab")).toMatchObject({
+      tool: {
+        requiresApproval: true,
+        approvalPolicy: "ask_if_overwrite",
+        sideEffect: "db_write",
+      },
+    });
+    expect(updateCard).toHaveBeenCalledWith("project-1", {
+      scriptLab: expect.objectContaining({
+        hook: "Stop lighting your desk like a cave.",
+        outline: "Hook\nMistake\nFix\nCTA",
+        script: "Open on the flat desk shot, then move the key light and practical into frame.",
+        caption: "A simple desk lighting reset.",
+        cta: "Save this before your next shoot.",
+        onScreenText: "Move the key\nAdd practicals",
+        notes: "Keep the product tactile.",
+      }),
+    });
+    expect(createProjectArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      threadId: "thread-1",
+      toolCallId: "tool-call-artifact",
+      artifactType: "script_package",
+      payload: expect.objectContaining({
+        script: expect.stringContaining("flat desk shot"),
+        critique: expect.objectContaining({
+          strongestPart: expect.any(String),
+          weakestPart: expect.any(String),
+          suggestedImprovement: expect.any(String),
+        }),
+        sourcePrompt: expect.stringContaining("desk lighting"),
+      }),
+      metadata: expect.objectContaining({
+        workflow: "script",
+      }),
+    }));
+    expect(updateCard).toHaveBeenCalledWith("project-1", { status: "scripted" });
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      command: "script",
+      respondedWith: "runtime-v2:script",
+    }));
+  });
+
+  test("runtime-v2 vague /script asks questions and does not update Script Lab", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/script",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "plan")).toMatchObject({
+      plan: {
+        intent: "ask_questions",
+        questions: expect.arrayContaining([expect.stringContaining("angle")]),
+      },
+    });
+    expect(events.find((event) => event.type === "chunk")?.text).toContain("Before I write this");
+    expect(updateCard).not.toHaveBeenCalled();
+    expect(createProjectArtifact).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 natural-language save request updates Script Lab", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-generate" })
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-update" })
+      .mockResolvedValueOnce({ id: "tool-call-artifact" })
+      .mockResolvedValueOnce({ id: "tool-call-status" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    createProjectArtifact.mockResolvedValue({ id: "artifact-1" });
+    getProjectWorkspace.mockResolvedValue({ ...baseProject, status: "posted" });
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    updateCard.mockResolvedValue(baseProject);
+    generateText.mockResolvedValue(`{"hook":"The edit starts before the timeline.","outline":["Hook","Setup","Payoff"],"script":"Turn this idea into a tight reel script with a clear save-worthy payoff.","caption":"A better way to prep reels.","cta":"Save this workflow.","onScreenText":["Plan before edit"]}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "write a script and save it for a 45 sec reel about planning the edit before opening the timeline",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(updateCard).toHaveBeenCalledWith("project-1", {
+      scriptLab: expect.objectContaining({
+        hook: "The edit starts before the timeline.",
+        script: "Turn this idea into a tight reel script with a clear save-worthy payoff.",
+      }),
+    });
+    expect(updateCard).not.toHaveBeenCalledWith("project-1", { status: "scripted" });
+  });
+
+  test("runtime-v2 natural-language draft without save asks before mutating workspace", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "write a script about desk lighting",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "plan")).toMatchObject({
+      plan: {
+        intent: "ask_questions",
+      },
+    });
+    expect(updateCard).not.toHaveBeenCalled();
+    expect(createProjectArtifact).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 partial script package preserves existing Script Lab fields", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    const projectWithExistingScriptLab = {
+      ...baseProject,
+      status: "posted" as const,
+      scriptLab: {
+        ...baseProject.scriptLab,
+        caption: "Existing caption",
+        cta: "Existing CTA",
+        onScreenText: "Existing text",
+      },
+    };
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-generate" })
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-update" })
+      .mockResolvedValueOnce({ id: "tool-call-artifact" })
+      .mockResolvedValueOnce({ id: "tool-call-status" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    createProjectArtifact.mockResolvedValue({ id: "artifact-1" });
+    getProjectWorkspace.mockResolvedValue(projectWithExistingScriptLab);
+    updateCard.mockResolvedValue(projectWithExistingScriptLab);
+    generateText.mockResolvedValue(`{"hook":"Fix the flat desk frame.","script":"Move the key light first, then show the before and after."}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/script make a 30 sec technical Instagram talking-head reel about fixing desk lighting and save it",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    await readSseEvents(response);
+    expect(updateCard).toHaveBeenCalledWith("project-1", {
+      scriptLab: expect.objectContaining({
+        hook: "Fix the flat desk frame.",
+        script: "Move the key light first, then show the before and after.",
+        caption: "Existing caption",
+        cta: "Existing CTA",
+        onScreenText: "Existing text",
+      }),
+    });
+  });
+
+  test("runtime-v2 moves idea status to scripted but does not downgrade later statuses", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    const { updateProjectStatusTool } = await import("@/lib/agent/runtime-v2/plugins/workspace-plugin");
+
+    const ideaProject = { ...baseProject, status: "idea" as const };
+    updateCard.mockResolvedValue({ ...ideaProject, status: "scripted" });
+
+    const ideaResult = await updateProjectStatusTool.handler(
+      { projectId: "project-1", threadId: "thread-1", runId: "run-1", project: ideaProject },
+      { status: "scripted", reason: "script_generated" },
+    );
+
+    expect(ideaResult.output).toMatchObject({ statusChanged: true, status: "scripted" });
+    expect(updateCard).toHaveBeenCalledWith("project-1", { status: "scripted" });
+
+    updateCard.mockClear();
+    const postedResult = await updateProjectStatusTool.handler(
+      { projectId: "project-1", threadId: "thread-1", runId: "run-1", project: { ...baseProject, status: "posted" } },
+      { status: "scripted", reason: "script_generated" },
+    );
+
+    expect(postedResult.output).toMatchObject({ statusChanged: false, status: "posted" });
+    expect(updateCard).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 does not claim update if Script Lab update fails", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-generate" })
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-update" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    getProjectWorkspace.mockResolvedValue({ ...baseProject, status: "idea" });
+    updateCard.mockRejectedValue(new Error("database update failed"));
+    generateText.mockResolvedValue(`{"hook":"Hook","outline":["One"],"script":"Script","caption":"Caption","cta":"CTA","onScreenText":["Text"]}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/script make a 30 sec technical Instagram talking-head reel about fixing desk lighting and save it",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "chunk")?.text ?? "").not.toContain("Workspace fields changed");
+    expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({
+      tool: {
+        status: "failed",
+        errorMessage: "database update failed",
+      },
+    });
+    expect(completeAgentRun).not.toHaveBeenCalledWith("run-1", expect.objectContaining({
+      respondedWith: "runtime-v2:script",
+    }));
+    expect(failAgentRun).toHaveBeenCalledWith("run-1", "database update failed");
+    expect(createProjectArtifact).not.toHaveBeenCalled();
   });
 
   test("/script streams markdown and emits a draft tool event", async () => {
