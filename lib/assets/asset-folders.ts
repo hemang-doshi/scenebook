@@ -180,15 +180,70 @@ export async function createAssetFolder(projectId: string, name: string, parentI
   return data as AssetFolderRecord;
 }
 
-async function getOrCreateFolder(projectId: string, name: string) {
-  const folders = await listProjectAssetFolders(projectId);
-  const existing = folders.find((folder) => folder.name === name && !folder.parent_id);
-
-  if (existing) {
-    return existing;
+export async function getOrCreateAssetFolder(projectId: string, name: string, parentId?: string | null) {
+  const normalizedName = name.trim();
+  if (!normalizedName) {
+    throw new Error("Asset folder name is required.");
   }
 
-  return createAssetFolder(projectId, name, null);
+  const folders = await listProjectAssetFolders(projectId);
+  const normalizedParentId = parentId ?? null;
+  const existing = folders.find((folder) =>
+    folder.name.toLowerCase() === normalizedName.toLowerCase() &&
+    (folder.parent_id ?? null) === normalizedParentId
+  );
+
+  if (existing) {
+    return {
+      folder: existing,
+      alreadyExisted: true,
+    };
+  }
+
+  return {
+    folder: await createAssetFolder(projectId, normalizedName, normalizedParentId),
+    alreadyExisted: false,
+  };
+}
+
+export async function getOrCreateAssetFolderPath(
+  projectId: string,
+  path: string | string[],
+  parentId?: string | null,
+) {
+  const parts = (Array.isArray(path) ? path : path.split("/"))
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    throw new Error("Asset folder path is required.");
+  }
+
+  let currentParentId = parentId ?? null;
+  let finalFolder: AssetFolderRecord | null = null;
+  let alreadyExisted = true;
+
+  for (const part of parts) {
+    const result = await getOrCreateAssetFolder(projectId, part, currentParentId);
+    finalFolder = result.folder;
+    currentParentId = result.folder.id;
+    alreadyExisted = alreadyExisted && result.alreadyExisted;
+  }
+
+  if (!finalFolder) {
+    throw new Error("Unable to resolve asset folder path.");
+  }
+
+  return {
+    folder: finalFolder,
+    path: parts.join(" / "),
+    alreadyExisted,
+  };
+}
+
+async function getOrCreateFolder(projectId: string, name: string) {
+  const result = await getOrCreateAssetFolder(projectId, name, null);
+  return result.folder;
 }
 
 export async function moveAssetToFolder(projectId: string, assetId: string, folderId: string) {

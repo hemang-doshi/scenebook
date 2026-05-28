@@ -1,5 +1,6 @@
 import type { CreativeBrief } from "./creative-brief";
 import type { AgentGoalRecord, AgentGoalStage } from "./goals";
+import { isAssetGenerationRequest } from "./asset-intent";
 
 export type AgentMode = "brainstorm" | "plan" | "goal" | "execute" | "review" | "ask";
 
@@ -72,9 +73,10 @@ export function selectAgentMode(input: AgentModeSelectorInput): AgentModeDecisio
 
   // 3. Check execute triggers (slash command / script / save)
   const isScriptCommand = parsedSlashCommand === "script";
+  const isAssetRequest = isAssetGenerationRequest(rawMessage);
   const hasExecuteVerb = executeKeywords.test(rawMessage);
 
-  if (isScriptCommand || hasExecuteVerb) {
+  if (isScriptCommand || hasExecuteVerb || isAssetRequest) {
     const cleanMsg = rawMessage.replace(/^\/[^\s]+/, "").trim();
     const isVague = cleanMsg.length < 15 && (!missingCreativeFields || missingCreativeFields.length > 2);
 
@@ -102,7 +104,7 @@ export function selectAgentMode(input: AgentModeSelectorInput): AgentModeDecisio
       reason: "User requested generation, updates, or direct file changes with sufficient context.",
       shouldAskQuestion: false,
       shouldUseTools: true,
-      suggestedWorkflow: isScriptCommand ? "script" : undefined,
+      suggestedWorkflow: isScriptCommand ? "script" : isAssetRequest ? "asset_generation" : undefined,
       goalStageUpdate,
     };
   }

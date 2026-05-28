@@ -64,7 +64,9 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
 
         {expanded ? (
           <div className="grid gap-3 pt-2 border-t border-[var(--hairline)]">
-            {kind === "media_asset" && typeof output.url === "string" ? renderMediaPreview(modality, output) : null}
+            {typeof output.url === "string" ? renderMediaPreview(modality, output) : null}
+
+            {renderAssetWorkflowDetails(kind, output)}
 
             {kind === "prompt_questions" ? renderQuestions(toolCall.id, output) : null}
 
@@ -119,6 +121,20 @@ function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unk
   if (typeof output.summary === "string" && output.summary.trim()) {
     return output.summary;
   }
+  if (kindIs(output, "prompt_json") && typeof output.prompt === "string") {
+    return `prompt generated: ${output.prompt}`;
+  }
+  if (kindIs(output, "media_asset")) {
+    const model = typeof output.model === "string" ? output.model : "selected model";
+    const folder = typeof output.folderName === "string" ? output.folderName : "project library";
+    return `${model} - saved to ${folder}`;
+  }
+  if (kindIs(output, "asset_folder")) {
+    return typeof output.path === "string" ? `folder ready: ${output.path}` : "folder ready";
+  }
+  if (kindIs(output, "project_asset_attachment")) {
+    return "visible in Project Hub asset library";
+  }
   if (typeof output.hook === "string" && output.hook.trim()) {
     return output.hook;
   }
@@ -133,6 +149,68 @@ function badgeClass(status: string) {
     return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-amber-800 text-[10px] rounded-[var(--rounded-sm)]";
   }
   return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]/80 text-[10px] rounded-[var(--rounded-sm)]";
+}
+
+function kindIs(output: Record<string, unknown>, kind: string) {
+  return output.kind === kind;
+}
+
+function renderAssetWorkflowDetails(kind: string | null, output: Record<string, unknown>) {
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (kind === "prompt_json") {
+    rows.push(
+      { label: "Prompt generated", value: String(output.prompt ?? "") },
+      { label: "Aspect ratio", value: String(output.aspect_ratio ?? output.output ?? "auto") },
+    );
+    if (typeof output.negative_prompt === "string" && output.negative_prompt.trim()) {
+      rows.push({ label: "Negative prompt", value: output.negative_prompt });
+    }
+  }
+
+  if (kind === "media_asset") {
+    rows.push(
+      { label: "Model used", value: String(output.model ?? "default") },
+      { label: "Provider", value: String(output.provider ?? "auto") },
+      { label: "Folder saved to", value: String(output.folderName ?? "Project library") },
+    );
+    if (typeof output.storagePath === "string") {
+      rows.push({ label: "Storage path", value: output.storagePath });
+    }
+    if (typeof output.prompt === "string") {
+      rows.push({ label: "Prompt generated", value: output.prompt });
+    }
+  }
+
+  if (kind === "asset_folder") {
+    rows.push(
+      { label: "Folder saved to", value: String(output.path ?? output.folderName ?? "Project library") },
+      { label: "Folder status", value: output.alreadyExisted === true ? "reused existing folder" : "created folder" },
+    );
+  }
+
+  if (kind === "project_asset_attachment") {
+    rows.push(
+      { label: "Project Hub", value: "asset visible in library" },
+      { label: "Asset ID", value: String(output.assetId ?? "") },
+    );
+  }
+
+  const visibleRows = rows.filter((row) => row.value.trim().length > 0 && row.value !== "[object Object]");
+  if (visibleRows.length === 0) {
+    return null;
+  }
+
+  return (
+    <dl className="grid gap-2 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/40 p-3 text-xs">
+      {visibleRows.map((row) => (
+        <div key={row.label} className="grid gap-1">
+          <dt className="font-mono text-[9px] uppercase tracking-wider text-[var(--muted)]">{row.label}</dt>
+          <dd className="leading-relaxed text-[var(--ink)] break-words">{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function renderQuestions(toolCallId: string, output: Record<string, unknown>) {

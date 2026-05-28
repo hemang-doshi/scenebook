@@ -266,6 +266,25 @@ describe("asset folders service", () => {
     ).toBe("B-roll");
   });
 
+  test("creates or reuses asset folder paths without duplicate names", async () => {
+    createSupabaseMock();
+    const { getOrCreateAssetFolderPath } = await import("@/lib/assets/asset-folders");
+
+    const reused = await getOrCreateAssetFolderPath("project-1", "Images");
+    expect(reused).toMatchObject({
+      folder: { id: "folder-images", name: "Images" },
+      path: "Images",
+      alreadyExisted: true,
+    });
+
+    const created = await getOrCreateAssetFolderPath("project-1", "Generated / Images");
+    expect(created).toMatchObject({
+      folder: { id: "new-folder", name: "Images" },
+      path: "Generated / Images",
+      alreadyExisted: false,
+    });
+  });
+
   test("creates asset versions under the active project", async () => {
     createSupabaseMock();
     const { createAssetVersion } = await import("@/lib/assets/asset-folders");

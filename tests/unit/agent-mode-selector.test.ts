@@ -89,6 +89,19 @@ describe("Agent Mode Selector", () => {
     expect(decision.shouldUseTools).toBe(true);
   });
 
+  test.each([
+    "generate an image of the desk setup",
+    "make a thumbnail for this reel",
+    "create b-roll of the product detail",
+    "give me a voiceover for the hook",
+  ])("%s enters asset generation workflow", (rawMessage) => {
+    const decision = selectAgentMode({ rawMessage });
+
+    expect(decision.mode).toBe("execute");
+    expect(decision.shouldUseTools).toBe(true);
+    expect(decision.suggestedWorkflow).toBe("asset_generation");
+  });
+
   test("“critique this” reviews", () => {
     const decision = selectAgentMode({
       rawMessage: "critique this hook and suggest improvements",

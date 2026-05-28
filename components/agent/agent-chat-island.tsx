@@ -291,6 +291,13 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                     (tool.result.output as Record<string, unknown>).kind === "media_error"
                   ) {
                     setActivity({ label: "generation failed", tone: "error" });
+                  } else if (
+                    tool.status === "completed" &&
+                    tool.result?.output &&
+                    (tool.result.output as Record<string, unknown>).kind === "media_asset"
+                  ) {
+                    setActivity({ label: "saving asset" });
+                    void loadAssets().finally(() => setActivity({ label: "done" }));
                   } else {
                     setActivity({ label: "done" });
                   }
@@ -314,6 +321,8 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 }
               } else if (data.type === "goal") {
                 setActiveGoal(data.activeGoal ?? null);
+              } else if (data.type === "tool_failed") {
+                setActivity({ label: "tool failed", tone: "error" });
               }
             } catch (err) {
               console.warn("Failed to parse stream packet:", rawData, err);
