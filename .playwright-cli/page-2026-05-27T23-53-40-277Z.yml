@@ -1,0 +1,29 @@
+- generic [ref=e3]:
+  - main [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - heading "SceneBook" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Command Center
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - text: Identity
+        - textbox "Identity" [ref=e14]:
+          - /placeholder: creator@scenebook.io
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: Passkey
+          - link "Forgot passkey?" [ref=e18] [cursor=pointer]:
+            - /url: /forgot-password
+        - textbox "Passkey Forgot passkey?" [ref=e19]:
+          - /placeholder: ••••••••
+      - button "Initialize session" [ref=e20]:
+        - img [ref=e21]
+        - text: Initialize session
+    - button "See the board" [ref=e24]:
+      - img [ref=e25]
+      - text: See the board
+    - paragraph [ref=e28]: v 2.4.1 - secure terminal
+  - paragraph [ref=e29]:
+    - text: Need an account?
+    - link "Create one" [ref=e30] [cursor=pointer]:
+      - /url: /sign-up

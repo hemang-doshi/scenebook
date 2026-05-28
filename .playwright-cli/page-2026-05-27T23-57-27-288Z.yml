@@ -1,0 +1,153 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e42]:
+    - complementary [ref=e43]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - paragraph [ref=e48]: SceneBook
+              - paragraph [ref=e49]: Workspace
+            - button "Collapse navigation" [expanded] [ref=e50]:
+              - img [ref=e51]
+          - generic [ref=e54]:
+            - paragraph [ref=e55]: Current Project
+            - paragraph [ref=e56]: Making Scenebook
+            - paragraph [ref=e57]: Idea
+          - navigation [ref=e59]:
+            - link "Projects" [ref=e60] [cursor=pointer]:
+              - /url: /home
+              - img [ref=e61]
+              - generic [ref=e64]: Projects
+            - link "Project Hub" [ref=e211] [cursor=pointer]:
+              - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+              - img [ref=e212]
+              - generic [ref=e214]: Project Hub
+            - link "Agent" [ref=e215] [cursor=pointer]:
+              - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce/chat
+              - img [ref=e216]
+              - generic [ref=e218]: Agent
+            - link "Editor" [ref=e65] [cursor=pointer]:
+              - /url: /editor
+              - img [ref=e66]
+              - generic [ref=e68]: Editor
+            - link "Analytics" [ref=e69] [cursor=pointer]:
+              - /url: /analytics
+              - img [ref=e70]
+              - generic [ref=e72]: Analytics
+            - link "Settings" [ref=e73] [cursor=pointer]:
+              - /url: /settings
+              - img [ref=e74]
+              - generic [ref=e77]: Settings
+          - link "New project" [ref=e78] [cursor=pointer]:
+            - /url: /home?create=1
+            - button "New project" [ref=e79]:
+              - img [ref=e80]
+              - text: New project
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - img [ref=e86]
+            - generic [ref=e90]:
+              - paragraph [ref=e91]: hemangspamz@gmail.com
+              - paragraph [ref=e92]: Workspace session
+          - button "Sign out" [ref=e93]:
+            - img [ref=e94]
+            - text: Sign out
+    - generic [ref=e97]:
+      - generic [ref=e100]:
+        - navigation "breadcrumb" [ref=e286]:
+          - list [ref=e287]:
+            - listitem [ref=e288]:
+              - link "Projects" [ref=e289] [cursor=pointer]:
+                - /url: /home
+            - listitem [ref=e290]:
+              - img [ref=e291]
+            - listitem [ref=e293]:
+              - link "Making Scenebook" [ref=e294] [cursor=pointer]:
+                - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+            - listitem [ref=e295]:
+              - img [ref=e296]
+            - listitem [ref=e298]:
+              - link "Agent" [disabled] [ref=e299]
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - img
+            - textbox "Search projects..." [ref=e108]
+          - button [ref=e109]:
+            - img [ref=e110]
+          - generic [ref=e113]: Supabase Mode
+      - main [ref=e114]:
+        - generic [ref=e234]:
+          - generic [ref=e236]:
+            - 'button "Assets: 0" [ref=e300]':
+              - img [ref=e238]
+              - generic [ref=e240]: "Assets:"
+              - generic [ref=e241]: "0"
+            - generic [ref=e242]:
+              - link "Project hub" [ref=e243] [cursor=pointer]:
+                - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+                - button "Project hub" [ref=e244]:
+                  - img [ref=e245]
+                  - text: Project hub
+              - generic [ref=e248]:
+                - generic [ref=e249]: "History:"
+                - button "+ New Conversation" [ref=e251] [cursor=pointer]:
+                  - generic [ref=e252]: + New Conversation
+                  - img [ref=e253]
+          - generic [ref=e256]: running /script
+          - generic [ref=e448]:
+            - paragraph [ref=e449]: You
+            - paragraph [ref=e451]: /script build a 30-second product launch script for SceneBook focused on creative continuity
+          - generic [ref=e262]:
+            - textbox "Ask the agent for the next beat, prompt bundle, storyboard, or a sharper cut." [ref=e452]
+            - generic [ref=e265]:
+              - generic [ref=e266]:
+                - link "Open editor" [ref=e267] [cursor=pointer]:
+                  - /url: /editor/1a49f71a-3a93-4f02-a421-6622967f97ce
+                  - button "Open editor" [ref=e268]:
+                    - generic [ref=e269]: Open editor
+                - generic [ref=e271]:
+                  - button "Routing" [expanded] [ref=e272]:
+                    - img [ref=e273]
+                    - text: Routing
+                    - img [ref=e274]
+                  - generic [ref=e367]:
+                    - generic [ref=e368]:
+                      - heading "Model routing" [level=3] [ref=e369]
+                      - paragraph [ref=e370]: Choose defaults per modality.
+                    - generic [ref=e371]:
+                      - button "chat Nemotron 3 Super via NIM" [ref=e373]:
+                        - generic [ref=e374]:
+                          - generic [ref=e375]: chat
+                          - generic [ref=e376]: Nemotron 3 Super via NIM
+                        - img [ref=e377]
+                      - button "image FLUX.1 Krea Dev" [ref=e380]:
+                        - generic [ref=e381]:
+                          - generic [ref=e382]: image
+                          - generic [ref=e383]: FLUX.1 Krea Dev
+                        - img [ref=e384]
+                      - generic [ref=e386]:
+                        - button "video HunyuanVideo" [expanded] [ref=e387]:
+                          - generic [ref=e388]:
+                            - generic [ref=e389]: video
+                            - generic [ref=e390]: HunyuanVideo
+                          - img [ref=e391]
+                        - combobox "video model" [ref=e401]:
+                          - option "HunyuanVideo" [selected]
+                          - option "LTX Video Distilled"
+                          - option "Wan 2.2 TI2V"
+                          - option "Mochi 1 Preview"
+                          - option "Wan 2.1 T2V"
+                      - button "audio OuteTTS 0.3 500M" [ref=e394]:
+                        - generic [ref=e395]:
+                          - generic [ref=e396]: audio
+                          - generic [ref=e397]: OuteTTS 0.3 500M
+                        - img [ref=e398]
+              - generic [ref=e276]:
+                - paragraph [ref=e277]: "Use `/` commands or send freeform prompts. Submit with Cmd/Ctrl+Enter."
+                - button "Attach files" [ref=e278]:
+                  - img [ref=e279]
+                - button "Send message" [disabled] [ref=e281]:
+                  - img [ref=e453]
+  - button "Open Next.js Dev Tools" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
+  - alert [ref=e40]
