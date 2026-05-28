@@ -538,13 +538,27 @@ function summarizeRuntimeV2Script(input: {
     ? "Review the saved script, then build the shoot pack."
     : "Review the saved script, then decide whether to move the project forward.";
 
-  return [
-    `Script package created: ${String(input.packageOutput.hook ?? "draft script package")}`,
-    updatedFields.length > 0
+  return formatRuntimeV2ToolFinalResponse({
+    status: `Script package created: ${String(input.packageOutput.hook ?? "draft script package")}`,
+    whatChanged: updatedFields.length > 0
       ? `Workspace fields changed: ${updatedFields.join(", ")}.`
       : "Workspace fields changed: none.",
-    `Producer critique: strongest part - ${String(input.critiqueOutput.strongestPart ?? "")} weakest part - ${String(input.critiqueOutput.weakestPart ?? "")} suggested improvement - ${String(input.critiqueOutput.suggestedImprovement ?? "")}`,
-    `Next best action: ${nextAction}`,
+    creativeReasoning: `Producer critique: strongest part - ${String(input.critiqueOutput.strongestPart ?? "")} weakest part - ${String(input.critiqueOutput.weakestPart ?? "")} suggested improvement - ${String(input.critiqueOutput.suggestedImprovement ?? "")}`,
+    nextAction,
+  });
+}
+
+function formatRuntimeV2ToolFinalResponse(input: {
+  status: string;
+  whatChanged: string;
+  creativeReasoning: string;
+  nextAction: string;
+}) {
+  return [
+    `Done / status: ${input.status}`,
+    `What changed: ${input.whatChanged}`,
+    `Creative reasoning summary: ${input.creativeReasoning}`,
+    `Next best action: ${input.nextAction}`,
   ].join("\n");
 }
 
@@ -732,6 +746,128 @@ function createRuntimeV2GoalStream(input: {
       "Connection": "keep-alive",
     },
   });
+}
+
+function createRuntimeV2CreativeConversationStream(input: {
+  body: z.infer<typeof requestSchema>;
+  projectId: string;
+  threadId: string;
+  runId: string;
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+  activeGoal?: AgentGoalRecord | null;
+  modeDecision: AgentModeDecision;
+}) {
+  const encoder = new TextEncoder();
+  const plan = buildAgentPlan({
+    modeDecision: input.modeDecision,
+    rawUserMessage: input.body.message,
+    project: input.project,
+    parsedSlashCommand: null,
+  });
+  const mode = input.modeDecision.mode === "plan" ? "plan" : "brainstorm";
+  const finalMessage = mode === "plan"
+    ? formatRuntimeV2PlanResponse(plan)
+    : formatRuntimeV2BrainstormResponse(plan);
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (type: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(encodeSse(type, payload)));
+      };
+
+      try {
+        emit("mode", {
+          threadId: input.threadId,
+          runId: input.runId,
+          mode,
+          reason: input.modeDecision.reason,
+        });
+        emit("plan", {
+          threadId: input.threadId,
+          runId: input.runId,
+          plan: encodeRuntimeV2Plan(plan),
+        });
+        emit("meta", {
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+        emit("chunk", { text: finalMessage });
+
+        await appendAgentMessage({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          role: "assistant",
+          content: finalMessage,
+          model: input.body.models?.chat ?? null,
+          provider: "agent-runtime-v2",
+          metadata: {
+            mode,
+            plan: encodeRuntimeV2Plan(plan),
+          },
+        });
+        await completeAgentRun(input.runId, {
+          mode,
+          respondedWith: `runtime-v2:${mode}`,
+        });
+        controller.close();
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : `Unable to complete ${mode} response.`;
+        await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
+        emit("error", { error: message });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+function formatRuntimeV2BrainstormResponse(plan: AgentPlan) {
+  const options = plan.creativeOptions.length > 0
+    ? plan.creativeOptions.slice(0, 5)
+    : [
+        "Open with the most visually surprising before/after.",
+        "Lead with a creator mistake the audience recognizes immediately.",
+        "Frame the idea as a save-worthy checklist.",
+      ];
+  const normalizedOptions = options.length >= 3 ? options : [
+    ...options,
+    "Create a contrast-driven visual hook.",
+    "Turn the project into one concrete viewer payoff.",
+  ].slice(0, 3);
+  const recommendation = normalizedOptions[0] ?? "Lead with the clearest viewer payoff.";
+
+  return [
+    "Strong options:",
+    ...normalizedOptions.slice(0, 5).map((option, index) => `${index + 1}. ${option}`),
+    `Recommendation: ${recommendation}`,
+    "High-leverage question: What single viewer payoff should this make undeniable in the first three seconds?",
+  ].join("\n");
+}
+
+function formatRuntimeV2PlanResponse(plan: AgentPlan) {
+  const stages = plan.structuredPlan.length > 0
+    ? plan.structuredPlan
+    : [
+        "Clarify the audience promise.",
+        "Draft the creative package.",
+        "Plan production assets.",
+        "Review before any workspace update.",
+      ];
+
+  return [
+    `Creative direction: Build around ${plan.projectContext?.title ?? "the current project"} with a clear viewer payoff before any execution.`,
+    "Stages:",
+    ...stages.map((stage, index) => `${index + 1}. ${stage}`),
+    "Next decision: Pick the strongest direction or ask me to execute a specific workspace action.",
+    "No workspace changes have been made.",
+  ].join("\n");
 }
 
 function createRuntimeV2ReviewStream(input: {
@@ -1297,11 +1433,12 @@ function createRuntimeV2WorkspaceControlStream(input: {
           completed.push(await runTool(toolAction.name, payload));
         }
 
-        const finalMessage = [
-          action.summary,
-          ...completed.map((result) => result.message),
-          "Suggested next action: Review the updated workspace state.",
-        ].join("\n");
+        const finalMessage = formatRuntimeV2ToolFinalResponse({
+          status: action.summary,
+          whatChanged: completed.map((result) => result.message).join(" "),
+          creativeReasoning: "Applied the requested workspace control because the target and action were clear.",
+          nextAction: "Review the updated workspace state.",
+        });
         emit("chunk", { text: finalMessage });
         await appendAgentMessage({
           projectId: input.projectId,
@@ -2181,11 +2318,17 @@ function createRuntimeV2AssetStream(input: {
         const attachmentOutput = attachResult.output as Record<string, JsonValue>;
         const isAttached = attachmentOutput.attached !== false;
         const finalParts = [
-          `Prompt generated: ${String(promptOutput.prompt ?? input.body.message)}`,
-          `Model used: ${String(mediaOutput.model ?? input.body.models?.[promptModality] ?? "default")}`,
-          `Folder saved to: ${String(mediaOutput.folderName ?? folderName)}`,
-          `Project attachment: ${isAttached ? "visible in Project Hub asset library" : "created"}.`,
-          "Next suggested action: Review the asset in Project Hub, then request a variation or move it into the edit.",
+          formatRuntimeV2ToolFinalResponse({
+            status: `${promptModality} asset generated.`,
+            whatChanged: [
+              `Prompt generated: ${String(promptOutput.prompt ?? input.body.message)}`,
+              `Model used: ${String(mediaOutput.model ?? input.body.models?.[promptModality] ?? "default")}`,
+              `Folder saved to: ${String(mediaOutput.folderName ?? folderName)}`,
+              `Project attachment: ${isAttached ? "visible in Project Hub asset library" : "created"}.`,
+            ].join(" "),
+            creativeReasoning: "The asset was generated from a structured prompt and organized into the project library for review.",
+            nextAction: "Review the asset in Project Hub, then request a variation or move it into the edit.",
+          }),
         ];
 
         if (updatedGoal) {
@@ -2405,6 +2548,23 @@ export async function POST(
 
     if (isRuntimeV2Enabled() && !effectiveCommand && modeDecision?.mode === "goal") {
       return createRuntimeV2GoalStream({
+        body,
+        projectId,
+        threadId,
+        runId: runIdForResponse,
+        project,
+        activeGoal,
+        modeDecision,
+      });
+    }
+
+    if (
+      isRuntimeV2Enabled() &&
+      !effectiveCommand &&
+      !activeGoal &&
+      (modeDecision?.mode === "brainstorm" || modeDecision?.mode === "plan")
+    ) {
+      return createRuntimeV2CreativeConversationStream({
         body,
         projectId,
         threadId,

@@ -5,6 +5,7 @@ import {
   getMissingCreativeFields,
   type CreativeBrief,
 } from "@/lib/agent/runtime-v2/creative-brief";
+import { buildAgentSystemInstruction } from "@/lib/agent/context-builder";
 import { buildAgentWorkspaceContext } from "@/lib/agent/runtime-v2/context-loader";
 
 describe("Creative Brief Extractor", () => {
@@ -132,6 +133,18 @@ describe("Creative Brief Extractor", () => {
 });
 
 describe("Context Loader", () => {
+  test("system instruction frames SceneBook Agent as creative producer and workspace operator", () => {
+    const instruction = buildAgentSystemInstruction({
+      project: null,
+      command: null,
+    });
+
+    expect(instruction).toContain("You are SceneBook Agent, a creative producer and workspace operator.");
+    expect(instruction).toContain("Slash commands are workflow hints, not rigid commands.");
+    expect(instruction).toContain("Never claim a workspace change unless the corresponding tool call completed.");
+    expect(instruction).toContain("Publishing and destructive actions require approval.");
+  });
+
   test("builds structured compact workspace context", () => {
     const project = {
       title: "How to Code AI",

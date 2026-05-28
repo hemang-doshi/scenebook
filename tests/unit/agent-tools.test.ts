@@ -660,6 +660,11 @@ describe("agent tools", () => {
       },
     });
     expect(events.find((event) => event.type === "chunk")?.text).toContain("Script package created");
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+    expect(finalText).toContain("Done / status:");
+    expect(finalText).toContain("What changed:");
+    expect(finalText).toContain("Creative reasoning summary:");
+    expect(finalText).toContain("Next best action:");
     expect(events.find((event) => event.type === "tool" && event.tool?.toolName === "Update Script Lab")).toMatchObject({
       tool: {
         requiresApproval: false,
@@ -1020,7 +1025,7 @@ describe("agent tools", () => {
     const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
     expect(finalText).toContain("Prompt generated:");
     expect(finalText).toContain("Folder saved to: Generated / Images");
-    expect(finalText).toContain("Next suggested action:");
+    expect(finalText).toContain("Next best action:");
     expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
       respondedWith: "runtime-v2:asset",
       assetId: "asset-1",
@@ -1686,6 +1691,9 @@ describe("agent tools", () => {
     expect(response.status).toBe(200);
     const events = await readSseEvents(response);
     expect(events.find((event) => event.type === "chunk")?.text ?? "").not.toContain("Workspace fields changed");
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+    expect(finalText).not.toContain("Done / status:");
+    expect(finalText).not.toContain("What changed:");
     expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({
       tool: {
         status: "failed",
@@ -2087,6 +2095,76 @@ describe("agent tools", () => {
     );
 
     expect(response.headers.get("Content-Type")).toContain("text/event-stream");
+    expect(createAgentToolCall).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 brainstorm response has producer option shape", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "Help me brainstorm better opening ideas",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+    const optionCount = (finalText.match(/\n\d\. /g) ?? []).length;
+
+    expect(events[0]).toMatchObject({ type: "mode", mode: "brainstorm" });
+    expect(optionCount).toBeGreaterThanOrEqual(3);
+    expect(optionCount).toBeLessThanOrEqual(5);
+    expect(finalText).toContain("Recommendation:");
+    expect(finalText).toContain("High-leverage question:");
+    expect(createAgentToolCall).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 plan response has creative direction and no premature tool claims", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "plan this reel campaign",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+
+    expect(events[0]).toMatchObject({ type: "mode", mode: "plan" });
+    expect(finalText).toContain("Creative direction:");
+    expect(finalText).toContain("Stages:");
+    expect(finalText).toContain("Next decision:");
+    expect(finalText).not.toContain("Updated Script Lab");
+    expect(finalText).not.toContain("saved");
     expect(createAgentToolCall).not.toHaveBeenCalled();
   });
 
