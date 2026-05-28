@@ -111,4 +111,14 @@ describe("Agent Mode Selector", () => {
     expect(decision.shouldAskQuestion).toBe(false);
     expect(decision.shouldUseTools).toBe(false);
   });
+
+  test("“is this good?” enters review mode", () => {
+    const decision = selectAgentMode({
+      rawMessage: "is this good? The first five seconds show the desk before the lighting fix.",
+    });
+
+    expect(decision.mode).toBe("review");
+    expect(decision.shouldAskQuestion).toBe(false);
+    expect(decision.shouldUseTools).toBe(false);
+  });
 });

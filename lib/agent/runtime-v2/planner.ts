@@ -327,9 +327,18 @@ function buildAssetSteps(workflow: AgentWorkflow): AgentPlanStep[] {
 
 function buildReviewSteps(rawUserMessage: string, workflow: AgentWorkflow | null): AgentPlanStep[] {
   const isUpdateRequested = /\b(update|save|apply|replace)\b/i.test(rawUserMessage);
+  const isRewriteRequested = /\b(make it better|make this better|make it more|improve this|rewrite this|rewrite it|improve it|stronger|punchier|cinematic)\b/i.test(rawUserMessage);
 
   if (workflow?.name === "script" || /\b(script|hook|caption)\b/i.test(rawUserMessage)) {
-    return buildToolSteps(isUpdateRequested ? ["critique_script", "update_script_lab"] : ["critique_script"]);
+    if (isRewriteRequested && isUpdateRequested) {
+      return buildToolSteps(["critique_script", "generate_script_package", "update_script_lab", "create_project_artifact"]);
+    }
+
+    if (isRewriteRequested) {
+      return buildToolSteps(["critique_script", "generate_script_package"]);
+    }
+
+    return buildToolSteps(["critique_script"]);
   }
 
   return [];
