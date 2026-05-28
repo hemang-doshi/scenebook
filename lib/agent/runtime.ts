@@ -24,6 +24,19 @@ async function requireUser() {
   return { supabase: supabase as any, user };
 }
 
+function deriveThreadTitleFromMessage(content: string) {
+  const trimmed = content
+    .trim()
+    .replace(/^\/[^\s]+\s*/, "")
+    .replace(/\s+/g, " ");
+
+  if (!trimmed) {
+    return "Untitled thread";
+  }
+
+  return trimmed.slice(0, 72);
+}
+
 export async function createOrLoadThread(projectId: string, threadId?: string) {
   const { supabase, user } = await requireUser();
 
@@ -90,12 +103,12 @@ export async function getAgentHistory(projectId: string, threadId?: string): Pro
       .eq("project_id", projectId)
       .eq("status", "active")
       .order("updated_at", { ascending: false })
-      .maybeSingle();
+      .limit(1);
 
     if (error) {
       throw error;
     }
-    thread = data as AgentThreadRecord | null;
+    thread = ((data as AgentThreadRecord[] | null) ?? [])[0] ?? null;
   }
 
   if (!thread) {
@@ -170,7 +183,10 @@ export async function appendAgentMessage(input: {
 
   await supabase
     .from("agent_threads")
-    .update({ updated_at: new Date().toISOString() })
+    .update({
+      updated_at: new Date().toISOString(),
+      ...(input.role === "user" ? { title: deriveThreadTitleFromMessage(input.content) } : {}),
+    })
     .eq("id", input.threadId)
     .eq("owner_id", user.id);
 
@@ -255,7 +271,6 @@ export async function createAgentToolCall(input: {
   payload: Record<string, JsonValue>;
 }) {
   const { supabase, user } = await requireUser();
-  const status = input.requiresApproval ? "awaiting_approval" : "running";
   const { data, error } = await supabase
     .from("agent_tool_calls")
     .insert({
@@ -265,7 +280,7 @@ export async function createAgentToolCall(input: {
       project_id: input.projectId,
       tool_name: input.toolName,
       command: input.command ?? null,
-      status,
+      status: "running",
       input: input.payload,
       output: {},
       requires_approval: input.requiresApproval,
@@ -280,19 +295,43 @@ export async function createAgentToolCall(input: {
   return data as AgentToolCallRecord;
 }
 
+export async function getAgentToolCall(toolCallId: string) {
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("agent_tool_calls")
+    .select("*")
+    .eq("id", toolCallId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Tool call not found.");
+  }
+
+  return data as AgentToolCallRecord;
+}
+
 export async function completeAgentToolCall(
   toolCallId: string,
   output: Record<string, JsonValue>,
-  requiresApproval: boolean,
+  status: string,
 ) {
   const { supabase } = await requireUser();
   const payload: Record<string, JsonValue> = {
     output,
-    status: requiresApproval ? "awaiting_approval" : "completed",
+    status,
   };
 
-  if (!requiresApproval) {
+  if (status === "completed" || status === "failed" || status === "rejected") {
     payload.completed_at = new Date().toISOString();
+  }
+
+  if (status === "approved" || status === "completed") {
+    payload.approved_at = new Date().toISOString();
   }
 
   const { error } = await supabase.from("agent_tool_calls").update(payload).eq("id", toolCallId);
@@ -325,6 +364,7 @@ export async function listAgentThreads(projectId: string): Promise<AgentThreadRe
     .select("*")
     .eq("owner_id", user.id)
     .eq("project_id", projectId)
+    .eq("status", "active")
     .order("updated_at", { ascending: false });
 
   if (error) {

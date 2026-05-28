@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Panel } from "@/components/ui/panel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export default function SignUpPage() {
@@ -17,33 +17,53 @@ export default function SignUpPage() {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <Panel className="w-full max-w-xl p-8 lg:p-10">
-        <p className="cmd-label">Create account</p>
-        <h1 className="cmd-title mt-4 text-4xl font-semibold">Bring your studio online</h1>
-        <div className="mt-8 space-y-4">
-          <label className="block text-sm font-medium text-foreground">
-            Email
+    <div className="flex min-h-screen bg-[var(--canvas)] items-center justify-center px-4 py-12">
+      <main className="w-full max-w-[420px] bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-8 md:p-10">
+        <div className="text-center mb-8">
+          <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-2">
+            Create Account
+          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--ink)]">
+            Bring your studio online
+          </h1>
+        </div>
+
+        <form className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+              Email
+            </label>
             <Input
-              className="mt-2"
+              id="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              placeholder="creator@scenebook.io"
               type="email"
+              required
             />
-          </label>
-          <label className="block text-sm font-medium text-foreground">
-            Password
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+              Password
+            </label>
             <Input
-              className="mt-2"
+              id="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••"
               type="password"
+              required
             />
-          </label>
+          </div>
+
           {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
+
           <Button
-            className="w-full"
-            onClick={() =>
+            className="w-full justify-center"
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
               startTransition(async () => {
                 try {
                   const client = createSupabaseBrowserClient();
@@ -58,21 +78,24 @@ export default function SignUpPage() {
 
                   router.push("/home");
                 } catch (caught) {
-                  setError(
-                    caught instanceof Error ? caught.message : "Unable to sign up.",
-                  );
+                  setError(caught instanceof Error ? caught.message : "Unable to sign up.");
                 }
-              })
-            }
-            disabled={isPending}
+              });
+            }}
+            type="submit"
           >
+            {isPending && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
             Create account
           </Button>
-        </div>
-        <p className="mt-6 text-sm text-muted">
-          Already set up? <Link className="text-foreground" href="/sign-in">Sign in</Link>
+        </form>
+
+        <p className="mt-8 text-center text-xs text-[var(--muted)]">
+          Already set up?{" "}
+          <Link className="text-[var(--ink)] font-semibold hover:underline" href="/sign-in">
+            Sign in
+          </Link>
         </p>
-      </Panel>
+      </main>
     </div>
   );
 }

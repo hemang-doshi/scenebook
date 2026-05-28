@@ -154,18 +154,6 @@ export type InboxItem = {
   cardId?: string | null;
 };
 
-export type ProjectMessage = {
-  id: string;
-  cardId: string;
-  ownerId: string;
-  role: "system" | "user" | "assistant";
-  content: string;
-  provider?: string | null;
-  model?: string | null;
-  metadata?: Record<string, JsonValue>;
-  createdAt: string;
-};
-
 export type GenerationRecord = {
   id: string;
   cardId: string;

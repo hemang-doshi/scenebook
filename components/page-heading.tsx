@@ -1,7 +1,5 @@
 import { motion } from "motion/react";
 
-import { Badge } from "@/components/ui/badge";
-
 export function PageHeading({
   eyebrow,
   title,
@@ -13,14 +11,14 @@ export function PageHeading({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: "easeOut" }}
-      className="mb-6"
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className="mb-8"
     >
-      <Badge>{eyebrow}</Badge>
-      <h1 className="cmd-title mt-4 text-4xl font-semibold text-foreground">{title}</h1>
-      <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
+      <div className="type-eyebrow text-[var(--muted)] text-[12px] uppercase tracking-[0.08em] mb-2">{eyebrow}</div>
+      <h1 className="type-display-lg text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-[var(--ink)] mb-3">{title}</h1>
+      <p className="type-body text-sm md:text-base text-[var(--muted)] leading-relaxed max-w-3xl">
         {description}
       </p>
     </motion.div>

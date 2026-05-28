@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
-import type { CardAsset, GenerationRecord, ProjectMessage } from "@/lib/types";
+import type { CardAsset, GenerationRecord } from "@/lib/types";
 
 type SupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
@@ -38,36 +38,6 @@ export async function loadCreatorSettingsRow(userId: string) {
   }
 
   return data;
-}
-
-export async function appendProjectMessages(
-  cardId: string,
-  messages: Array<{
-    role: ProjectMessage["role"];
-    content: string;
-    provider?: string | null;
-    model?: string | null;
-    metadata?: ProjectMessage["metadata"];
-  }>,
-) {
-  const supabase = await createSupabaseServerClient();
-  const user = await requireUser(supabase);
-
-  const rows: Database["public"]["Tables"]["project_messages"]["Insert"][] = messages.map((message) => ({
-    owner_id: user.id,
-    card_id: cardId,
-    role: message.role,
-    content: message.content,
-    provider: message.provider ?? null,
-    model: message.model ?? null,
-    metadata: message.metadata ?? {},
-  }));
-
-  const { error } = await (supabase.from("project_messages") as any).insert(rows);
-
-  if (error) {
-    throw error;
-  }
 }
 
 export async function createGenerationRecord(

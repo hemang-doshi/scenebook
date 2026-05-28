@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { ArrowRight, LoaderCircle, ShieldAlert, Sparkles } from "lucide-react";
+import { LoaderCircle, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,6 @@ export default function ResetPasswordPage() {
   const client = createSupabaseBrowserClient();
 
   useEffect(() => {
-    // Check initial user status
     client.auth.getUser().then(({ data }) => {
       if (data.user) {
         setHasSession(true);
@@ -30,7 +29,6 @@ export default function ResetPasswordPage() {
       setLoading(false);
     });
 
-    // Subscribe to state updates in case the token exchange resolves asynchronously
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((event, session) => {
@@ -46,79 +44,78 @@ export default function ResetPasswordPage() {
   }, [client]);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <main className="cmd-panel relative z-10 w-full max-w-[420px] overflow-hidden rounded-xl p-8">
-        <div className="pointer-events-none absolute inset-0 border border-accent/10" />
-        <div className="relative text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-white/5">
-            <Sparkles className="h-5 w-5 text-accent" />
-          </div>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">
+    <div className="flex min-h-screen bg-[var(--canvas)] items-center justify-center px-4 py-12">
+      <main className="w-full max-w-[420px] bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-8 md:p-10">
+        <div className="text-center mb-8">
+          <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-2">
+            Reset Password
+          </p>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[var(--ink)]">
             SceneBook
           </h1>
-          <p className="cmd-label mt-2">Initialize New Passkey</p>
         </div>
 
         {loading ? (
-          <div className="mt-10 flex flex-col items-center justify-center space-y-4">
-            <LoaderCircle className="h-8 w-8 animate-spin text-accent" />
-            <p className="text-sm text-muted">Checking terminal session...</p>
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <LoaderCircle className="h-8 w-8 animate-spin text-[var(--ink)]" />
+            <p className="text-sm text-[var(--muted)]">Checking session...</p>
           </div>
         ) : !hasSession ? (
-          <div className="mt-8 text-center space-y-4">
+          <div className="text-center space-y-4">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[var(--danger)]/10 text-[var(--danger)]">
               <ShieldAlert className="h-5 w-5" />
             </div>
-            <p className="text-sm text-[var(--danger)]">
+            <p className="text-sm font-semibold text-[var(--danger)]">
               Invalid or expired recovery session.
             </p>
-            <p className="text-xs text-muted">
-              Please request a new link to securely reset your passkey.
+            <p className="text-xs text-[var(--muted)]">
+              Please request a new link to securely reset your password.
             </p>
             <div className="pt-4">
               <Link
                 href="/forgot-password"
-                className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted transition hover:text-accent"
+                className="text-xs font-semibold text-[var(--ink)] hover:underline"
               >
                 Request recovery link
               </Link>
             </div>
           </div>
         ) : success ? (
-          <div className="mt-8 text-center space-y-4">
-            <p className="text-sm text-[var(--accent-secondary)]">
-              Passkey updated successfully!
+          <div className="text-center space-y-4">
+            <p className="text-sm text-[var(--ink)] font-semibold">
+              Password updated successfully!
             </p>
-            <p className="text-xs text-muted">
-              Your security session is initialized. Redirecting to workspace...
+            <p className="text-xs text-[var(--muted)]">
+              Redirecting to workspace...
             </p>
             <div className="pt-4">
-              <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-[var(--accent-secondary)]" />
+              <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-[var(--ink)]" />
             </div>
           </div>
         ) : (
-          <form className="mt-8 space-y-5">
-            <label className="block">
-              <span className="cmd-label">New Passkey</span>
+          <form className="space-y-6">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+                New Password
+              </label>
               <Input
-                className="mt-2"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="••••••••"
                 type="password"
                 required
               />
-            </label>
+            </div>
 
             {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
             <Button
-              className="w-full"
+              className="w-full justify-center"
               disabled={isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (password.length < 6) {
-                  setError("Passkey must be at least 6 characters.");
+                  setError("Password must be at least 6 characters.");
                   return;
                 }
                 startTransition(async () => {
@@ -140,26 +137,18 @@ export default function ResetPasswordPage() {
                     setError(
                       caught instanceof Error
                         ? caught.message
-                        : "Unable to update passkey.",
+                        : "Unable to update password.",
                     );
                   }
                 });
               }}
               type="submit"
             >
-              {isPending ? (
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowRight className="mr-2 h-4 w-4" />
-              )}
-              Initialize passkey
+              {isPending && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+              Update password
             </Button>
           </form>
         )}
-
-        <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-muted/60">
-          v 2.4.1 - secure terminal
-        </p>
       </main>
     </div>
   );

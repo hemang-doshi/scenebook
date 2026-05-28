@@ -15,7 +15,6 @@ import type {
   ContentPlatform,
   ContentStatus,
   InboxItem,
-  ProjectMessage,
   ScriptLab,
   ShootPack,
 } from "@/lib/types";
@@ -79,7 +78,6 @@ type SupabaseAuthResult = Promise<{ data: { user: { id: string } | null } }>;
 type InboxRow = Database["public"]["Tables"]["inbox_items"]["Row"];
 type ContentCardRow = Database["public"]["Tables"]["content_cards"]["Row"];
 type AssetRow = Database["public"]["Tables"]["card_assets"]["Row"];
-type ProjectMessageRow = Database["public"]["Tables"]["project_messages"]["Row"];
 type GenerationRecordRow = Database["public"]["Tables"]["generation_records"]["Row"];
 type SupabaseInsertChain = PromiseLike<{ error: Error | null }> & {
   select(query: string): {
@@ -113,7 +111,6 @@ type SupabaseRepositoryClient = {
 };
 
 export type ProjectWorkspace = CardDetail & {
-  messages: ProjectMessage[];
   generations: GenerationRecord[];
 };
 
@@ -964,10 +961,9 @@ export async function getProjectWorkspace(cardId: string): Promise<ProjectWorksp
   const detail = await getCardDetail(cardId);
 
   if (!detail || env.isSampleMode) {
-    return detail
+      return detail
       ? {
           ...detail,
-          messages: [],
           generations: [],
         }
       : null;
@@ -976,30 +972,14 @@ export async function getProjectWorkspace(cardId: string): Promise<ProjectWorksp
   const supabase =
     (await createSupabaseServerClient()) as unknown as SupabaseRepositoryClient;
   const [
-    { data: messages, error: messagesError },
     { data: generations, error: generationsError },
   ] = await Promise.all([
-    supabase.from("project_messages").select("*").order("created_at", { ascending: true }),
     supabase.from("generation_records").select("*").order("created_at", { ascending: false }),
   ]);
 
-  if (messagesError ?? generationsError) {
-    throw messagesError ?? generationsError;
+  if (generationsError) {
+    throw generationsError;
   }
-
-  const mappedMessages = ((messages ?? []) as ProjectMessageRow[])
-    .filter((message) => message.card_id === cardId)
-    .map<ProjectMessage>((message) => ({
-      id: message.id,
-      cardId: message.card_id,
-      ownerId: message.owner_id,
-      role: message.role as "system" | "user" | "assistant",
-      content: message.content,
-      provider: message.provider,
-      model: message.model,
-      metadata: message.metadata as ProjectMessage["metadata"],
-      createdAt: message.created_at,
-    }));
 
   const mappedGenerations = ((generations ?? []) as GenerationRecordRow[])
     .filter((generation) => generation.card_id === cardId)
@@ -1020,7 +1000,6 @@ export async function getProjectWorkspace(cardId: string): Promise<ProjectWorksp
 
   return {
     ...detail,
-    messages: mappedMessages,
     generations: mappedGenerations,
   };
 }

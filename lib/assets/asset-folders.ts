@@ -65,6 +65,25 @@ function getTable(supabase: SupabaseClient, table: string) {
   return (supabase as any).from(table);
 }
 
+function isAssetFolderInfraUnavailable(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message.toLowerCase()
+        : "";
+
+  return (
+    message.includes("asset_folders") ||
+    message.includes("asset_folder_items") ||
+    message.includes("relation") ||
+    message.includes("schema cache")
+  );
+}
+
 function mapAssetRow(row: any): CardAsset {
   return {
     id: row.id,
@@ -292,7 +311,19 @@ export async function ensureAssetInDefaultFolder(input: {
 export async function getProjectAssetLibrary(projectId: string): Promise<ProjectAssetLibrary> {
   const supabase = await createSupabaseServerClient();
   const user = await requireUser(supabase);
-  const [foldersResult, folderItemsResult, assetsResult] = await Promise.all([
+  const assetsResult = await getTable(supabase, "card_assets")
+    .select("*")
+    .eq("owner_id", user.id)
+    .eq("card_id", projectId)
+    .order("created_at", { ascending: true });
+
+  if (assetsResult.error) {
+    throw assetsResult.error;
+  }
+
+  const assets = ((assetsResult.data ?? []) as any[]).map(mapAssetRow);
+
+  const [foldersResult, folderItemsResult] = await Promise.all([
     getTable(supabase, "asset_folders")
       .select("*")
       .eq("owner_id", user.id)
@@ -304,20 +335,23 @@ export async function getProjectAssetLibrary(projectId: string): Promise<Project
       .eq("owner_id", user.id)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
-    getTable(supabase, "card_assets")
-      .select("*")
-      .eq("owner_id", user.id)
-      .eq("card_id", projectId)
-      .order("created_at", { ascending: true }),
   ]);
 
-  if (foldersResult.error ?? folderItemsResult.error ?? assetsResult.error) {
-    throw foldersResult.error ?? folderItemsResult.error ?? assetsResult.error;
+  if (foldersResult.error ?? folderItemsResult.error) {
+    const infraError = foldersResult.error ?? folderItemsResult.error;
+
+    if (isAssetFolderInfraUnavailable(infraError)) {
+      return {
+        folders: [],
+        looseAssets: assets,
+      };
+    }
+
+    throw infraError;
   }
 
   const folders = (foldersResult.data ?? []) as AssetFolderRecord[];
   const folderItems = (folderItemsResult.data ?? []) as AssetFolderItemRecord[];
-  const assets = ((assetsResult.data ?? []) as any[]).map(mapAssetRow);
   const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
   const folderAssets = new Set(folderItems.map((item) => item.asset_id));
 

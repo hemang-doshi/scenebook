@@ -119,16 +119,16 @@ export const videoModelPresets: MediaModelPreset[] = [
 
 export const audioModelPresets: MediaModelPreset[] = [
   {
-    id: "OuteAI/OuteTTS-0.3-500M",
-    label: "OuteTTS 0.3 500M",
-    modality: "audio",
-    description: "Draft narration and voiceover generation.",
-  },
-  {
     id: "hexgrad/Kokoro-82M",
     label: "Kokoro 82M",
     modality: "audio",
     description: "Cleaner synthetic narration.",
+  },
+  {
+    id: "OuteAI/OuteTTS-0.3-500M",
+    label: "OuteTTS 0.3 500M",
+    modality: "audio",
+    description: "Draft narration and voiceover generation.",
   },
   {
     id: "facebook/mms-tts-eng",

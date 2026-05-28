@@ -61,3 +61,21 @@ export async function listMemorySnapshots(threadId: string) {
 
   return data ?? [];
 }
+
+export async function getLatestProjectMemory(projectId: string) {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("agent_memory_snapshots")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
