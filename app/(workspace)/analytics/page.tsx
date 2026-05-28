@@ -226,11 +226,15 @@ export default function AnalyticsDashboard() {
     const params = new URLSearchParams(window.location.search);
     const instagram = params.get("instagram");
     if (instagram === "success") {
-      setOauthStatus({ type: "success", message: "Instagram account connected successfully!" });
+      queueMicrotask(() => {
+        setOauthStatus({ type: "success", message: "Instagram account connected successfully!" });
+      });
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (instagram === "error") {
       const msg = params.get("message") || "An error occurred during authentication.";
-      setOauthStatus({ type: "error", message: msg });
+      queueMicrotask(() => {
+        setOauthStatus({ type: "error", message: msg });
+      });
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
