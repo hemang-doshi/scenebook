@@ -94,8 +94,24 @@ describe("Agent Runtime v2 planner", () => {
     expect(plan.workflow?.name).toBe("asset_generation");
     expect(plan.steps.map((step) => step.toolName)).toEqual([
       "generate_prompt_json",
+      "create_asset_folder",
       "generate_media_asset",
       "attach_asset_to_project",
+    ]);
+  });
+
+  test("vague asset request asks high-leverage questions", () => {
+    const plan = buildAgentPlan({
+      modeDecision: executeDecision,
+      rawUserMessage: "generate an image",
+      project: baseProject,
+    });
+
+    expect(plan.intent).toBe("ask_questions");
+    expect(plan.workflow?.name).toBe("asset_generation");
+    expect(plan.questions).toEqual([
+      "What should the asset show, sound like, or communicate?",
+      "Should it feel cinematic, clean SaaS, or raw devlog?",
     ]);
   });
 

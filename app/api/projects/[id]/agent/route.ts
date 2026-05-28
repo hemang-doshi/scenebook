@@ -6,6 +6,15 @@ import { generateTextStream } from "@/lib/ai/client";
 import { buildAgentSystemInstruction } from "@/lib/agent/context-builder";
 import { parseSlashCommand } from "@/lib/agent/command-parser";
 import {
+  hasSpecificAssetDirection,
+  inferAssetAspectRatio,
+  inferAssetFolderPath,
+  inferAssetModality,
+  inferAssetTitle,
+  isAssetGenerationRequest,
+  type RuntimeAssetModality,
+} from "@/lib/agent/runtime-v2/asset-intent";
+import {
   appendAgentMessage,
   completeAgentToolCall,
   completeAgentRun,
@@ -169,6 +178,21 @@ function buildRuntimeV2ScriptBrief(prompt: string, project: Awaited<ReturnType<t
     durationSeconds: extracted.durationSeconds ?? 30,
     format: extracted.format ?? mapProjectFormat(project?.format),
     tone: extracted.tone ?? "polished",
+  };
+}
+
+function buildRuntimeV2AssetBrief(message: string, project: Awaited<ReturnType<typeof getProjectWorkspace>>): CreativeBrief {
+  const extracted = extractCreativeBrief(message);
+  const modality = inferAssetModality(message);
+  const hasDirection = hasSpecificAssetDirection(message);
+
+  return {
+    ...extracted,
+    ...(modality ? { modality } : {}),
+    ...(hasDirection ? { prompt: message, creativeDirection: message } : {}),
+    projectFormat: project?.format ?? project?.platform ?? undefined,
+    aspectRatio: inferAssetAspectRatio(message, project),
+    folderIntent: modality ? inferAssetFolderPath(message, modality) : undefined,
   };
 }
 
@@ -344,6 +368,7 @@ async function createRuntimeV2ToolCall(input: {
   threadId: string;
   runId: string;
   toolName: string;
+  command?: AgentCommand | null;
   requiresApproval: boolean;
   payload: Record<string, unknown>;
 }) {
@@ -352,7 +377,7 @@ async function createRuntimeV2ToolCall(input: {
     threadId: input.threadId,
     runId: input.runId,
     toolName: input.toolName,
-    command: "script",
+    command: input.command ?? "script",
     requiresApproval: input.requiresApproval,
     payload: jsonRecord(input.payload),
   });
@@ -896,6 +921,315 @@ function createRuntimeV2ScriptStream(input: {
   });
 }
 
+function createRuntimeV2AssetStream(input: {
+  body: z.infer<typeof requestSchema>;
+  projectId: string;
+  threadId: string;
+  runId: string;
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+  activeGoal?: AgentGoalRecord | null;
+  modeDecision: AgentModeDecision;
+}) {
+  const encoder = new TextEncoder();
+  const creativeBrief = buildRuntimeV2AssetBrief(input.body.message, input.project);
+  const plan = buildAgentPlan({
+    modeDecision: input.modeDecision,
+    workflow: "asset_generation",
+    creativeBrief,
+    rawUserMessage: input.body.message,
+    project: input.project,
+    parsedSlashCommand: null,
+  });
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let activeToolCallId: string | null = null;
+
+      const emit = (type: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(encodeSse(type, payload)));
+      };
+
+      const emitTool = (
+        id: string,
+        toolName: string,
+        status: string,
+        metadata: {
+          requiresApproval: boolean;
+          approvalPolicy: string;
+          sideEffect: string;
+          result?: AgentRuntimeToolResult<Record<string, JsonValue>>;
+          errorMessage?: string;
+        },
+      ) => {
+        const tool = {
+          id,
+          command: "generate",
+          status,
+          toolName,
+          requiresApproval: metadata.requiresApproval,
+          approvalPolicy: metadata.approvalPolicy,
+          sideEffect: metadata.sideEffect,
+          errorMessage: metadata.errorMessage ?? null,
+          result: metadata.result ?? null,
+        };
+
+        emit("tool", { tool });
+
+        if (status === "failed") {
+          emit("tool_failed", {
+            tool,
+            error: metadata.errorMessage ?? "Runtime v2 asset tool failed.",
+          });
+        }
+      };
+
+      const runTool = async (toolName: string, payload: Record<string, unknown>) => {
+        const tool = getRuntimeV2ToolByName(toolName);
+        if (!tool) {
+          throw new Error(`Runtime v2 tool not found: ${toolName}`);
+        }
+
+        const toolCall = await createRuntimeV2ToolCall({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          runId: input.runId,
+          toolName: tool.displayName,
+          command: "generate",
+          requiresApproval: tool.approvalPolicy !== "auto",
+          payload,
+        });
+        activeToolCallId = toolCall.id;
+        const toolEventMetadata = {
+          requiresApproval: tool.approvalPolicy !== "auto",
+          approvalPolicy: tool.approvalPolicy,
+          sideEffect: tool.sideEffect,
+        };
+
+        emitTool(toolCall.id, tool.displayName, "running", {
+          ...toolEventMetadata,
+          result: {
+            message: "Running tool.",
+            output: { kind: "tool_progress", activity: toolName },
+          },
+        });
+
+        try {
+          const parsedPayload = tool.inputSchema.parse(payload);
+          const result = await tool.handler({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            runId: input.runId,
+            toolCallId: toolCall.id,
+            rawInput: input.body.message,
+            project: input.project,
+            selectedModel: input.body.models?.chat ?? null,
+            selectedModels: input.body.models ?? null,
+            emitProgress: async (activity) => {
+              emitTool(toolCall.id, tool.displayName, "running", {
+                ...toolEventMetadata,
+                result: {
+                  message: activity,
+                  output: { kind: "tool_progress", activity },
+                },
+              });
+            },
+          }, parsedPayload) as AgentRuntimeToolResult<Record<string, JsonValue>>;
+
+          await completeAgentToolCall(toolCall.id, result.output, "completed");
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "completed", {
+            ...toolEventMetadata,
+            result,
+          });
+          return result;
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : "Runtime v2 asset tool failed.";
+          await Promise.resolve(failAgentToolCall(toolCall.id, message)).catch(() => null);
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "failed", {
+            ...toolEventMetadata,
+            errorMessage: message,
+          });
+          throw caught;
+        }
+      };
+
+      try {
+        emit("meta", {
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+        emit("plan", {
+          plan: encodeRuntimeV2Plan(plan),
+        });
+
+        if (plan.intent === "ask_questions") {
+          const message = [
+            "Before I generate this asset, I need a little more direction:",
+            ...plan.questions.map((question, index) => `${index + 1}. ${question}`),
+          ].join("\n");
+
+          emit("chunk", { text: message });
+          await appendAgentMessage({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            role: "assistant",
+            content: message,
+            model: input.body.models?.chat ?? null,
+            provider: "agent-runtime-v2",
+            metadata: {
+              workflow: "asset_generation",
+              plan: encodeRuntimeV2Plan(plan),
+            },
+          });
+          await completeAgentRun(input.runId, {
+            command: "generate",
+            respondedWith: "runtime-v2:asset:questions",
+          });
+          controller.close();
+          return;
+        }
+
+        const modality = normalizeRuntimeAssetModality(
+          plan.creativeBrief.modality,
+          inferAssetModality(input.body.message) ?? "image",
+        );
+        const aspectRatio = typeof plan.creativeBrief.aspectRatio === "string"
+          ? plan.creativeBrief.aspectRatio
+          : inferAssetAspectRatio(input.body.message, input.project);
+        const folderPath = inferAssetFolderPath(input.body.message, modality);
+
+        const promptResult = await runTool("generate_prompt_json", {
+          prompt: input.body.message,
+          modality,
+          aspectRatio,
+          platform: input.project?.platform ?? undefined,
+          folderIntent: folderPath,
+        });
+        const promptOutput = promptResult.output as Record<string, JsonValue>;
+        const promptModality = normalizeRuntimeAssetModality(promptOutput.modality, modality);
+
+        const folderResult = await runTool("create_asset_folder", {
+          name: inferAssetFolderPath(input.body.message, promptModality),
+        });
+        const folderOutput = folderResult.output as Record<string, JsonValue>;
+        const folderId = typeof folderOutput.folderId === "string" ? folderOutput.folderId : null;
+        const folderName = typeof folderOutput.path === "string"
+          ? folderOutput.path
+          : typeof folderOutput.folderName === "string"
+            ? folderOutput.folderName
+            : inferAssetFolderPath(input.body.message, promptModality);
+
+        const mediaResult = await runTool("generate_media_asset", {
+          prompt: typeof promptOutput.prompt === "string" ? promptOutput.prompt : input.body.message,
+          type: promptModality,
+          model: input.body.models?.[promptModality] ?? undefined,
+          folderId,
+          folderName,
+          title: inferAssetTitle(input.body.message, promptModality),
+          negativePrompt: typeof promptOutput.negative_prompt === "string" ? promptOutput.negative_prompt : undefined,
+          parameters: isRecord(promptOutput.parameters) ? promptOutput.parameters : undefined,
+          structuredPrompt: promptOutput,
+          metadata: {
+            workflow: "asset_generation",
+            folderPath: folderName,
+          },
+        });
+        const mediaOutput = mediaResult.output as Record<string, JsonValue>;
+        const assetId = typeof mediaOutput.assetId === "string" ? mediaOutput.assetId : "";
+
+        const attachResult = await runTool("attach_asset_to_project", {
+          assetId,
+          projectId: input.projectId,
+          type: folderName === "Thumbnails" ? "thumbnail" : promptModality,
+        });
+
+        let updatedGoal = input.activeGoal ?? null;
+        if (updatedGoal) {
+          updatedGoal = await completeGoalStep({
+            goalId: updatedGoal.id,
+            step: `${promptModality} asset generated and attached to the project.`,
+            stage: "generating_assets",
+            nextActions: nextActionsForGoalStage("generating_assets"),
+            metadata: {
+              lastCompletedWorkflow: "asset_generation",
+              lastGeneratedAssetId: assetId,
+            },
+          });
+          emit("goal", { activeGoal: summarizeAgentGoalForClient(updatedGoal) });
+        }
+
+        const attachmentOutput = attachResult.output as Record<string, JsonValue>;
+        const isAttached = attachmentOutput.attached !== false;
+        const finalParts = [
+          `Prompt generated: ${String(promptOutput.prompt ?? input.body.message)}`,
+          `Model used: ${String(mediaOutput.model ?? input.body.models?.[promptModality] ?? "default")}`,
+          `Folder saved to: ${String(mediaOutput.folderName ?? folderName)}`,
+          `Project attachment: ${isAttached ? "visible in Project Hub asset library" : "created"}.`,
+          "Next suggested action: Review the asset in Project Hub, then request a variation or move it into the edit.",
+        ];
+
+        if (updatedGoal) {
+          finalParts.push(
+            "",
+            formatGoalFinalResponse({
+              goal: updatedGoal,
+              whatChanged: `Generated and attached a ${promptModality} asset.`,
+              nextAction: getGoalNextAction(updatedGoal),
+            }),
+          );
+        }
+
+        const finalMessage = finalParts.join("\n");
+        emit("chunk", { text: finalMessage });
+        await appendAgentMessage({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          role: "assistant",
+          content: finalMessage,
+          model: input.body.models?.chat ?? null,
+          provider: "agent-runtime-v2",
+          metadata: {
+            workflow: "asset_generation",
+            plan: encodeRuntimeV2Plan(plan),
+            assetId,
+            folderId,
+            ...(updatedGoal ? { goalId: updatedGoal.id, goalStage: getGoalStage(updatedGoal) } : {}),
+          },
+        });
+        await completeAgentRun(input.runId, {
+          command: "generate",
+          respondedWith: "runtime-v2:asset",
+          assetId,
+          folderId,
+          ...(updatedGoal ? { goalId: updatedGoal.id, goalStage: getGoalStage(updatedGoal) } : {}),
+        });
+        controller.close();
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "Unable to complete asset workflow.";
+        await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
+        if (activeToolCallId) {
+          await Promise.resolve(failAgentToolCall(activeToolCallId, message)).catch(() => null);
+        }
+        emit("error", { error: message });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+function normalizeRuntimeAssetModality(value: unknown, fallback: RuntimeAssetModality): RuntimeAssetModality {
+  return value === "video" || value === "audio" || value === "image" ? value : fallback;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -1035,6 +1369,29 @@ export async function POST(
         project,
         activeGoal,
         modeDecision,
+      });
+    }
+
+    if (
+      isRuntimeV2Enabled() &&
+      !effectiveCommand &&
+      (modeDecision?.suggestedWorkflow === "asset_generation" || isAssetGenerationRequest(body.message))
+    ) {
+      return createRuntimeV2AssetStream({
+        body,
+        projectId,
+        threadId,
+        runId: runIdForResponse,
+        project,
+        activeGoal,
+        modeDecision: modeDecision ?? {
+          mode: "execute",
+          confidence: 0.8,
+          reason: "User requested asset generation.",
+          shouldAskQuestion: false,
+          shouldUseTools: true,
+          suggestedWorkflow: "asset_generation",
+        },
       });
     }
 

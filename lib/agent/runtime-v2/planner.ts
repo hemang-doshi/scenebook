@@ -1,4 +1,9 @@
 import type { ProjectWorkspace } from "@/lib/data/repository";
+import {
+  hasSpecificAssetDirection,
+  inferAssetModality,
+  isAssetGenerationRequest,
+} from "@/lib/agent/runtime-v2/asset-intent";
 import type { AgentMode, AgentModeDecision } from "@/lib/agent/runtime-v2/mode-selector";
 import type { CreativeBrief } from "@/lib/agent/runtime-v2/creative-brief";
 import { getToolByName } from "@/lib/agent/runtime-v2/tools/registry";
@@ -142,7 +147,7 @@ export function buildAgentPlan(input: BuildAgentPlanInput): AgentPlan {
     return {
       ...basePlan,
       intent: "execute_tools",
-      steps: buildAssetSteps(workflow, creativeBrief),
+      steps: buildAssetSteps(workflow),
     };
   }
 
@@ -227,11 +232,11 @@ function hasAssetField(
   project: ProjectWorkspace | null,
 ): boolean {
   if (field === "modality") {
-    return hasValue(brief.modality) || /\b(image|video|audio)\b/i.test(rawUserMessage);
+    return hasValue(brief.modality) || Boolean(inferAssetModality(rawUserMessage));
   }
 
   if (field === "promptOrCreativeDirection") {
-    return hasValue(brief.prompt) || hasValue(brief.creativeDirection) || rawUserMessage.trim().length > 20;
+    return hasValue(brief.prompt) || hasValue(brief.creativeDirection) || hasSpecificAssetDirection(rawUserMessage);
   }
 
   if (field === "projectFormat") {
@@ -284,6 +289,15 @@ function buildQuestions(
     .map((field) => workflow.questionStrategy.questionsByField[field])
     .filter((question): question is string => Boolean(question));
 
+  if (
+    workflow.name === "asset_generation" &&
+    missingFields.includes("promptOrCreativeDirection") &&
+    !missingFields.includes("modality") &&
+    questions.length < workflow.questionStrategy.maxQuestions
+  ) {
+    questions.push("Should it feel cinematic, clean SaaS, or raw devlog?");
+  }
+
   return (questions.length > 0 ? questions : fallbackQuestions).slice(0, workflow.questionStrategy.maxQuestions);
 }
 
@@ -307,12 +321,8 @@ function buildToolSteps(toolNames: string[]): AgentPlanStep[] {
   });
 }
 
-function buildAssetSteps(workflow: AgentWorkflow, brief: CreativeBrief): AgentPlanStep[] {
-  const toolSequence = hasValue(brief.folderIntent)
-    ? ["generate_prompt_json", "generate_media_asset", "create_asset_folder", "attach_asset_to_project"]
-    : workflow.defaultToolSequence;
-
-  return buildToolSteps(toolSequence);
+function buildAssetSteps(workflow: AgentWorkflow): AgentPlanStep[] {
+  return buildToolSteps(workflow.defaultToolSequence);
 }
 
 function buildReviewSteps(rawUserMessage: string, workflow: AgentWorkflow | null): AgentPlanStep[] {
@@ -363,8 +373,7 @@ function summarizeProject(project: ProjectWorkspace | null): AgentPlanProjectCon
 }
 
 function isAssetRequest(rawUserMessage: string): boolean {
-  return /\b(generate|create|make|draft)\b/i.test(rawUserMessage)
-    && /\b(asset|image|video|audio|prompt json|prompt)\b/i.test(rawUserMessage);
+  return isAssetGenerationRequest(rawUserMessage);
 }
 
 function isPublishRequest(rawUserMessage: string): boolean {

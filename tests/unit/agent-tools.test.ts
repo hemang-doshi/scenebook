@@ -21,6 +21,8 @@ const getAgentHistory = vi.fn();
 const getAgentToolCall = vi.fn();
 const listAgentThreads = vi.fn();
 const generateProjectMedia = vi.fn();
+const getOrCreateAssetFolderPath = vi.fn();
+const moveAssetToFolder = vi.fn();
 const getLatestProjectMemory = vi.fn().mockResolvedValue(null);
 const createMemorySnapshot = vi.fn();
 const createProjectArtifact = vi.fn();
@@ -33,6 +35,11 @@ vi.mock("@/lib/ai/client", () => ({
 
 vi.mock("@/lib/generation/generate-media", () => ({
   generateProjectMedia,
+}));
+
+vi.mock("@/lib/assets/asset-folders", () => ({
+  getOrCreateAssetFolderPath,
+  moveAssetToFolder,
 }));
 
 vi.mock("@/lib/agent/runtime", () => ({
@@ -257,6 +264,8 @@ describe("agent tools", () => {
     getAgentToolCall.mockReset();
     listAgentThreads.mockReset();
     generateProjectMedia.mockReset();
+    getOrCreateAssetFolderPath.mockReset();
+    moveAssetToFolder.mockReset();
     getLatestProjectMemory.mockResolvedValue(null);
     createMemorySnapshot.mockReset();
     createProjectArtifact.mockReset();
@@ -901,6 +910,204 @@ describe("agent tools", () => {
     expect(systemInstruction).toContain("Stage: scripting");
     expect(finalText).toContain("Current goal: Launch the desk lighting reel");
     expect(finalText).toContain("Next suggested action: Draft the opening shot options.");
+  });
+
+  test("runtime-v2 image request generates, organizes, and attaches an asset", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-prompt" })
+      .mockResolvedValueOnce({ id: "tool-call-folder" })
+      .mockResolvedValueOnce({ id: "tool-call-media" })
+      .mockResolvedValueOnce({ id: "tool-call-attach" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    getOrCreateAssetFolderPath.mockResolvedValue({
+      folder: { id: "folder-generated-images", name: "Images" },
+      path: "Generated / Images",
+      alreadyExisted: false,
+    });
+    generateProjectMedia.mockResolvedValue({
+      generationId: "generation-asset-1",
+      assetId: "asset-1",
+      url: "https://example.com/generated.png",
+      path: "project/generated.png",
+      folderId: "folder-generated-images",
+      folderName: "Generated / Images",
+      model: "black-forest-labs/FLUX.1-Krea-dev",
+      provider: "huggingface",
+      prompt: "A cinematic vertical desk lighting hero frame.",
+    });
+    generateText.mockResolvedValue(`{"modality":"image","prompt":"A cinematic vertical desk lighting hero frame.","aspect_ratio":"9:16","negative_prompt":"blurry, watermark","output":{"aspect_ratio":"9:16","width":1024,"height":1792}}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "generate an image of a cinematic desk lighting setup for an Instagram Reel",
+          models: { image: "black-forest-labs/FLUX.1-Krea-dev", chat: "gemini-2.5-flash" },
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("text/event-stream");
+    const events = await readSseEvents(response);
+
+    expect(events.find((event) => event.type === "plan")).toMatchObject({
+      plan: {
+        workflow: "asset_generation",
+        steps: [
+          "generate_prompt_json",
+          "create_asset_folder",
+          "generate_media_asset",
+          "attach_asset_to_project",
+        ],
+      },
+    });
+    expect(getOrCreateAssetFolderPath).toHaveBeenCalledWith("project-1", "Generated / Images", null);
+    expect(generateProjectMedia).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      userId: "user-1",
+      modality: "image",
+      modelId: "black-forest-labs/FLUX.1-Krea-dev",
+      folderId: "folder-generated-images",
+      negativePrompt: "blurry, watermark",
+      structuredPrompt: expect.objectContaining({
+        kind: "prompt_json",
+        prompt: "A cinematic vertical desk lighting hero frame.",
+      }),
+    }));
+    expect(events.find((event) =>
+      event.type === "tool" &&
+      event.tool?.toolName === "Generate Media Asset" &&
+      event.tool?.status === "completed"
+    )).toMatchObject({
+      tool: {
+        status: "completed",
+        result: {
+          output: {
+            kind: "media_asset",
+            assetId: "asset-1",
+            url: "https://example.com/generated.png",
+            folderName: "Generated / Images",
+          },
+        },
+      },
+    });
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+    expect(finalText).toContain("Prompt generated:");
+    expect(finalText).toContain("Folder saved to: Generated / Images");
+    expect(finalText).toContain("Next suggested action:");
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      respondedWith: "runtime-v2:asset",
+      assetId: "asset-1",
+      folderId: "folder-generated-images",
+    }));
+  });
+
+  test("runtime-v2 vague asset request asks questions before generation", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "generate an image",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "plan")).toMatchObject({
+      plan: {
+        intent: "ask_questions",
+        workflow: "asset_generation",
+      },
+    });
+    expect(events.find((event) => event.type === "chunk")?.text).toContain("Before I generate this asset");
+    expect(events.find((event) => event.type === "chunk")?.text).toContain("Should it feel cinematic");
+    expect(createAgentToolCall).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
+    expect(generateProjectMedia).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 failed asset generation surfaces a tool_failed event", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-prompt" })
+      .mockResolvedValueOnce({ id: "tool-call-folder" })
+      .mockResolvedValueOnce({ id: "tool-call-media" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    failAgentRun.mockResolvedValue({});
+    failAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    getOrCreateAssetFolderPath.mockResolvedValue({
+      folder: { id: "folder-generated-images", name: "Images" },
+      path: "Generated / Images",
+      alreadyExisted: true,
+    });
+    generateText.mockResolvedValue(`{"modality":"image","prompt":"A cinematic vertical desk lighting hero frame.","aspect_ratio":"9:16"}`);
+    generateProjectMedia.mockRejectedValue(new Error("No media provider available."));
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "generate an image of a cinematic desk lighting setup for an Instagram Reel",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "tool_failed")).toMatchObject({
+      tool: {
+        id: "tool-call-media",
+        toolName: "Generate Media Asset",
+        status: "failed",
+      },
+      error: "No media provider available.",
+    });
+    expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({
+      tool: {
+        id: "tool-call-media",
+        status: "failed",
+        errorMessage: "No media provider available.",
+      },
+    });
+    expect(failAgentRun).toHaveBeenCalledWith("run-1", "No media provider available.");
+    expect(completeAgentRun).not.toHaveBeenCalledWith("run-1", expect.objectContaining({
+      respondedWith: "runtime-v2:asset",
+    }));
   });
 
   test("runtime-v2 natural-language save request updates Script Lab", async () => {
