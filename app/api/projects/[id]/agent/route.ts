@@ -307,7 +307,10 @@ function shouldRequireRuntimeV2Approval(input: {
   }
 
   if (tool.name === "update_project_status") {
-    return !(payload.status === "scripted" && payload.reason === "script_generated");
+    return !(
+      (payload.status === "scripted" && payload.reason === "script_generated") ||
+      payload.reason === "natural_language_workspace_control"
+    );
   }
 
   if (tool.sideEffect === "editor_write") {
@@ -1104,6 +1107,412 @@ function createRuntimeV2ReviewStream(input: {
       "Connection": "keep-alive",
     },
   });
+}
+
+type WorkspaceControlAction =
+  | { kind: "ask"; question: string }
+  | { kind: "tools"; summary: string; tools: Array<{ name: string; payload: Record<string, unknown> }> };
+
+function createRuntimeV2WorkspaceControlStream(input: {
+  body: z.infer<typeof requestSchema>;
+  projectId: string;
+  threadId: string;
+  runId: string;
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+  activeGoal?: AgentGoalRecord | null;
+  modeDecision: AgentModeDecision;
+}) {
+  const encoder = new TextEncoder();
+  const action = parseWorkspaceControlAction(input.body.message, input.project);
+  const plan = buildAgentPlan({
+    modeDecision: input.modeDecision,
+    rawUserMessage: input.body.message,
+    project: input.project,
+    parsedSlashCommand: null,
+  });
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let activeToolCallId: string | null = null;
+      const emit = (type: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(encodeSse(type, payload)));
+      };
+
+      const emitTool = (
+        id: string,
+        toolName: string,
+        status: RuntimeV2ToolStatus,
+        metadata: {
+          requiresApproval: boolean;
+          approvalPolicy: string;
+          sideEffect: string;
+          purpose?: string;
+          changedFields?: string[];
+          result?: AgentRuntimeToolResult<Record<string, JsonValue>>;
+          errorMessage?: string;
+        },
+      ) => {
+        const toolEvent: RuntimeV2ToolEventPayload = {
+          id,
+          command: null,
+          status,
+          toolName,
+          requiresApproval: metadata.requiresApproval,
+          approvalPolicy: metadata.approvalPolicy,
+          sideEffect: metadata.sideEffect,
+          purpose: metadata.purpose,
+          changedFields: metadata.changedFields,
+          errorMessage: metadata.errorMessage ?? null,
+          result: metadata.result ?? null,
+        };
+        emit("tool", { tool: toolEvent });
+        emit(runtimeV2ToolEventType(status), {
+          tool: toolEvent,
+          ...(status === "failed" ? { error: metadata.errorMessage ?? "Workspace control tool failed." } : {}),
+        });
+      };
+
+      const runTool = async (toolName: string, payload: Record<string, unknown>) => {
+        const tool = getRuntimeV2ToolByName(toolName);
+        if (!tool) {
+          throw new Error(`Runtime v2 tool not found: ${toolName}`);
+        }
+
+        const requiresApproval = shouldRequireRuntimeV2Approval({ tool, payload, project: input.project });
+        const toolCall = await createRuntimeV2ToolCall({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          runId: input.runId,
+          toolName: tool.displayName,
+          command: null,
+          requiresApproval,
+          payload,
+        });
+        activeToolCallId = toolCall.id;
+        const toolEventMetadata = {
+          requiresApproval,
+          approvalPolicy: tool.approvalPolicy,
+          sideEffect: tool.sideEffect,
+          purpose: tool.description,
+          changedFields: changedFieldsForRuntimeV2Tool(tool.name, {}, payload),
+        };
+
+        emitTool(toolCall.id, tool.displayName, "planned", {
+          ...toolEventMetadata,
+          result: {
+            message: "Tool planned.",
+            output: { kind: "tool_plan", activity: toolName },
+          },
+        });
+        emitTool(toolCall.id, tool.displayName, "running", {
+          ...toolEventMetadata,
+          result: {
+            message: "Running tool.",
+            output: { kind: "tool_progress", activity: toolName },
+          },
+        });
+
+        try {
+          const parsedPayload = tool.inputSchema.parse(payload);
+          const result = await tool.handler({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            runId: input.runId,
+            toolCallId: toolCall.id,
+            rawInput: input.body.message,
+            project: input.project,
+            selectedModel: input.body.models?.chat ?? null,
+            selectedModels: input.body.models ?? null,
+          }, parsedPayload) as AgentRuntimeToolResult<Record<string, JsonValue>>;
+
+          await completeAgentToolCall(toolCall.id, result.output, "completed");
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "completed", {
+            ...toolEventMetadata,
+            changedFields: changedFieldsForRuntimeV2Tool(tool.name, result.output, payload),
+            result,
+          });
+          return result;
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : "Workspace control tool failed.";
+          await Promise.resolve(failAgentToolCall(toolCall.id, message)).catch(() => null);
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "failed", {
+            ...toolEventMetadata,
+            errorMessage: message,
+          });
+          throw caught;
+        }
+      };
+
+      try {
+        emit("mode", {
+          threadId: input.threadId,
+          runId: input.runId,
+          mode: "execute",
+          workflow: "workspace_control",
+          reason: input.modeDecision.reason,
+        });
+        emit("plan", {
+          threadId: input.threadId,
+          runId: input.runId,
+          plan: encodeRuntimeV2Plan(plan),
+        });
+        emit("meta", {
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+
+        if (action.kind === "ask") {
+          emit("chunk", { text: action.question });
+          await appendAgentMessage({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            role: "assistant",
+            content: action.question,
+            model: input.body.models?.chat ?? null,
+            provider: "agent-runtime-v2",
+            metadata: {
+              mode: "workspace_control",
+              plan: encodeRuntimeV2Plan(plan),
+            },
+          });
+          await completeAgentRun(input.runId, {
+            mode: "workspace_control",
+            respondedWith: "runtime-v2:workspace:question",
+          });
+          controller.close();
+          return;
+        }
+
+        const completed: AgentRuntimeToolResult<Record<string, JsonValue>>[] = [];
+        for (const toolAction of action.tools) {
+          const payload = { ...toolAction.payload };
+          if (toolAction.name === "move_asset_to_folder" && typeof payload.folderName === "string") {
+            const folderResult = await runTool("create_asset_folder", { name: payload.folderName });
+            const folderOutput = folderResult.output as Record<string, JsonValue>;
+            payload.folderId = typeof folderOutput.folderId === "string" ? folderOutput.folderId : payload.folderId;
+            delete payload.folderName;
+          }
+          completed.push(await runTool(toolAction.name, payload));
+        }
+
+        const finalMessage = [
+          action.summary,
+          ...completed.map((result) => result.message),
+          "Suggested next action: Review the updated workspace state.",
+        ].join("\n");
+        emit("chunk", { text: finalMessage });
+        await appendAgentMessage({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          role: "assistant",
+          content: finalMessage,
+          model: input.body.models?.chat ?? null,
+          provider: "agent-runtime-v2",
+          metadata: {
+            mode: "workspace_control",
+            plan: encodeRuntimeV2Plan(plan),
+          },
+        });
+        await completeAgentRun(input.runId, {
+          mode: "workspace_control",
+          respondedWith: "runtime-v2:workspace",
+        });
+        controller.close();
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "Unable to control workspace.";
+        await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
+        if (activeToolCallId) {
+          await Promise.resolve(failAgentToolCall(activeToolCallId, message)).catch(() => null);
+        }
+        emit("error", { error: message });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+function parseWorkspaceControlAction(
+  rawMessage: string,
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>,
+): WorkspaceControlAction {
+  const message = rawMessage.trim();
+
+  if (/\b(make this my cta|use this as cta)\b/i.test(message)) {
+    const cta = extractAfterMarker(message, /(?:make this my cta|use this as cta)\s*:?\s*/i);
+    return cta
+      ? {
+          kind: "tools",
+          summary: "Updated Script Lab CTA.",
+          tools: [{ name: "update_script_lab", payload: { cta } }],
+        }
+      : { kind: "ask", question: "What CTA should I save?" };
+  }
+
+  if (/\bmake this (my|the) hook\b/i.test(message)) {
+    const hook = extractAfterMarker(message, /make this (?:my|the) hook\s*:?\s*/i);
+    return hook
+      ? {
+          kind: "tools",
+          summary: "Updated Script Lab hook.",
+          tools: [{ name: "update_script_lab", payload: { hook } }],
+        }
+      : { kind: "ask", question: "What hook should I save?" };
+  }
+
+  if (/\badd this to script\b/i.test(message)) {
+    const script = extractAfterMarker(message, /add this to script\s*:?\s*/i);
+    return script
+      ? {
+          kind: "tools",
+          summary: "Updated Script Lab script.",
+          tools: [{ name: "update_script_lab", payload: { script } }],
+        }
+      : { kind: "ask", question: "What script text should I add?" };
+  }
+
+  if (/\bsave this\b/i.test(message)) {
+    return { kind: "ask", question: "Where should I save this: hook, script, caption, CTA, tasks, or an artifact?" };
+  }
+
+  if (/\badd (these|\d+) (as )?tasks\b/i.test(message)) {
+    const labels = extractTaskLabels(message);
+    return labels.length > 0
+      ? {
+          kind: "tools",
+          summary: "Added tasks to the shoot pack.",
+          tools: [{
+            name: "update_shoot_pack",
+            payload: {
+              missingAssets: labels.map((label) => ({ label, done: false })),
+            },
+          }],
+        }
+      : { kind: "ask", question: "Which tasks should I add to the shoot pack?" };
+  }
+
+  if (/\bmark ready to shoot\b/i.test(message)) {
+    return {
+      kind: "tools",
+      summary: "Marked the project ready to shoot.",
+      tools: [{
+        name: "update_project_status",
+        payload: { status: "ready_to_shoot", reason: "natural_language_workspace_control" },
+      }],
+    };
+  }
+
+  if (/\bcreate (a )?folder\b/i.test(message)) {
+    const folderName = extractFolderName(message);
+    return folderName
+      ? {
+          kind: "tools",
+          summary: `Created asset folder ${folderName}.`,
+          tools: [{ name: "create_asset_folder", payload: { name: folderName } }],
+        }
+      : { kind: "ask", question: "What should I name the folder?" };
+  }
+
+  if (/\bmove asset\b/i.test(message)) {
+    const folderName = extractMoveFolderName(message) ?? "Thumbnails";
+    const asset = resolveAssetForMove(message, project);
+    if (!asset) {
+      return { kind: "ask", question: `Which asset should I move to ${folderName}?` };
+    }
+
+    return {
+      kind: "tools",
+      summary: `Moved ${asset.title} to ${folderName}.`,
+      tools: [{ name: "move_asset_to_folder", payload: { assetId: asset.id, folderName } }],
+    };
+  }
+
+  if (/\borganize assets\b/i.test(message)) {
+    return {
+      kind: "tools",
+      summary: "Created default organization folders.",
+      tools: [
+        { name: "create_asset_folder", payload: { name: "Images" } },
+        { name: "create_asset_folder", payload: { name: "Videos" } },
+        { name: "create_asset_folder", payload: { name: "Audio" } },
+      ],
+    };
+  }
+
+  if (/\bprepare for instagram\b/i.test(message)) {
+    const caption = project?.scriptLab.caption?.trim() || project?.title || "Prepared Instagram post.";
+    return {
+      kind: "tools",
+      summary: "Prepared Instagram post package.",
+      tools: [{ name: "prepare_instagram_post", payload: { caption } }],
+    };
+  }
+
+  return { kind: "ask", question: "What workspace field should I update?" };
+}
+
+function extractAfterMarker(message: string, marker: RegExp) {
+  return message.replace(marker, "").trim().replace(/^[:\s]+/, "").replace(/\s+$/g, "");
+}
+
+function extractTaskLabels(message: string) {
+  const source = message.includes(":")
+    ? message.slice(message.indexOf(":") + 1)
+    : message.replace(/.*?\badd (?:these|\d+) (?:as )?tasks\b/i, "");
+
+  return source
+    .split(/,|\n|;/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function extractFolderName(message: string) {
+  const match = message.match(/\bfolder(?: named| called)?\s+(.+)$/i);
+  return match?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
+}
+
+function extractMoveFolderName(message: string) {
+  const match = message.match(/\bto\s+(.+)$/i);
+  return match?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
+}
+
+function resolveAssetForMove(
+  message: string,
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>,
+) {
+  const assets = project?.assets ?? [];
+  if (assets.length === 0) {
+    return null;
+  }
+
+  const folderName = extractMoveFolderName(message);
+  const descriptor = message
+    .replace(/\bmove asset\b/i, "")
+    .replace(folderName ? new RegExp(`\\bto\\s+${escapeRegExp(folderName)}$`, "i") : /\bto\s+.+$/i, "")
+    .trim()
+    .toLowerCase();
+
+  if (!descriptor) {
+    return assets.length === 1 ? assets[0] : null;
+  }
+
+  return assets.find((asset) =>
+    asset.title.toLowerCase().includes(descriptor) ||
+    descriptor.includes(asset.title.toLowerCase())
+  ) ?? null;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function createRuntimeV2ScriptStream(input: {
@@ -2008,6 +2417,18 @@ export async function POST(
 
     if (isRuntimeV2Enabled() && !effectiveCommand && modeDecision?.mode === "review") {
       return createRuntimeV2ReviewStream({
+        body,
+        projectId,
+        threadId,
+        runId: runIdForResponse,
+        project,
+        activeGoal,
+        modeDecision,
+      });
+    }
+
+    if (isRuntimeV2Enabled() && !effectiveCommand && modeDecision?.suggestedWorkflow === "workspace_control") {
+      return createRuntimeV2WorkspaceControlStream({
         body,
         projectId,
         threadId,

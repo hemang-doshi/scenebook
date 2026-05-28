@@ -127,6 +127,14 @@ export function buildAgentPlan(input: BuildAgentPlanInput): AgentPlan {
     };
   }
 
+  if (input.modeDecision.suggestedWorkflow === "workspace_control") {
+    return {
+      ...basePlan,
+      intent: "execute_tools",
+      steps: buildWorkspaceControlSteps(input.rawUserMessage),
+    };
+  }
+
   if (isPublishRequest(input.rawUserMessage)) {
     return {
       ...basePlan,
@@ -323,6 +331,34 @@ function buildToolSteps(toolNames: string[]): AgentPlanStep[] {
 
 function buildAssetSteps(workflow: AgentWorkflow): AgentPlanStep[] {
   return buildToolSteps(workflow.defaultToolSequence);
+}
+
+function buildWorkspaceControlSteps(rawUserMessage: string): AgentPlanStep[] {
+  if (/\b(make this my cta|use this as cta|make this (my|the) hook|add this to script|save this)\b/i.test(rawUserMessage)) {
+    return buildToolSteps(["update_script_lab"]);
+  }
+
+  if (/\b(add (these|\d+) (as )?tasks)\b/i.test(rawUserMessage)) {
+    return buildToolSteps(["update_shoot_pack"]);
+  }
+
+  if (/\b(mark ready to shoot)\b/i.test(rawUserMessage)) {
+    return buildToolSteps(["update_project_status"]);
+  }
+
+  if (/\b(create (a )?folder|organize assets)\b/i.test(rawUserMessage)) {
+    return buildToolSteps(["create_asset_folder"]);
+  }
+
+  if (/\b(move asset)\b/i.test(rawUserMessage)) {
+    return buildToolSteps(["create_asset_folder", "move_asset_to_folder"]);
+  }
+
+  if (/\b(prepare for instagram)\b/i.test(rawUserMessage)) {
+    return buildToolSteps(["prepare_instagram_post"]);
+  }
+
+  return [];
 }
 
 function buildReviewSteps(rawUserMessage: string, workflow: AgentWorkflow | null): AgentPlanStep[] {

@@ -43,6 +43,7 @@ export function selectAgentMode(input: AgentModeSelectorInput): AgentModeDecisio
 
   const brainstormKeywords = /\b(ideas|angle|options|brainstorm|concepts|hooks|don't know|dont know|not sure|suggest)\b/i;
   const reviewKeywords = /\b(critique|improve|review|feedback|analyze|audit|evaluate|is this good|make it better|make this better|make it more|rewrite this|rewrite it)\b/i;
+  const workspaceControlKeywords = /\b(save this|add this to script|make this (my|the) hook|make this my cta|use this as cta|add (these|\d+) (as )?tasks|mark ready to shoot|create (a )?folder|move asset|organize assets|prepare for instagram)\b/i;
   const planKeywords = /\b(plan|campaign|strategy|outline|roadmap|steps|phase)\b/i;
   const goalKeywords = /\b(end-to-end|end to end|from idea to publish|from idea through publish|idea to publish|help me make|help make|complete this project|finish this project|entire|full workflow|go through)\b/i;
   const executeKeywords = /\b(write|generate|save|update|create|import|export|apply)\b/i;
@@ -56,6 +57,18 @@ export function selectAgentMode(input: AgentModeSelectorInput): AgentModeDecisio
       shouldAskQuestion: false,
       shouldUseTools: /\b(save|update|apply|persist|store)\b/i.test(rawMessage),
       suggestedWorkflow: /\b(script|hook|caption|rewrite|make it|improve)\b/i.test(rawMessage) ? "script" : undefined,
+      goalStageUpdate,
+    };
+  }
+
+  if (workspaceControlKeywords.test(rawMessage)) {
+    return {
+      mode: "execute",
+      confidence: 0.88,
+      reason: "User requested a workspace update in natural language.",
+      shouldAskQuestion: false,
+      shouldUseTools: true,
+      suggestedWorkflow: "workspace_control",
       goalStageUpdate,
     };
   }
