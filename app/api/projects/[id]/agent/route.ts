@@ -51,6 +51,13 @@ import {
 } from "@/lib/agent/runtime-v2/goals";
 import { selectAgentMode, type AgentModeDecision } from "@/lib/agent/runtime-v2/mode-selector";
 import { buildAgentPlan, type AgentPlan } from "@/lib/agent/runtime-v2/planner";
+import {
+  buildProducerReview,
+  formatProducerReview,
+  scriptLabReviewPayload,
+  shouldSaveImprovement,
+  shouldRewriteFromReview,
+} from "@/lib/agent/runtime-v2/reflection";
 import { getToolByName as getRuntimeV2ToolByName } from "@/lib/agent/runtime-v2/tools/registry";
 import type { AgentRuntimeTool, AgentRuntimeToolResult } from "@/lib/agent/runtime-v2/tools/types";
 import {
@@ -293,6 +300,9 @@ function shouldRequireRuntimeV2Approval(input: {
   }
 
   if (tool.name === "update_script_lab") {
+    if (payload.overwrite === true) {
+      return false;
+    }
     return wouldOverwriteFinalizedScript(payload, project);
   }
 
@@ -706,6 +716,381 @@ function createRuntimeV2GoalStream(input: {
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Unable to update goal mode.";
         await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
+        emit("error", { error: message });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+function createRuntimeV2ReviewStream(input: {
+  body: z.infer<typeof requestSchema>;
+  projectId: string;
+  threadId: string;
+  runId: string;
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+  activeGoal?: AgentGoalRecord | null;
+  modeDecision: AgentModeDecision;
+}) {
+  const encoder = new TextEncoder();
+  const review = buildProducerReview({
+    rawMessage: input.body.message,
+    project: input.project,
+  });
+  const shouldRewrite = shouldRewriteFromReview(input.body.message);
+  const shouldSave = shouldSaveImprovement(input.body.message);
+  const plan = buildAgentPlan({
+    modeDecision: input.modeDecision,
+    workflow: shouldRewrite ? "script" : undefined,
+    rawUserMessage: input.body.message,
+    project: input.project,
+    creativeBrief: {},
+    parsedSlashCommand: null,
+  });
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let activeToolCallId: string | null = null;
+      const emit = (type: string, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(encodeSse(type, payload)));
+      };
+
+      const emitTool = (
+        id: string,
+        toolName: string,
+        status: RuntimeV2ToolStatus,
+        metadata: {
+          requiresApproval: boolean;
+          approvalPolicy: string;
+          sideEffect: string;
+          purpose?: string;
+          changedFields?: string[];
+          result?: AgentRuntimeToolResult<Record<string, JsonValue>>;
+          errorMessage?: string;
+        },
+      ) => {
+        const toolEvent: RuntimeV2ToolEventPayload = {
+          id,
+          command: "script",
+          status,
+          toolName,
+          requiresApproval: metadata.requiresApproval,
+          approvalPolicy: metadata.approvalPolicy,
+          sideEffect: metadata.sideEffect,
+          purpose: metadata.purpose,
+          changedFields: metadata.changedFields,
+          errorMessage: metadata.errorMessage ?? null,
+          result: metadata.result ?? null,
+        };
+        emit("tool", { tool: toolEvent });
+        emit(runtimeV2ToolEventType(status), {
+          tool: toolEvent,
+          ...(status === "failed" ? { error: metadata.errorMessage ?? "Runtime v2 review tool failed." } : {}),
+        });
+      };
+
+      const runTool = async (toolName: string, payload: Record<string, unknown>) => {
+        const tool = getRuntimeV2ToolByName(toolName);
+        if (!tool) {
+          throw new Error(`Runtime v2 tool not found: ${toolName}`);
+        }
+
+        const requiresApproval = shouldRequireRuntimeV2Approval({ tool, payload, project: input.project });
+        const toolCall = await createRuntimeV2ToolCall({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          runId: input.runId,
+          toolName: tool.displayName,
+          command: "script",
+          requiresApproval,
+          payload,
+        });
+        activeToolCallId = toolCall.id;
+        const toolEventMetadata = {
+          requiresApproval,
+          approvalPolicy: tool.approvalPolicy,
+          sideEffect: tool.sideEffect,
+          purpose: tool.description,
+          changedFields: changedFieldsForRuntimeV2Tool(tool.name, {}, payload),
+        };
+
+        emitTool(toolCall.id, tool.displayName, "planned", {
+          ...toolEventMetadata,
+          result: {
+            message: "Tool planned.",
+            output: { kind: "tool_plan", activity: toolName },
+          },
+        });
+
+        if (requiresApproval) {
+          const output = approvalRequestOutput({
+            tool,
+            payload,
+            reason: "This review action requires approval before it can run.",
+          });
+          await completeAgentToolCall(toolCall.id, output, "awaiting_approval");
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "awaiting_approval", {
+            ...toolEventMetadata,
+            result: {
+              message: "Approval required before this review tool can run.",
+              output,
+            },
+          });
+          throw new RuntimeV2ApprovalRequired(toolCall.id, tool.displayName);
+        }
+
+        emitTool(toolCall.id, tool.displayName, "running", {
+          ...toolEventMetadata,
+          result: {
+            message: "Running tool.",
+            output: { kind: "tool_progress", activity: toolName },
+          },
+        });
+
+        try {
+          const parsedPayload = tool.inputSchema.parse(payload);
+          const result = await tool.handler({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            runId: input.runId,
+            toolCallId: toolCall.id,
+            rawInput: input.body.message,
+            project: input.project,
+            selectedModel: input.body.models?.chat ?? null,
+            selectedModels: input.body.models ?? null,
+            emitProgress: async (activity) => {
+              emitTool(toolCall.id, tool.displayName, "running", {
+                ...toolEventMetadata,
+                result: {
+                  message: activity,
+                  output: { kind: "tool_progress", activity },
+                },
+              });
+            },
+          }, parsedPayload) as AgentRuntimeToolResult<Record<string, JsonValue>>;
+
+          await completeAgentToolCall(toolCall.id, result.output, "completed");
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "completed", {
+            ...toolEventMetadata,
+            changedFields: changedFieldsForRuntimeV2Tool(tool.name, result.output, payload),
+            result,
+          });
+          return { result, toolCallId: toolCall.id };
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : "Runtime v2 review tool failed.";
+          await Promise.resolve(failAgentToolCall(toolCall.id, message)).catch(() => null);
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "failed", {
+            ...toolEventMetadata,
+            errorMessage: message,
+          });
+          throw caught;
+        }
+      };
+
+      try {
+        emit("mode", {
+          threadId: input.threadId,
+          runId: input.runId,
+          mode: "review",
+          reason: input.modeDecision.reason,
+        });
+        emit("plan", {
+          threadId: input.threadId,
+          runId: input.runId,
+          plan: encodeRuntimeV2Plan(plan),
+        });
+        emit("meta", {
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+
+        const reviewText = formatProducerReview(review);
+
+        if (!shouldRewrite) {
+          emit("chunk", { text: reviewText });
+          await appendAgentMessage({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            role: "assistant",
+            content: reviewText,
+            model: input.body.models?.chat ?? null,
+            provider: "agent-runtime-v2",
+            metadata: {
+              mode: "review",
+              review,
+              plan: encodeRuntimeV2Plan(plan),
+            },
+          });
+          await completeAgentRun(input.runId, {
+            mode: "review",
+            respondedWith: "runtime-v2:review",
+          });
+          controller.close();
+          return;
+        }
+
+        const source = review.sourceText || scriptLabReviewPayload(input.project?.scriptLab ?? {
+          angle: "",
+          hook: "",
+          outline: "",
+          script: "",
+          caption: "",
+          onScreenText: "",
+          cta: "",
+          notes: "",
+        }).script as string;
+        const critique = await runTool("critique_script", {
+          hook: input.project?.scriptLab.hook,
+          script: source,
+          caption: input.project?.scriptLab.caption,
+          cta: input.project?.scriptLab.cta,
+          criteria: ["producer_fit", "clarity", "visual_payoff", "cta"],
+        });
+        const rewrite = await runTool("generate_script_package", {
+          prompt: [
+            "Rewrite this as an improved producer-ready version.",
+            `User direction: ${input.body.message}`,
+            `Producer review:\n${reviewText}`,
+            `Current material:\n${source}`,
+          ].join("\n\n"),
+          brief: {
+            tone: /cinematic/i.test(input.body.message) ? "cinematic" : undefined,
+            platform: input.project?.platform,
+            format: input.project?.format,
+          },
+        });
+        const improved = rewrite.result.output as Record<string, JsonValue>;
+
+        if (!shouldSave) {
+          const finalMessage = [
+            reviewText,
+            "",
+            "Improved version drafted:",
+            String(improved.script ?? improved.hook ?? rewrite.result.message),
+            "",
+            "Suggested next action: Reply with save or update if you want this written to Script Lab.",
+          ].join("\n");
+          emit("chunk", { text: finalMessage });
+          await appendAgentMessage({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            role: "assistant",
+            content: finalMessage,
+            model: input.body.models?.chat ?? null,
+            provider: "agent-runtime-v2",
+            metadata: {
+              mode: "review",
+              review,
+              critique: critique.result.output,
+              improved,
+              plan: encodeRuntimeV2Plan(plan),
+            },
+          });
+          await completeAgentRun(input.runId, {
+            mode: "review",
+            respondedWith: "runtime-v2:review:rewrite",
+          });
+          controller.close();
+          return;
+        }
+
+        const patch = isRecord(improved.scriptLabPatch)
+          ? improved.scriptLabPatch
+          : {
+              hook: improved.hook,
+              outline: Array.isArray(improved.outline) ? improved.outline.join("\n") : improved.outline,
+              script: improved.script,
+              caption: improved.caption,
+              cta: improved.cta,
+              onScreenText: Array.isArray(improved.onScreenText) ? improved.onScreenText.join("\n") : improved.onScreenText,
+            };
+        const update = await runTool("update_script_lab", {
+          ...patch,
+          overwrite: true,
+        });
+        await runTool("create_project_artifact", {
+          title: typeof improved.hook === "string" && improved.hook.trim()
+            ? `Review version: ${improved.hook.slice(0, 100)}`
+            : "Producer review version",
+          artifactType: "script_review_version",
+          payload: {
+            kind: "script_review_version",
+            review,
+            critique: critique.result.output,
+            original: scriptLabReviewPayload(input.project?.scriptLab ?? {
+              angle: "",
+              hook: "",
+              outline: "",
+              script: "",
+              caption: "",
+              onScreenText: "",
+              cta: "",
+              notes: "",
+            }),
+            improved,
+            update: update.result.output,
+          },
+          metadata: {
+            workflow: "review",
+            sourcePrompt: input.body.message,
+          },
+        });
+
+        const finalMessage = [
+          reviewText,
+          "",
+          "Improved version saved to Script Lab.",
+          `Suggested next action: Review the saved version, then decide whether to generate a shot list or ask for another pass.`,
+        ].join("\n");
+        emit("chunk", { text: finalMessage });
+        await appendAgentMessage({
+          projectId: input.projectId,
+          threadId: input.threadId,
+          role: "assistant",
+          content: finalMessage,
+          model: input.body.models?.chat ?? null,
+          provider: "agent-runtime-v2",
+          metadata: {
+            mode: "review",
+            review,
+            critique: critique.result.output,
+            improved,
+            plan: encodeRuntimeV2Plan(plan),
+          },
+        });
+        await completeAgentRun(input.runId, {
+          mode: "review",
+          respondedWith: "runtime-v2:review:update",
+        });
+        controller.close();
+      } catch (caught) {
+        if (isRuntimeV2ApprovalRequired(caught)) {
+          const finalMessage = `${caught.toolName} is waiting for approval before it can run.`;
+          emit("chunk", { text: finalMessage });
+          await Promise.resolve(completeAgentRun(input.runId, {
+            mode: "review",
+            respondedWith: "runtime-v2:review:awaiting_approval",
+            approvalRequiredToolCallId: caught.toolCallId,
+          })).catch(() => null);
+          controller.close();
+          return;
+        }
+        const message = caught instanceof Error ? caught.message : "Unable to complete review mode.";
+        await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
+        if (activeToolCallId) {
+          await Promise.resolve(failAgentToolCall(activeToolCallId, message)).catch(() => null);
+        }
         emit("error", { error: message });
         controller.close();
       }
@@ -1611,6 +1996,18 @@ export async function POST(
 
     if (isRuntimeV2Enabled() && !effectiveCommand && modeDecision?.mode === "goal") {
       return createRuntimeV2GoalStream({
+        body,
+        projectId,
+        threadId,
+        runId: runIdForResponse,
+        project,
+        activeGoal,
+        modeDecision,
+      });
+    }
+
+    if (isRuntimeV2Enabled() && !effectiveCommand && modeDecision?.mode === "review") {
+      return createRuntimeV2ReviewStream({
         body,
         projectId,
         threadId,

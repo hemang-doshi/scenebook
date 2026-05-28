@@ -1124,6 +1124,131 @@ describe("agent tools", () => {
     expect(generateProjectMedia).not.toHaveBeenCalled();
   });
 
+  test("runtime-v2 review-only request critiques without DB writes", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue({
+      ...baseProject,
+      scriptLab: {
+        ...baseProject.scriptLab,
+        hook: "Your desk lighting is killing your edit.",
+        script: "Show the flat desk shot, move the key light, then reveal the before and after.",
+        caption: "Fix the fastest desk lighting mistake.",
+      },
+    });
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "is this good?",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+
+    expect(events[0]).toMatchObject({ type: "mode", mode: "review" });
+    expect(finalText).toContain("Strongest part:");
+    expect(finalText).toContain("Weakest part:");
+    expect(finalText).toContain("Why it may or may not work:");
+    expect(finalText).toContain("One concrete improvement:");
+    expect(finalText).toContain("Suggested next action:");
+    expect(createAgentToolCall).not.toHaveBeenCalled();
+    expect(updateCard).not.toHaveBeenCalled();
+    expect(createProjectArtifact).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 improve and save critiques, rewrites, updates Script Lab, and versions artifact", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-rewrite" })
+      .mockResolvedValueOnce({ id: "tool-call-update" })
+      .mockResolvedValueOnce({ id: "tool-call-artifact" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    createProjectArtifact.mockResolvedValue({ id: "artifact-review-version-1" });
+    const projectWithDraft = {
+      ...baseProject,
+      status: "scripted" as const,
+      scriptLab: {
+        ...baseProject.scriptLab,
+        hook: "Fix your desk lighting.",
+        outline: "Problem\nFix\nReveal",
+        script: "Show the flat desk shot. Move the key light. Reveal the result.",
+        caption: "Desk lighting fix.",
+        cta: "Save this.",
+        onScreenText: "Move the key",
+      },
+    };
+    getProjectWorkspace.mockResolvedValue(projectWithDraft);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    updateCard.mockResolvedValue({
+      ...projectWithDraft,
+      scriptLab: {
+        ...projectWithDraft.scriptLab,
+        hook: "Make your desk look cinematic in 30 seconds.",
+        script: "Open on a flat, lifeless desk frame, then slide in a soft key and practical lamp before revealing the cinematic before-after.",
+      },
+    });
+    generateText.mockResolvedValue(`{"hook":"Make your desk look cinematic in 30 seconds.","outline":["Flat before","Light move","Cinematic reveal"],"script":"Open on a flat, lifeless desk frame, then slide in a soft key and practical lamp before revealing the cinematic before-after.","caption":"Turn a flat desk setup into a cinematic frame.","cta":"Save this lighting reset.","onScreenText":["Flat frame","Soft key","Cinematic reveal"]}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "make it more cinematic and save it",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
+
+    expect(events[0]).toMatchObject({ type: "mode", mode: "review" });
+    expect(events.find((event) => event.type === "tool_completed" && event.tool?.toolName === "Update Script Lab")).toBeTruthy();
+    expect(finalText).toContain("Improved version saved to Script Lab.");
+    expect(updateCard).toHaveBeenCalledWith("project-1", {
+      scriptLab: expect.objectContaining({
+        hook: "Make your desk look cinematic in 30 seconds.",
+        script: expect.stringContaining("cinematic before-after"),
+      }),
+    });
+    expect(createProjectArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      threadId: "thread-1",
+      toolCallId: "tool-call-artifact",
+      artifactType: "script_review_version",
+      payload: expect.objectContaining({
+        original: expect.objectContaining({
+          script: "Show the flat desk shot. Move the key light. Reveal the result.",
+        }),
+        improved: expect.objectContaining({
+          script: expect.stringContaining("cinematic before-after"),
+        }),
+      }),
+    }));
+  });
+
   test("runtime-v2 failed asset generation surfaces a tool_failed event", async () => {
     vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
     createAuthSupabase();

@@ -42,7 +42,7 @@ export function selectAgentMode(input: AgentModeSelectorInput): AgentModeDecisio
   const goalStageUpdate = input.activeGoal ? inferGoalStageUpdate(rawMessage) : undefined;
 
   const brainstormKeywords = /\b(ideas|angle|options|brainstorm|concepts|hooks|don't know|dont know|not sure|suggest)\b/i;
-  const reviewKeywords = /\b(critique|improve|review|feedback|analyze|audit|evaluate)\b/i;
+  const reviewKeywords = /\b(critique|improve|review|feedback|analyze|audit|evaluate|is this good|make it better|make this better|make it more|rewrite this|rewrite it)\b/i;
   const planKeywords = /\b(plan|campaign|strategy|outline|roadmap|steps|phase)\b/i;
   const goalKeywords = /\b(end-to-end|end to end|from idea to publish|from idea through publish|idea to publish|help me make|help make|complete this project|finish this project|entire|full workflow|go through)\b/i;
   const executeKeywords = /\b(write|generate|save|update|create|import|export|apply)\b/i;
@@ -54,7 +54,8 @@ export function selectAgentMode(input: AgentModeSelectorInput): AgentModeDecisio
       confidence: 0.9,
       reason: "User requested feedback, audit, or review of the content.",
       shouldAskQuestion: false,
-      shouldUseTools: false,
+      shouldUseTools: /\b(save|update|apply|persist|store)\b/i.test(rawMessage),
+      suggestedWorkflow: /\b(script|hook|caption|rewrite|make it|improve)\b/i.test(rawMessage) ? "script" : undefined,
       goalStageUpdate,
     };
   }
