@@ -644,9 +644,10 @@ describe("agent tools", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("text/event-stream");
     const events = await readSseEvents(response);
-    expect(events[0]).toMatchObject({ type: "meta", threadId: "thread-1", runId: "run-1" });
-    expect(events[1]).toMatchObject({
+    expect(events[0]).toMatchObject({
       type: "plan",
+      threadId: "thread-1",
+      runId: "run-1",
       plan: {
         workflow: "script",
         steps: [
@@ -661,8 +662,8 @@ describe("agent tools", () => {
     expect(events.find((event) => event.type === "chunk")?.text).toContain("Script package created");
     expect(events.find((event) => event.type === "tool" && event.tool?.toolName === "Update Script Lab")).toMatchObject({
       tool: {
-        requiresApproval: true,
-        approvalPolicy: "ask_if_overwrite",
+        requiresApproval: false,
+        approvalPolicy: "auto",
         sideEffect: "db_write",
       },
     });
@@ -963,6 +964,7 @@ describe("agent tools", () => {
     const events = await readSseEvents(response);
 
     expect(events.find((event) => event.type === "plan")).toMatchObject({
+      type: "plan",
       plan: {
         workflow: "asset_generation",
         steps: [
@@ -973,6 +975,7 @@ describe("agent tools", () => {
         ],
       },
     });
+    expect(events[0]).toMatchObject({ type: "plan" });
     expect(getOrCreateAssetFolderPath).toHaveBeenCalledWith("project-1", "Generated / Images", null);
     expect(generateProjectMedia).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
@@ -1003,6 +1006,17 @@ describe("agent tools", () => {
         },
       },
     });
+    const completedToolIndex = events.findIndex((event) =>
+      event.type === "tool_completed" &&
+      event.tool?.toolName === "Attach Asset to Project"
+    );
+    const finalChunkIndex = events.findIndex((event) =>
+      event.type === "chunk" &&
+      typeof event.text === "string" &&
+      event.text.includes("Prompt generated:")
+    );
+    expect(completedToolIndex).toBeGreaterThan(-1);
+    expect(finalChunkIndex).toBeGreaterThan(completedToolIndex);
     const finalText = events.filter((event) => event.type === "chunk").map((event) => event.text).join("");
     expect(finalText).toContain("Prompt generated:");
     expect(finalText).toContain("Folder saved to: Generated / Images");
@@ -1011,6 +1025,65 @@ describe("agent tools", () => {
       respondedWith: "runtime-v2:asset",
       assetId: "asset-1",
       folderId: "folder-generated-images",
+    }));
+  });
+
+  test("runtime-v2 approval-required script overwrite does not run before approval", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall
+      .mockResolvedValueOnce({ id: "tool-call-generate" })
+      .mockResolvedValueOnce({ id: "tool-call-critique" })
+      .mockResolvedValueOnce({ id: "tool-call-update" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue({
+      ...baseProject,
+      status: "posted",
+      scriptLab: {
+        ...baseProject.scriptLab,
+        script: "Existing finalized script.",
+      },
+    });
+    generateText.mockResolvedValue(`{"hook":"New hook","outline":["One"],"script":"Replacement script","caption":"Caption","cta":"CTA","onScreenText":["Text"]}`);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/script replace the finalized script with a new version",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "tool_awaiting_approval")).toMatchObject({
+      tool: {
+        id: "tool-call-update",
+        toolName: "Update Script Lab",
+        status: "awaiting_approval",
+      },
+    });
+    expect(updateCard).not.toHaveBeenCalled();
+    expect(createProjectArtifact).not.toHaveBeenCalled();
+    expect(completeAgentToolCall).toHaveBeenCalledWith(
+      "tool-call-update",
+      expect.objectContaining({
+        kind: "approval_request",
+        reason: "This would overwrite an existing finalized script.",
+      }),
+      "awaiting_approval",
+    );
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      respondedWith: "runtime-v2:script:awaiting_approval",
+      approvalRequiredToolCallId: "tool-call-update",
     }));
   });
 

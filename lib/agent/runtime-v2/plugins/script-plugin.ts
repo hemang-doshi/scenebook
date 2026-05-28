@@ -178,7 +178,7 @@ export const updateScriptLabTool: AgentRuntimeTool<UpdateScriptLabInput, ScriptL
   description: "Applies approved script package fields to the project's Script Lab.",
   inputSchema: updateScriptLabInputSchema,
   sideEffect: "db_write",
-  approvalPolicy: "ask_if_overwrite",
+  approvalPolicy: "auto",
   async handler(ctx, input) {
     if (!ctx.project) {
       throw new Error("Project not found for Script Lab update.");
@@ -224,7 +224,7 @@ export const updateScriptLabTool: AgentRuntimeTool<UpdateScriptLabInput, ScriptL
     subtitle: "Apply script fields to the project workspace.",
     metadata: {
       sideEffect: "db_write",
-      approvalPolicy: "ask_if_overwrite",
+      approvalPolicy: "auto",
     },
   }),
 };

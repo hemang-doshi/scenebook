@@ -192,6 +192,34 @@ describe("agent UI components", () => {
     expect(screen.getByText(/SceneBook keeps the reel plan connected/i)).toBeInTheDocument();
   });
 
+  test("tool call cards show failed state and changed workspace fields", () => {
+    render(
+      React.createElement(ToolCallCard, {
+        toolCall: {
+          id: "tool-call-failed",
+          kind: "tool",
+          toolName: "Update Script Lab",
+          command: "script",
+          status: "failed",
+          requiresApproval: false,
+          purpose: "Applies script package fields to the project's Script Lab.",
+          changedFields: ["hook", "script"],
+          output: {
+            kind: "tool_error",
+            summary: "Could not update Script Lab.",
+          },
+          errorMessage: "database update failed",
+          createdAt: new Date().toISOString(),
+        },
+      }),
+    );
+
+    expect(screen.getByText("failed")).toBeInTheDocument();
+    expect(screen.getByText("database update failed")).toBeInTheDocument();
+    expect(screen.getByText("hook")).toBeInTheDocument();
+    expect(screen.getByText("script")).toBeInTheDocument();
+  });
+
   test("history selector renders prior project threads plus muted new conversation", async () => {
     fetchJson.mockImplementation(async (url: string) => {
       if (url.includes("listThreads=true")) {

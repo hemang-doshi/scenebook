@@ -38,7 +38,7 @@ describe("Agent Runtime v2 tool registry", () => {
 
   test("returns tools by name with approval policy metadata", () => {
     expect(getToolByName("generate_script_package")?.approvalPolicy).toBe("auto");
-    expect(getToolByName("create_project_artifact")?.approvalPolicy).toBe("ask_if_overwrite");
+    expect(getToolByName("create_project_artifact")?.approvalPolicy).toBe("auto");
     expect(getToolByName("publish_to_instagram")?.approvalPolicy).toBe("always");
     expect(getToolByName("missing_tool")).toBeUndefined();
   });

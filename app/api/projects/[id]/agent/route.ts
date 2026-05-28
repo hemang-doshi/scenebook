@@ -33,6 +33,11 @@ import { getAgentTool, listSupportedAgentCommands } from "@/lib/agent/tools/regi
 import { extractCreativeBrief, type CreativeBrief } from "@/lib/agent/runtime-v2/creative-brief";
 import { buildAgentWorkspaceContext } from "@/lib/agent/runtime-v2/context-loader";
 import {
+  runtimeV2ToolEventType,
+  type RuntimeV2ToolEventPayload,
+  type RuntimeV2ToolStatus,
+} from "@/lib/agent/runtime-v2/events";
+import {
   completeGoalStep,
   createAgentGoal,
   formatGoalFinalResponse,
@@ -47,7 +52,7 @@ import {
 import { selectAgentMode, type AgentModeDecision } from "@/lib/agent/runtime-v2/mode-selector";
 import { buildAgentPlan, type AgentPlan } from "@/lib/agent/runtime-v2/planner";
 import { getToolByName as getRuntimeV2ToolByName } from "@/lib/agent/runtime-v2/tools/registry";
-import type { AgentRuntimeToolResult } from "@/lib/agent/runtime-v2/tools/types";
+import type { AgentRuntimeTool, AgentRuntimeToolResult } from "@/lib/agent/runtime-v2/tools/types";
 import {
   assetAgentCommands,
   streamingAgentCommands,
@@ -260,6 +265,120 @@ function jsonValue(value: unknown): JsonValue | undefined {
   return undefined;
 }
 
+class RuntimeV2ApprovalRequired extends Error {
+  toolCallId: string;
+  toolName: string;
+
+  constructor(toolCallId: string, toolName: string) {
+    super(`${toolName} is awaiting approval.`);
+    this.name = "RuntimeV2ApprovalRequired";
+    this.toolCallId = toolCallId;
+    this.toolName = toolName;
+  }
+}
+
+function isRuntimeV2ApprovalRequired(error: unknown): error is RuntimeV2ApprovalRequired {
+  return error instanceof RuntimeV2ApprovalRequired;
+}
+
+function shouldRequireRuntimeV2Approval(input: {
+  tool: AgentRuntimeTool;
+  payload: Record<string, unknown>;
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>;
+}) {
+  const { tool, payload, project } = input;
+
+  if (tool.approvalPolicy === "always" || tool.sideEffect === "publish") {
+    return true;
+  }
+
+  if (tool.name === "update_script_lab") {
+    return wouldOverwriteFinalizedScript(payload, project);
+  }
+
+  if (tool.name === "update_project_status") {
+    return !(payload.status === "scripted" && payload.reason === "script_generated");
+  }
+
+  if (tool.sideEffect === "editor_write") {
+    return hasDestructiveIntent(payload);
+  }
+
+  if (/delete|remove/i.test(tool.name)) {
+    return true;
+  }
+
+  return tool.approvalPolicy !== "auto";
+}
+
+function wouldOverwriteFinalizedScript(
+  payload: Record<string, unknown>,
+  project: Awaited<ReturnType<typeof getProjectWorkspace>>,
+) {
+  const nextScript = typeof payload.script === "string" ? payload.script.trim() : "";
+  const existingScript = project?.scriptLab.script?.trim() ?? "";
+  const finalizedStatuses = new Set(["scripted", "ready_to_shoot", "shot", "editing", "posting", "posted", "analyzed"]);
+
+  return Boolean(nextScript && existingScript && project?.status && finalizedStatuses.has(project.status));
+}
+
+function hasDestructiveIntent(payload: Record<string, unknown>) {
+  return Object.entries(payload).some(([key, value]) => {
+    if (/(delete|remove|overwrite|replace|destructive)/i.test(key) && value !== false && value !== null) {
+      return true;
+    }
+    return typeof value === "string" && /\b(delete|remove|overwrite|replace)\b/i.test(value);
+  });
+}
+
+function changedFieldsForRuntimeV2Tool(toolName: string, output: Record<string, unknown>, payload: Record<string, unknown>) {
+  if (Array.isArray(output.updatedFields)) {
+    return output.updatedFields.filter((item): item is string => typeof item === "string");
+  }
+
+  if (toolName === "update_script_lab") {
+    return Object.keys(payload).filter((key) => key !== "overwrite");
+  }
+
+  if (toolName === "update_shoot_pack") {
+    return Object.keys(payload).filter((key) => key !== "overwrite");
+  }
+
+  if (toolName === "create_asset_folder") {
+    return ["asset folders"];
+  }
+
+  if (toolName === "attach_asset_to_project") {
+    return ["project assets"];
+  }
+
+  if (toolName === "create_project_artifact") {
+    return ["project artifacts"];
+  }
+
+  if (toolName === "update_creative_brief") {
+    const brief = isRecord(payload.brief) ? payload.brief : payload;
+    return Object.keys(brief);
+  }
+
+  return [];
+}
+
+function approvalRequestOutput(input: {
+  tool: AgentRuntimeTool;
+  payload: Record<string, unknown>;
+  reason: string;
+}) {
+  return {
+    kind: "approval_request",
+    toolName: input.tool.displayName,
+    purpose: input.tool.description,
+    reason: input.reason,
+    input: jsonRecord(input.payload),
+    changedFields: changedFieldsForRuntimeV2Tool(input.tool.name, {}, input.payload),
+  };
+}
+
 async function persistArtifactForToolCall(toolCall: AgentToolCallRecord, output: Record<string, any>) {
   await createProjectArtifact({
     projectId: toolCall.project_id,
@@ -378,6 +497,7 @@ async function createRuntimeV2ToolCall(input: {
     runId: input.runId,
     toolName: input.toolName,
     command: input.command ?? "script",
+    status: "planned",
     requiresApproval: input.requiresApproval,
     payload: jsonRecord(input.payload),
   });
@@ -515,6 +635,12 @@ function createRuntimeV2GoalStream(input: {
       };
 
       try {
+        emit("mode", {
+          threadId: input.threadId,
+          runId: input.runId,
+          mode: "goal",
+          reason: input.modeDecision.reason,
+        });
         emit("meta", {
           threadId: input.threadId,
           runId: input.runId,
@@ -643,27 +769,34 @@ function createRuntimeV2ScriptStream(input: {
       const emitTool = (
         id: string,
         toolName: string,
-        status: string,
+        status: RuntimeV2ToolStatus,
         metadata: {
           requiresApproval: boolean;
           approvalPolicy: string;
           sideEffect: string;
+          purpose?: string;
+          changedFields?: string[];
           result?: AgentRuntimeToolResult<Record<string, JsonValue>>;
           errorMessage?: string;
         },
       ) => {
-        emit("tool", {
-          tool: {
-            id,
-            command: "script",
-            status,
-            toolName,
-            requiresApproval: metadata.requiresApproval,
-            approvalPolicy: metadata.approvalPolicy,
-            sideEffect: metadata.sideEffect,
-            errorMessage: metadata.errorMessage ?? null,
-            result: metadata.result ?? null,
-          },
+        const toolEvent: RuntimeV2ToolEventPayload = {
+          id,
+          command: "script",
+          status,
+          toolName,
+          requiresApproval: metadata.requiresApproval,
+          approvalPolicy: metadata.approvalPolicy,
+          sideEffect: metadata.sideEffect,
+          purpose: metadata.purpose,
+          changedFields: metadata.changedFields,
+          errorMessage: metadata.errorMessage ?? null,
+          result: metadata.result ?? null,
+        };
+        emit("tool", { tool: toolEvent });
+        emit(runtimeV2ToolEventType(status), {
+          tool: toolEvent,
+          ...(status === "failed" ? { error: metadata.errorMessage ?? "Runtime v2 tool failed." } : {}),
         });
       };
 
@@ -678,15 +811,46 @@ function createRuntimeV2ScriptStream(input: {
           threadId: input.threadId,
           runId: input.runId,
           toolName: tool.displayName,
-          requiresApproval: tool.approvalPolicy !== "auto",
+          requiresApproval: shouldRequireRuntimeV2Approval({ tool, payload, project: input.project }),
           payload,
         });
         activeToolCallId = toolCall.id;
+        const requiresApproval = shouldRequireRuntimeV2Approval({ tool, payload, project: input.project });
         const toolEventMetadata = {
-          requiresApproval: tool.approvalPolicy !== "auto",
+          requiresApproval,
           approvalPolicy: tool.approvalPolicy,
           sideEffect: tool.sideEffect,
+          purpose: tool.description,
+          changedFields: changedFieldsForRuntimeV2Tool(tool.name, {}, payload),
         };
+        emitTool(toolCall.id, tool.displayName, "planned", {
+          ...toolEventMetadata,
+          result: {
+            message: "Tool planned.",
+            output: { kind: "tool_plan", activity: toolName },
+          },
+        });
+
+        if (requiresApproval) {
+          const output = approvalRequestOutput({
+            tool,
+            payload,
+            reason: tool.name === "update_script_lab"
+              ? "This would overwrite an existing finalized script."
+              : "This action requires approval before it can run.",
+          });
+          await completeAgentToolCall(toolCall.id, output, "awaiting_approval");
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "awaiting_approval", {
+            ...toolEventMetadata,
+            result: {
+              message: "Approval required before this tool can run.",
+              output,
+            },
+          });
+          throw new RuntimeV2ApprovalRequired(toolCall.id, tool.displayName);
+        }
+
         emitTool(toolCall.id, tool.displayName, "running", {
           ...toolEventMetadata,
           result: {
@@ -721,6 +885,7 @@ function createRuntimeV2ScriptStream(input: {
           activeToolCallId = null;
           emitTool(toolCall.id, tool.displayName, "completed", {
             ...toolEventMetadata,
+            changedFields: changedFieldsForRuntimeV2Tool(tool.name, result.output, payload),
             result,
           });
           return result;
@@ -737,12 +902,14 @@ function createRuntimeV2ScriptStream(input: {
       };
 
       try {
+        emit("plan", {
+          threadId: input.threadId,
+          runId: input.runId,
+          plan: encodeRuntimeV2Plan(plan),
+        });
         emit("meta", {
           threadId: input.threadId,
           runId: input.runId,
-        });
-        emit("plan", {
-          plan: encodeRuntimeV2Plan(plan),
         });
 
         if (plan.intent === "ask_questions") {
@@ -901,6 +1068,30 @@ function createRuntimeV2ScriptStream(input: {
         });
         controller.close();
       } catch (caught) {
+        if (isRuntimeV2ApprovalRequired(caught)) {
+          const finalMessage = `${caught.toolName} is waiting for approval before it can run.`;
+          emit("chunk", { text: finalMessage });
+          await Promise.resolve(appendAgentMessage({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            role: "assistant",
+            content: finalMessage,
+            model: input.body.models?.chat ?? null,
+            provider: "agent-runtime-v2",
+            metadata: {
+              workflow: "script",
+              approvalRequiredToolCallId: caught.toolCallId,
+              plan: encodeRuntimeV2Plan(plan),
+            },
+          })).catch(() => null);
+          await Promise.resolve(completeAgentRun(input.runId, {
+            command: "script",
+            respondedWith: "runtime-v2:script:awaiting_approval",
+            approvalRequiredToolCallId: caught.toolCallId,
+          })).catch(() => null);
+          controller.close();
+          return;
+        }
         const message = caught instanceof Error ? caught.message : "Unable to complete script workflow.";
         await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
         if (activeToolCallId) {
@@ -952,16 +1143,18 @@ function createRuntimeV2AssetStream(input: {
       const emitTool = (
         id: string,
         toolName: string,
-        status: string,
+        status: RuntimeV2ToolStatus,
         metadata: {
           requiresApproval: boolean;
           approvalPolicy: string;
           sideEffect: string;
+          purpose?: string;
+          changedFields?: string[];
           result?: AgentRuntimeToolResult<Record<string, JsonValue>>;
           errorMessage?: string;
         },
       ) => {
-        const tool = {
+        const tool: RuntimeV2ToolEventPayload = {
           id,
           command: "generate",
           status,
@@ -969,18 +1162,18 @@ function createRuntimeV2AssetStream(input: {
           requiresApproval: metadata.requiresApproval,
           approvalPolicy: metadata.approvalPolicy,
           sideEffect: metadata.sideEffect,
+          purpose: metadata.purpose,
+          changedFields: metadata.changedFields,
           errorMessage: metadata.errorMessage ?? null,
           result: metadata.result ?? null,
         };
 
         emit("tool", { tool });
+        emit(runtimeV2ToolEventType(status), {
+          tool,
+          ...(status === "failed" ? { error: metadata.errorMessage ?? "Runtime v2 asset tool failed." } : {}),
+        });
 
-        if (status === "failed") {
-          emit("tool_failed", {
-            tool,
-            error: metadata.errorMessage ?? "Runtime v2 asset tool failed.",
-          });
-        }
       };
 
       const runTool = async (toolName: string, payload: Record<string, unknown>) => {
@@ -995,15 +1188,44 @@ function createRuntimeV2AssetStream(input: {
           runId: input.runId,
           toolName: tool.displayName,
           command: "generate",
-          requiresApproval: tool.approvalPolicy !== "auto",
+          requiresApproval: shouldRequireRuntimeV2Approval({ tool, payload, project: input.project }),
           payload,
         });
         activeToolCallId = toolCall.id;
+        const requiresApproval = shouldRequireRuntimeV2Approval({ tool, payload, project: input.project });
         const toolEventMetadata = {
-          requiresApproval: tool.approvalPolicy !== "auto",
+          requiresApproval,
           approvalPolicy: tool.approvalPolicy,
           sideEffect: tool.sideEffect,
+          purpose: tool.description,
+          changedFields: changedFieldsForRuntimeV2Tool(tool.name, {}, payload),
         };
+
+        emitTool(toolCall.id, tool.displayName, "planned", {
+          ...toolEventMetadata,
+          result: {
+            message: "Tool planned.",
+            output: { kind: "tool_plan", activity: toolName },
+          },
+        });
+
+        if (requiresApproval) {
+          const output = approvalRequestOutput({
+            tool,
+            payload,
+            reason: "This action requires approval before it can run.",
+          });
+          await completeAgentToolCall(toolCall.id, output, "awaiting_approval");
+          activeToolCallId = null;
+          emitTool(toolCall.id, tool.displayName, "awaiting_approval", {
+            ...toolEventMetadata,
+            result: {
+              message: "Approval required before this tool can run.",
+              output,
+            },
+          });
+          throw new RuntimeV2ApprovalRequired(toolCall.id, tool.displayName);
+        }
 
         emitTool(toolCall.id, tool.displayName, "running", {
           ...toolEventMetadata,
@@ -1039,6 +1261,7 @@ function createRuntimeV2AssetStream(input: {
           activeToolCallId = null;
           emitTool(toolCall.id, tool.displayName, "completed", {
             ...toolEventMetadata,
+            changedFields: changedFieldsForRuntimeV2Tool(tool.name, result.output, payload),
             result,
           });
           return result;
@@ -1055,12 +1278,14 @@ function createRuntimeV2AssetStream(input: {
       };
 
       try {
+        emit("plan", {
+          threadId: input.threadId,
+          runId: input.runId,
+          plan: encodeRuntimeV2Plan(plan),
+        });
         emit("meta", {
           threadId: input.threadId,
           runId: input.runId,
-        });
-        emit("plan", {
-          plan: encodeRuntimeV2Plan(plan),
         });
 
         if (plan.intent === "ask_questions") {
@@ -1206,6 +1431,30 @@ function createRuntimeV2AssetStream(input: {
         });
         controller.close();
       } catch (caught) {
+        if (isRuntimeV2ApprovalRequired(caught)) {
+          const finalMessage = `${caught.toolName} is waiting for approval before it can run.`;
+          emit("chunk", { text: finalMessage });
+          await Promise.resolve(appendAgentMessage({
+            projectId: input.projectId,
+            threadId: input.threadId,
+            role: "assistant",
+            content: finalMessage,
+            model: input.body.models?.chat ?? null,
+            provider: "agent-runtime-v2",
+            metadata: {
+              workflow: "asset_generation",
+              approvalRequiredToolCallId: caught.toolCallId,
+              plan: encodeRuntimeV2Plan(plan),
+            },
+          })).catch(() => null);
+          await Promise.resolve(completeAgentRun(input.runId, {
+            command: "generate",
+            respondedWith: "runtime-v2:asset:awaiting_approval",
+            approvalRequiredToolCallId: caught.toolCallId,
+          })).catch(() => null);
+          controller.close();
+          return;
+        }
         const message = caught instanceof Error ? caught.message : "Unable to complete asset workflow.";
         await Promise.resolve(failAgentRun(input.runId, message)).catch(() => null);
         if (activeToolCallId) {
@@ -1872,7 +2121,7 @@ export async function PATCH(
       .object({
         toolCallId: z.string().uuid(),
         action: z.enum(["apply"]).optional(),
-        status: z.enum(["completed", "failed", "rejected", "approved", "awaiting_approval", "awaiting_input"]).optional(),
+        status: z.enum(["planned", "running", "completed", "failed", "rejected", "approved", "awaiting_approval", "awaiting_input"]).optional(),
         output: z.record(z.string(), z.any()).optional(),
       })
       .parse(await request.json());

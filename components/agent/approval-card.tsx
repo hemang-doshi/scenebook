@@ -15,13 +15,15 @@ interface ApprovalCardProps {
 
 export function ApprovalCard({ toolCall, projectId, onRefresh }: ApprovalCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isAskingChanges, setIsAskingChanges] = useState(false);
   const [editText, setEditText] = useState(() => JSON.stringify(toolCall.output, null, 2));
+  const [changesText, setChangesText] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isPending = toolCall.status === "awaiting_approval";
 
-  async function handleApply() {
+  async function handleApprove() {
     setIsSubmitting(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/agent`, {
@@ -87,11 +89,40 @@ export function ApprovalCard({ toolCall, projectId, onRefresh }: ApprovalCardPro
     }
   }
 
+  async function handleAskForChanges() {
+    setIsSubmitting(true);
+    try {
+      const baseOutput =
+        typeof toolCall.output === "object" && toolCall.output !== null && !Array.isArray(toolCall.output)
+          ? toolCall.output as Record<string, unknown>
+          : {};
+      const res = await fetch(`/api/projects/${projectId}/agent`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolCallId: toolCall.id,
+          status: "awaiting_input",
+          output: {
+            ...baseOutput,
+            requestedChanges: changesText.trim(),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error("Change request failed");
+      setIsAskingChanges(false);
+      onRefresh();
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : "Failed to request changes.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (isEditing) {
     return (
       <div className="grid gap-4 rounded-[var(--rounded-lg)] border border-[var(--hairline)] bg-[var(--canvas)] p-6 shadow-sm">
         <div>
-          <h3 className="text-sm font-bold text-[var(--ink)]">Edit JSON Prompt Output</h3>
+          <h3 className="text-sm font-bold text-[var(--ink)]">Edit Tool Output</h3>
           <p className="mt-1 text-xs text-[var(--muted)]">Modify the structured output JSON before approval.</p>
         </div>
 
@@ -135,6 +166,52 @@ export function ApprovalCard({ toolCall, projectId, onRefresh }: ApprovalCardPro
     );
   }
 
+  if (isAskingChanges) {
+    return (
+      <div className="grid gap-4 rounded-[var(--rounded-lg)] border border-[var(--hairline)] bg-[var(--canvas)] p-6 shadow-sm">
+        <ToolCallCard toolCall={toolCall} />
+
+        {validationError ? (
+          <p className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] px-3 py-2 text-xs text-[var(--danger)] font-mono">
+            {validationError}
+          </p>
+        ) : null}
+
+        <Textarea
+          value={changesText}
+          onChange={(e) => setChangesText(e.target.value)}
+          placeholder="What should change before this runs?"
+          className="min-h-[8rem] bg-[var(--canvas)] border border-[var(--hairline)] p-4 rounded-[var(--rounded-md)] text-sm text-[var(--ink)] focus-visible:ring-2 focus-visible:ring-[var(--ink)]/10 focus-visible:border-[var(--ink)]"
+        />
+
+        <div className="flex gap-2 pt-2 border-t border-[var(--hairline)]">
+          <Button
+            type="button"
+            variant="primary"
+            disabled={isSubmitting || !changesText.trim()}
+            onClick={handleAskForChanges}
+            className="h-9 px-4 text-xs font-semibold"
+          >
+            Ask for changes
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isSubmitting}
+            onClick={() => {
+              setChangesText("");
+              setValidationError(null);
+              setIsAskingChanges(false);
+            }}
+            className="h-9 px-4 text-xs font-semibold"
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-4 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-5 shadow-sm">
       <ToolCallCard toolCall={toolCall} />
@@ -151,10 +228,19 @@ export function ApprovalCard({ toolCall, projectId, onRefresh }: ApprovalCardPro
             type="button"
             variant="primary"
             disabled={isSubmitting}
-            onClick={handleApply}
+            onClick={handleApprove}
             className="h-9 px-4 text-xs font-semibold"
           >
-            Apply to project
+            Approve
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={isSubmitting}
+            onClick={() => setIsAskingChanges(true)}
+            className="h-9 px-4 text-xs font-semibold border-[var(--hairline)]"
+          >
+            Ask for changes
           </Button>
           <Button
             type="button"
@@ -163,7 +249,7 @@ export function ApprovalCard({ toolCall, projectId, onRefresh }: ApprovalCardPro
             onClick={() => setIsEditing(true)}
             className="h-9 px-4 text-xs font-semibold border-[var(--hairline)]"
           >
-            Modify
+            Edit JSON
           </Button>
           <Button
             type="button"

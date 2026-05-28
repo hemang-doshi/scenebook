@@ -23,6 +23,13 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
   const output = (toolCall.output ?? {}) as Record<string, unknown>;
   const kind = typeof output.kind === "string" ? output.kind : null;
   const modality = typeof output.modality === "string" ? output.modality : "image";
+  const changedFields = toolCall.changedFields?.length
+    ? toolCall.changedFields
+    : Array.isArray(output.changedFields)
+      ? output.changedFields.filter((field): field is string => typeof field === "string")
+      : Array.isArray(output.updatedFields)
+        ? output.updatedFields.filter((field): field is string => typeof field === "string")
+        : [];
 
   async function copyOutput(value: unknown) {
     await navigator.clipboard.writeText(JSON.stringify(value, null, 2));
@@ -36,16 +43,36 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
         <div>
           <CardTitle className="text-sm font-bold text-[var(--ink)]">{toolCall.toolName}</CardTitle>
           <p className="mt-1 text-xs text-[var(--muted)] font-mono">
-            {toolCall.command ? `/${toolCall.command}` : "tool"} • {toolCall.status}
+            {toolCall.command ? `/${toolCall.command}` : "tool"} • {statusLabel(toolCall.status)}
           </p>
-          <p className="mt-2 text-sm text-[var(--ink)] font-sans">{summarizeToolCall(toolCall, output)}</p>
+          {toolCall.purpose ? (
+            <p className="mt-2 text-sm text-[var(--ink)] font-sans">{toolCall.purpose}</p>
+          ) : null}
         </div>
         <Badge className={badgeClass(toolCall.status)}>
-          {toolCall.status === "approved" ? "applied" : kind ?? "tool"}
+          {statusLabel(toolCall.status)}
         </Badge>
       </CardHeader>
 
       <CardContent className="grid gap-3 text-sm text-[var(--ink)]">
+        <p className="text-sm text-[var(--ink)] font-sans">{summarizeToolCall(toolCall, output)}</p>
+
+        {changedFields.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--muted)]">Changed</span>
+            {changedFields.map((field) => (
+              <Badge
+                key={field}
+                className="border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]/80 text-[10px] rounded-[var(--rounded-sm)]"
+              >
+                {field}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        {typeof output.url === "string" ? renderMediaPreview(modality, output) : null}
+
         {toolCall.errorMessage ? (
           <p className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] px-3 py-2 text-xs text-[var(--danger)] font-mono">
             {toolCall.errorMessage}
@@ -64,8 +91,6 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
 
         {expanded ? (
           <div className="grid gap-3 pt-2 border-t border-[var(--hairline)]">
-            {typeof output.url === "string" ? renderMediaPreview(modality, output) : null}
-
             {renderAssetWorkflowDetails(kind, output)}
 
             {kind === "prompt_questions" ? renderQuestions(toolCall.id, output) : null}
@@ -102,11 +127,14 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
 }
 
 function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unknown>) {
+  if (toolCall.status === "planned") {
+    return typeof output.activity === "string" ? `planned: ${output.activity}` : "planned";
+  }
   if (toolCall.status === "running") {
     return typeof output.activity === "string" ? output.activity : "working";
   }
   if (toolCall.status === "awaiting_approval") {
-    return "draft ready";
+    return typeof output.reason === "string" ? output.reason : "draft ready";
   }
   if (toolCall.status === "approved") {
     return "Applied to project";
@@ -139,6 +167,10 @@ function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unk
     return output.hook;
   }
   return "tool output";
+}
+
+function statusLabel(status: string) {
+  return status.replaceAll("_", " ");
 }
 
 function badgeClass(status: string) {

@@ -6,6 +6,7 @@ import type {
   AgentMessageRole,
   AgentModelsSelection,
   AgentRunRecord,
+  AgentToolCallStatus,
   AgentThreadRecord,
   AgentToolCallRecord,
 } from "@/lib/agent/types";
@@ -267,6 +268,7 @@ export async function createAgentToolCall(input: {
   runId: string;
   toolName: string;
   command?: string | null;
+  status?: AgentToolCallStatus;
   requiresApproval: boolean;
   payload: Record<string, JsonValue>;
 }) {
@@ -280,7 +282,7 @@ export async function createAgentToolCall(input: {
       project_id: input.projectId,
       tool_name: input.toolName,
       command: input.command ?? null,
-      status: "running",
+      status: input.status ?? "running",
       input: input.payload,
       output: {},
       requires_approval: input.requiresApproval,
