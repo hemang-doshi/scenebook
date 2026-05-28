@@ -157,6 +157,72 @@ function createSupabaseMock() {
   };
 }
 
+function createSupabaseMockWithMissingFolderTables() {
+  const assets = [
+    {
+      id: "asset-1",
+      owner_id: "user-1",
+      card_id: "project-1",
+      type: "image",
+      title: "Hero still",
+      url: "https://example.com/hero.png",
+      note: "prompt",
+      storage_path: "path/hero.png",
+      source: "generated",
+      scene_key: null,
+      metadata: {},
+      generation_id: "generation-1",
+      created_at: "2026-05-27T00:00:00.000Z",
+      updated_at: "2026-05-27T00:00:00.000Z",
+    },
+    {
+      id: "asset-2",
+      owner_id: "user-1",
+      card_id: "project-1",
+      type: "video",
+      title: "B-roll hallway",
+      url: "https://example.com/broll.mp4",
+      note: "prompt",
+      storage_path: "path/broll.mp4",
+      source: "generated",
+      scene_key: null,
+      metadata: {},
+      generation_id: "generation-2",
+      created_at: "2026-05-27T00:00:00.000Z",
+      updated_at: "2026-05-27T00:00:00.000Z",
+    },
+  ];
+
+  function createBuilder(table: string) {
+    const builder = {
+      select: vi.fn(() => builder),
+      eq: vi.fn(() => builder),
+      order: vi.fn(() => builder),
+      then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => {
+        if (table === "card_assets") {
+          return Promise.resolve({ data: assets, error: null }).then(resolve, reject);
+        }
+
+        return Promise.resolve({
+          data: null,
+          error: new Error('relation "public.asset_folders" does not exist'),
+        }).then(resolve, reject);
+      },
+    };
+
+    return builder;
+  }
+
+  const supabase = {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+    },
+    from: vi.fn((table: string) => createBuilder(table)),
+  };
+
+  createSupabaseServerClient.mockResolvedValue(supabase);
+}
+
 describe("asset folders service", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -176,6 +242,16 @@ describe("asset folders service", () => {
       childFolders: [{ id: "folder-child" }],
     });
     expect(library.looseAssets).toMatchObject([{ id: "asset-2" }]);
+  });
+
+  test("falls back to loose assets when folder tables are unavailable", async () => {
+    createSupabaseMockWithMissingFolderTables();
+    const { getProjectAssetLibrary } = await import("@/lib/assets/asset-folders");
+
+    const library = await getProjectAssetLibrary("project-1");
+
+    expect(library.folders).toEqual([]);
+    expect(library.looseAssets).toMatchObject([{ id: "asset-1" }, { id: "asset-2" }]);
   });
 
   test("maps default generated video folders to B-roll when the title says so", async () => {

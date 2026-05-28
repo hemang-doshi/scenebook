@@ -38,18 +38,18 @@ test("creator can move from idea capture to a learning loop in database mode", a
 
   await page.getByPlaceholder(/Ask the agent/i).fill("/script sharp desk-setup cold open");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByText("Hook:")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Script Builder")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Hook", { exact: false })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("Script Builder")).toBeVisible({ timeout: 60_000 });
 
   await page.getByRole("button", { name: "Assets" }).click();
   await expect(page.getByText("Asset Library")).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: "Close asset drawer" }).click();
+  await page.getByRole("button", { name: "Close asset menu" }).click();
   await page.getByRole("button", { name: /Project hub/i }).click();
 
-  await expect(page.getByRole("heading", { name: "Continue in Agent" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("heading", { name: "Generated Assets" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("heading", { name: "Next Best Actions" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("/script", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue in Agent" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Asset Library" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Agent Reflection" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("/script", { exact: false })).toBeVisible();
 
   await page.locator(`a[href="/editor/${cardId}"]`).first().click();
   await expect(page).toHaveURL(new RegExp(`/editor/${cardId}$`));

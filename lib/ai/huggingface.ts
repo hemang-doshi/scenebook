@@ -35,11 +35,12 @@ export async function generateMediaWithHuggingFace({
   provider,
 }: HuggingFaceGenerationRequest) {
   const client = new InferenceClient(token);
-  const args = provider
+  const resolvedProvider = provider && provider !== "huggingface" ? provider : undefined;
+  const args = resolvedProvider
     ? {
         model,
         inputs: prompt,
-        provider: provider as any,
+        provider: resolvedProvider as any,
       }
     : {
         model,

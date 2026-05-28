@@ -357,6 +357,70 @@ export type Database = {
           },
         ]
       }
+      project_artifacts: {
+        Row: {
+          artifact_type: string
+          created_at: string
+          id: string
+          metadata: Json
+          owner_id: string
+          payload: Json
+          project_id: string
+          thread_id: string
+          title: string
+          tool_call_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          artifact_type: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          owner_id: string
+          payload?: Json
+          project_id: string
+          thread_id: string
+          title: string
+          tool_call_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          artifact_type?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          owner_id?: string
+          payload?: Json
+          project_id?: string
+          thread_id?: string
+          title?: string
+          tool_call_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_artifacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_artifacts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "agent_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_artifacts_tool_call_id_fkey"
+            columns: ["tool_call_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tool_calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_items: {
         Row: {
           card_id: string | null
@@ -507,50 +571,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      project_messages: {
-        Row: {
-          card_id: string
-          content: string
-          created_at: string
-          id: string
-          metadata: Json
-          model: string | null
-          owner_id: string
-          provider: string | null
-          role: string
-        }
-        Insert: {
-          card_id: string
-          content: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          model?: string | null
-          owner_id: string
-          provider?: string | null
-          role: string
-        }
-        Update: {
-          card_id?: string
-          content?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          model?: string | null
-          owner_id?: string
-          provider?: string | null
-          role?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_messages_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "content_cards"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       raw_jobs: {
         Row: {

@@ -98,7 +98,7 @@ type AccountAnalytics = {
 
 function SVGLineChart({
   values,
-  color = "rgb(99, 102, 241)",
+  color = "rgb(0, 0, 0)",
   gradId,
 }: {
   dates: string[];
@@ -127,14 +127,14 @@ function SVGLineChart({
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.12" />
           <stop offset="100%" stopColor={color} stopOpacity="0.0" />
         </linearGradient>
       </defs>
-      <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-      <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+      <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="var(--hairline)" strokeWidth="1" />
+      <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="var(--hairline-soft)" strokeWidth="1" />
       <path d={areaD} fill={`url(#${gradId})`} />
-      <path d={pathD} fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -142,31 +142,31 @@ function SVGLineChart({
 function MarkdownViewer({ text }: { text: string }) {
   const lines = text.split("\n");
   return (
-    <div className="space-y-3 text-sm text-muted leading-relaxed">
+    <div className="space-y-3 text-sm text-[var(--ink)]/80 leading-relaxed">
       {lines.map((line, i) => {
         const trimmed = line.trim();
         if (trimmed.startsWith("#### ")) {
-          return <h5 key={i} className="text-xs font-semibold text-foreground uppercase tracking-wider mt-4">{trimmed.slice(5)}</h5>;
+          return <h5 key={i} className="text-xs font-bold text-[var(--ink)] uppercase tracking-wider mt-4">{trimmed.slice(5)}</h5>;
         }
         if (trimmed.startsWith("### ")) {
-          return <h4 key={i} className="text-sm font-semibold text-foreground mt-4 mb-1.5">{trimmed.slice(4)}</h4>;
+          return <h4 key={i} className="text-sm font-bold text-[var(--ink)] mt-4 mb-1.5">{trimmed.slice(4)}</h4>;
         }
         if (trimmed.startsWith("## ")) {
-          return <h3 key={i} className="text-base font-semibold text-accent mt-6 mb-3 border-b border-border/40 pb-1.5">{trimmed.slice(3)}</h3>;
+          return <h3 key={i} className="text-base font-bold text-[var(--ink)] mt-6 mb-3 border-b border-[var(--hairline)] pb-1.5">{trimmed.slice(3)}</h3>;
         }
         if (trimmed.startsWith("# ")) {
-          return <h2 key={i} className="text-lg font-bold text-foreground mt-7 mb-4">{trimmed.slice(2)}</h2>;
+          return <h2 key={i} className="text-lg font-bold text-[var(--ink)] mt-7 mb-4">{trimmed.slice(2)}</h2>;
         }
         if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
           return (
-            <div key={i} className="flex gap-2 pl-4 animate-fade-in">
-              <span className="text-accent">•</span>
+            <div key={i} className="flex gap-2 pl-4 animate-fade-in text-sm">
+              <span className="text-[var(--ink)]/60 select-none">•</span>
               <span>{trimmed.slice(2)}</span>
             </div>
           );
         }
         if (trimmed.startsWith("> ")) {
-          return <blockquote key={i} className="border-l-2 border-accent pl-3 italic text-muted-foreground my-2">{trimmed.slice(2)}</blockquote>;
+          return <blockquote key={i} className="border-l-2 border-[var(--ink)] pl-3 italic text-[var(--muted)] my-2">{trimmed.slice(2)}</blockquote>;
         }
         if (!trimmed) {
           return <div key={i} className="h-1.5" />;
@@ -226,7 +226,6 @@ export default function AnalyticsDashboard() {
     const params = new URLSearchParams(window.location.search);
     const instagram = params.get("instagram");
     if (instagram === "success") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOauthStatus({ type: "success", message: "Instagram account connected successfully!" });
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (instagram === "error") {
@@ -351,24 +350,24 @@ export default function AnalyticsDashboard() {
 
   if (loading) {
     return (
-      <Panel className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-accent" />
-      </Panel>
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--ink)]" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Panel className="p-6 border-rose-500/20 bg-rose-500/5 text-rose-400">
+      <Panel className="p-6 border-[var(--danger)]/20 bg-[var(--surface-soft)] text-[var(--danger)] max-w-4xl mx-auto mt-8">
         <p className="font-semibold">Failed to load analytics dashboard:</p>
-        <p className="text-xs text-muted-foreground mt-1">{error}</p>
+        <p className="text-xs text-[var(--muted)] mt-1">{error}</p>
       </Panel>
     );
   }
 
   if (accounts.length === 0) {
     return (
-      <div className="space-y-6 max-w-5xl">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
         <PageHeading
           eyebrow="Performance"
           title="Analytics"
@@ -378,8 +377,8 @@ export default function AnalyticsDashboard() {
         {oauthStatus && (
           <div className={`p-4 rounded-xl border flex items-start gap-3 text-sm ${
             oauthStatus.type === "success" 
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-              : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+              ? "bg-[var(--surface-soft)] border-[var(--hairline)] text-[var(--ink)]" 
+              : "bg-[var(--surface-soft)] border-[var(--danger)]/20 text-[var(--danger)]"
           }`}>
             {oauthStatus.type === "success" ? (
               <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
@@ -388,21 +387,21 @@ export default function AnalyticsDashboard() {
             )}
             <div>
               <p className="font-semibold capitalize">{oauthStatus.type === "success" ? "Success" : "Connection Error"}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{oauthStatus.message}</p>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">{oauthStatus.message}</p>
             </div>
           </div>
         )}
 
-        <Panel className="flex flex-col items-center justify-center text-center p-12 py-20 border-dashed border-border/80">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pink-500/10 text-pink-400 mb-4 border border-pink-500/20">
+        <Panel className="flex flex-col items-center justify-center text-center p-12 py-20 border-dashed border-[var(--hairline)] bg-[var(--canvas)]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-[var(--rounded-md)] bg-[var(--surface-soft)] text-[var(--ink)] mb-4 border border-[var(--hairline)]">
             <InstagramIcon className="h-7 w-7" />
           </div>
-          <h2 className="text-lg font-semibold text-foreground">No Social Channels Connected</h2>
-          <p className="mt-2 text-sm text-muted max-w-md">
+          <h2 className="text-lg font-bold text-[var(--ink)]">No Social Channels Connected</h2>
+          <p className="mt-2 text-sm text-[var(--muted)] max-w-md">
             Connect an Instagram Professional account to start gathering real-time metrics, publishing videos, and auditing account trends.
           </p>
           <div className="mt-6 flex gap-3">
-            <Button onClick={() => window.location.href = "/api/instagram/auth?returnTo=analytics"}>
+            <Button variant="primary" onClick={() => window.location.href = "/api/instagram/auth?returnTo=analytics"}>
               Connect Instagram <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
             <Link href="/settings">
@@ -417,39 +416,41 @@ export default function AnalyticsDashboard() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeading
-          eyebrow="Performance"
-          title="Analytics"
-          description="Aggregated account KPIs, retention insights, and automated strategy auditing."
-        />
-        
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
-          {/* Last Synced Status Badge */}
-          {activeAccount && (
-            <div className="flex flex-col items-end">
-              {activeAccount.lastSyncedAt ? (
-                <Badge className="bg-emerald-500/10 border-emerald-500/30 text-emerald-400 text-[10px] font-mono flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Synced {new Date(activeAccount.lastSyncedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                </Badge>
-              ) : (
-                <Badge className="bg-amber-500/10 border-amber-500/30 text-amber-400 text-[10px] font-mono flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  Demo Data (Sync Required)
-                </Badge>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8 pb-16">
+      {/* Saturated Signature Block-Lime Header Block */}
+      <Panel className="rounded-[var(--rounded-lg)] bg-[var(--block-lime)] text-[var(--ink)] border-0 p-8 md:p-10">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-mono tracking-widest text-[var(--ink)]/60 uppercase mb-2">Performance</p>
+            <h1 className="type-display-lg text-3xl md:text-4xl font-bold tracking-tight text-[var(--ink)]">Analytics</h1>
+            <p className="mt-2 text-sm md:text-base text-[var(--ink)]/80 leading-relaxed">
+              Aggregated account KPIs, retention insights, and automated strategy auditing.
+            </p>
+            
+            {activeAccount && (
+              <div className="mt-4 flex items-center">
+                {activeAccount.lastSyncedAt ? (
+                  <Badge className="bg-[var(--canvas)] border border-[var(--hairline)] text-[var(--ink)] text-[10px] font-mono flex items-center gap-1.5 px-3 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink)] animate-pulse" />
+                    Synced {new Date(activeAccount.lastSyncedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  </Badge>
+                ) : (
+                  <Badge className="bg-[var(--canvas)] border border-[var(--hairline)] text-[var(--ink)] text-[10px] font-mono flex items-center gap-1.5 px-3 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink)] animate-pulse" />
+                    Demo Data (Sync Required)
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2 shrink-0">
             <div className="w-48">
               <CustomSelect
                 value={selectedAccountId}
                 onChange={(val) => {
                   setSelectedAccountId(val);
-                  setAiReport(null); // Reset report when switching account
+                  setAiReport(null);
                 }}
                 options={accounts.map((acc) => ({
                   value: acc.accountId,
@@ -462,26 +463,26 @@ export default function AnalyticsDashboard() {
               <Button
                 disabled={syncing}
                 onClick={handleSync}
-                className="h-9 px-3 border border-border/40 font-mono text-xs flex items-center gap-1.5"
+                className="h-11 px-4 border border-[var(--hairline)] bg-[var(--canvas)] text-[var(--ink)] font-mono text-xs flex items-center gap-1.5"
                 variant="secondary"
               >
                 {syncing ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--ink)]" />
                 ) : (
-                  <RefreshCw className="h-3.5 w-3.5 text-muted" />
+                  <RefreshCw className="h-3.5 w-3.5 text-[var(--ink)]" />
                 )}
                 Sync
               </Button>
             )}
           </div>
         </div>
-      </div>
+      </Panel>
 
       {oauthStatus && (
         <div className={`p-4 rounded-xl border flex items-start gap-3 text-sm ${
           oauthStatus.type === "success" 
-            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-            : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+            ? "bg-[var(--surface-soft)] border-[var(--hairline)] text-[var(--ink)]" 
+            : "bg-[var(--surface-soft)] border-[var(--danger)]/20 text-[var(--danger)]"
         }`}>
           {oauthStatus.type === "success" ? (
             <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
@@ -490,7 +491,7 @@ export default function AnalyticsDashboard() {
           )}
           <div>
             <p className="font-semibold capitalize">{oauthStatus.type === "success" ? "Success" : "Connection Error"}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{oauthStatus.message}</p>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">{oauthStatus.message}</p>
           </div>
         </div>
       )}
@@ -499,46 +500,46 @@ export default function AnalyticsDashboard() {
         <>
           {/* High-level KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Panel className="space-y-2 bg-black/15 border-border/40">
-              <div className="flex items-center justify-between text-muted text-xs uppercase tracking-wider">
+            <Panel className="space-y-2 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
+              <div className="flex items-center justify-between text-[var(--muted)] text-[10px] font-mono uppercase tracking-wider">
                 <span>Followers</span>
-                <Users className="h-4 w-4 text-accent" />
+                <Users className="h-4 w-4 text-[var(--ink)]" />
               </div>
-              <p className="text-2xl font-bold tracking-tight text-foreground">
+              <p className="text-2xl font-bold tracking-tight text-[var(--ink)]">
                 {activeAccount.kpis.followers.toLocaleString()}
               </p>
             </Panel>
 
-            <Panel className="space-y-2 bg-black/15 border-border/40">
-              <div className="flex items-center justify-between text-muted text-xs uppercase tracking-wider">
+            <Panel className="space-y-2 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
+              <div className="flex items-center justify-between text-[var(--muted)] text-[10px] font-mono uppercase tracking-wider">
                 <span>Reach</span>
-                <Eye className="h-4 w-4 text-accent" />
+                <Eye className="h-4 w-4 text-[var(--ink)]" />
               </div>
-              <p className="text-2xl font-bold tracking-tight text-foreground">
+              <p className="text-2xl font-bold tracking-tight text-[var(--ink)]">
                 {activeAccount.kpis.reach !== null && activeAccount.kpis.reach !== undefined 
                   ? activeAccount.kpis.reach.toLocaleString() 
                   : "—"}
               </p>
             </Panel>
 
-            <Panel className="space-y-2 bg-black/15 border-border/40">
-              <div className="flex items-center justify-between text-muted text-xs uppercase tracking-wider">
+            <Panel className="space-y-2 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
+              <div className="flex items-center justify-between text-[var(--muted)] text-[10px] font-mono uppercase tracking-wider">
                 <span>Views</span>
-                <BarChart3 className="h-4 w-4 text-accent" />
+                <BarChart3 className="h-4 w-4 text-[var(--ink)]" />
               </div>
-              <p className="text-2xl font-bold tracking-tight text-foreground">
+              <p className="text-2xl font-bold tracking-tight text-[var(--ink)]">
                 {activeAccount.kpis.views !== null && activeAccount.kpis.views !== undefined 
                   ? activeAccount.kpis.views.toLocaleString() 
                   : "—"}
               </p>
             </Panel>
 
-            <Panel className="space-y-2 bg-black/15 border-border/40">
-              <div className="flex items-center justify-between text-muted text-xs uppercase tracking-wider">
+            <Panel className="space-y-2 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
+              <div className="flex items-center justify-between text-[var(--muted)] text-[10px] font-mono uppercase tracking-wider">
                 <span>Engagement Rate</span>
-                <Heart className="h-4 w-4 text-accent" />
+                <Heart className="h-4 w-4 text-[var(--ink)]" />
               </div>
-              <p className="text-2xl font-bold tracking-tight text-foreground">
+              <p className="text-2xl font-bold tracking-tight text-[var(--ink)]">
                 {activeAccount.kpis.engagementRate !== null && activeAccount.kpis.engagementRate !== undefined 
                   ? `${activeAccount.kpis.engagementRate}%` 
                   : "—"}
@@ -548,27 +549,27 @@ export default function AnalyticsDashboard() {
 
           {/* Charts Row */}
           <div className="grid gap-6 md:grid-cols-2">
-            <Panel className="space-y-4">
+            <Panel className="space-y-4 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
               <div>
-                <p className="cmd-label text-accent">Engagement trend</p>
-                <h3 className="mt-1 text-sm font-semibold">Weekly Reach & View Spikes</h3>
+                <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-1">Engagement trend</p>
+                <h3 className="text-base font-bold text-[var(--ink)]">Weekly Reach & View Spikes</h3>
               </div>
-              <div className="h-40 w-full bg-black/30 rounded-xl p-2 border border-border/30 flex items-center justify-center">
+              <div className="h-40 w-full bg-[var(--canvas)] rounded-[var(--rounded-md)] p-2 border border-[var(--hairline)] flex items-center justify-center">
                 {activeAccount.trends.views && activeAccount.trends.views.some(v => v > 0) ? (
                   <SVGLineChart
                     dates={activeAccount.trends.dates}
                     values={activeAccount.trends.views}
-                    color="rgb(99, 102, 241)"
+                    color="rgb(0, 0, 0)"
                     gradId="viewsGrad"
                   />
                 ) : (
                   <div className="text-center p-4">
-                    <p className="text-xs text-muted-foreground">No view metrics available to plot.</p>
+                    <p className="text-xs text-[var(--muted)]">No view metrics available to plot.</p>
                   </div>
                 )}
               </div>
               {activeAccount.trends.dates && activeAccount.trends.dates.length > 0 && (
-                <div className="flex justify-between text-[9px] text-muted font-mono px-1">
+                <div className="flex justify-between text-[9px] text-[var(--muted)] font-mono px-1">
                   <span>{activeAccount.trends.dates[0]}</span>
                   <span>{activeAccount.trends.dates[Math.floor(activeAccount.trends.dates.length / 2)]}</span>
                   <span>{activeAccount.trends.dates[activeAccount.trends.dates.length - 1]}</span>
@@ -576,32 +577,32 @@ export default function AnalyticsDashboard() {
               )}
             </Panel>
 
-            <Panel className="space-y-4">
+            <Panel className="space-y-4 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
               <div>
-                <p className="cmd-label text-accent">Audience growth</p>
-                <h3 className="mt-1 text-sm font-semibold">Net Followers Gains (Last 30 days)</h3>
+                <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-1">Audience growth</p>
+                <h3 className="text-base font-bold text-[var(--ink)]">Net Followers Gains (Last 30 days)</h3>
               </div>
-              <div className="h-40 w-full bg-black/30 rounded-xl p-2 border border-border/30 flex items-center justify-center">
+              <div className="h-40 w-full bg-[var(--canvas)] rounded-[var(--rounded-md)] p-2 border border-[var(--hairline)] flex items-center justify-center">
                 {activeAccount.trends.followers && 
                 activeAccount.trends.followers.length > 0 && 
                 !activeAccount.trends.followers.every((val) => val === activeAccount.trends.followers[0]) ? (
                   <SVGLineChart
                     dates={activeAccount.trends.dates}
                     values={activeAccount.trends.followers}
-                    color="rgb(236, 72, 153)"
+                    color="rgb(197, 176, 244)"
                     gradId="followersGrad"
                   />
                 ) : (
                   <div className="text-center p-4">
-                    <p className="text-xs text-muted-foreground">Historical follower trend is unavailable.</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1 max-w-xs mx-auto">
-                      Instagram Graph API does not provide retroactive follower history. Net gains timeline will build dynamically here over time.
+                    <p className="text-xs text-[var(--muted)]">Historical follower trend is unavailable.</p>
+                    <p className="text-[10px] text-[var(--muted)]/70 mt-1 max-w-xs mx-auto leading-relaxed">
+                      Instagram Graph API net gains timeline will build dynamically here over time.
                     </p>
                   </div>
                 )}
               </div>
               {activeAccount.trends.dates && activeAccount.trends.dates.length > 0 && (
-                <div className="flex justify-between text-[9px] text-muted font-mono px-1">
+                <div className="flex justify-between text-[9px] text-[var(--muted)] font-mono px-1">
                   <span>{activeAccount.trends.dates[0]}</span>
                   <span>{activeAccount.trends.dates[Math.floor(activeAccount.trends.dates.length / 2)]}</span>
                   <span>{activeAccount.trends.dates[activeAccount.trends.dates.length - 1]}</span>
@@ -613,20 +614,20 @@ export default function AnalyticsDashboard() {
           {/* AI Auditor & Recent Posts */}
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             {/* AI Auditor */}
-            <Panel className="space-y-6">
+            <Panel className="space-y-6 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-accent" />
-                  <h2 className="text-base font-semibold">AI Insights Auditor</h2>
+                  <Sparkles className="h-5 w-5 text-[var(--ink)] animate-pulse" />
+                  <h2 className="text-base font-bold text-[var(--ink)]">AI Insights Auditor</h2>
                 </div>
-                <Button disabled={auditing} onClick={handleAiAudit} className="h-8 text-xs font-mono">
+                <Button variant="primary" disabled={auditing} onClick={handleAiAudit} className="h-9 px-4 text-xs font-semibold">
                   {auditing ? (
                     <>
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Auditing...
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-[var(--on-primary)]" /> Auditing...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="mr-2 h-3.5 w-3.5" /> Run Audit
+                      <Sparkles className="mr-2 h-4 w-4" /> Run Audit
                     </>
                   )}
                 </Button>
@@ -634,20 +635,20 @@ export default function AnalyticsDashboard() {
 
               {auditing ? (
                 <div className="flex flex-col items-center justify-center py-20 space-y-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-accent" />
-                  <p className="text-xs text-muted">Gemini is reviewing your views, reach, and scripts...</p>
+                  <Loader2 className="h-8 w-8 animate-spin text-[var(--ink)]" />
+                  <p className="text-xs text-[var(--muted)]">Gemini is reviewing your views, reach, and scripts...</p>
                 </div>
               ) : aiReport ? (
-                <div className="rounded-xl border border-border/60 bg-black/45 p-6 max-h-[500px] overflow-y-auto custom-scrollbar">
+                <div className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] p-6 max-h-[500px] overflow-y-auto scrollbar-thin">
                   <MarkdownViewer text={aiReport} />
                 </div>
               ) : (
-                <div className="rounded-xl border border-border/40 bg-black/20 p-8 text-center space-y-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent mx-auto">
+                <div className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] p-8 text-center space-y-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--rounded-md)] bg-[var(--canvas)] border border-[var(--hairline)] text-[var(--ink)] mx-auto">
                      <BookOpen className="h-5 w-5" />
                   </div>
-                  <h4 className="text-sm font-semibold">Automated Performance Summary</h4>
-                  <p className="text-xs text-muted max-w-sm mx-auto">
+                  <h4 className="text-sm font-semibold text-[var(--ink)]">Automated Performance Summary</h4>
+                  <p className="text-xs text-[var(--muted)] max-w-sm mx-auto leading-relaxed">
                     Analyze your recent posts, retention metrics, and caption copy to generate customized script iterations and follow-up hook recommendations.
                   </p>
                 </div>
@@ -655,25 +656,25 @@ export default function AnalyticsDashboard() {
             </Panel>
 
             {/* Recent Posts Breakdown */}
-            <Panel className="space-y-4">
+            <Panel className="space-y-4 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="cmd-label text-accent">Posts Breakdown</p>
-                  <h2 className="mt-1 text-base font-semibold">Recent Reels & Video assets</h2>
+                  <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-1">Posts Breakdown</p>
+                  <h2 className="text-base font-bold text-[var(--ink)]">Recent Reels & Video assets</h2>
                 </div>
                 
                 {/* Grid vs Table Toggle */}
-                <div className="flex items-center gap-1 bg-black/30 p-1 rounded-lg border border-border/40 shrink-0">
+                <div className="flex items-center gap-1 bg-[var(--surface-soft)] p-1 rounded-[var(--rounded-md)] border border-[var(--hairline)] shrink-0">
                   <button
                     onClick={() => setViewMode("grid")}
-                    className={`p-1.5 rounded-md transition ${viewMode === "grid" ? "bg-accent/15 text-accent" : "text-muted hover:text-foreground"}`}
+                    className={`p-1.5 rounded-[var(--rounded-md)] transition ${viewMode === "grid" ? "bg-[var(--canvas)] text-[var(--ink)] shadow-sm border border-[var(--hairline)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
                     title="Grid View"
                   >
                     <LayoutGrid className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setViewMode("table")}
-                    className={`p-1.5 rounded-md transition ${viewMode === "table" ? "bg-accent/15 text-accent" : "text-muted hover:text-foreground"}`}
+                    className={`p-1.5 rounded-[var(--rounded-md)] transition ${viewMode === "table" ? "bg-[var(--canvas)] text-[var(--ink)] shadow-sm border border-[var(--hairline)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
                     title="Table View"
                   >
                     <List className="h-3.5 w-3.5" />
@@ -683,7 +684,7 @@ export default function AnalyticsDashboard() {
 
               {viewMode === "grid" ? (
                 // Grid View
-                <div className="grid sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="grid sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto scrollbar-thin pr-1">
                   {activeAccount.posts.map((post) => (
                     <div
                       key={post.id}
@@ -691,23 +692,23 @@ export default function AnalyticsDashboard() {
                         setSelectedPost(post);
                         setPostAudit(null);
                       }}
-                      className="group cursor-pointer overflow-hidden rounded-xl border border-border/60 bg-black/35 hover:border-accent/40 transition duration-300 flex flex-col"
+                      className="group cursor-pointer overflow-hidden rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] hover:border-[var(--ink)] transition-colors duration-250 flex flex-col"
                     >
-                      <div className="relative aspect-video bg-black/45 w-full overflow-hidden border-b border-border/40">
+                      <div className="relative aspect-video bg-[var(--surface-soft)] w-full overflow-hidden border-b border-[var(--hairline)]">
                         {post.thumbnail_url || post.media_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={post.thumbnail_url || post.media_url}
                             alt={post.title}
-                            className="object-cover w-full h-full group-hover:scale-105 transition duration-300"
+                            className="object-cover w-full h-full group-hover:scale-[1.02] transition duration-200"
                           />
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <InstagramIcon className="h-6 w-6 text-muted-foreground/35" />
+                            <InstagramIcon className="h-6 w-6 text-[var(--muted)]/40" />
                           </div>
                         )}
                         <div className="absolute top-2 right-2">
-                          <Badge className="bg-black/70 backdrop-blur-md border-border/60 text-[9px] capitalize px-2 py-0.5">
+                          <Badge className="bg-[var(--canvas)] border border-[var(--hairline)] text-[var(--ink)] text-[9px] capitalize px-2 py-0.5">
                             {post.format}
                           </Badge>
                         </div>
@@ -715,10 +716,10 @@ export default function AnalyticsDashboard() {
                       
                       <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                         <div>
-                          <h4 className="text-xs font-semibold text-foreground line-clamp-2 group-hover:text-accent transition duration-200">
+                          <h4 className="text-xs font-semibold text-[var(--ink)] line-clamp-2 transition-colors duration-200">
                             {post.title}
                           </h4>
-                          <p className="text-[9px] text-muted font-mono mt-1">
+                          <p className="text-[9px] text-[var(--muted)] font-mono mt-1">
                             {new Date(post.publishedAt).toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
@@ -728,23 +729,23 @@ export default function AnalyticsDashboard() {
                         </div>
 
                         {post.error && (
-                          <div className="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-md line-clamp-2" title={post.error}>
+                          <div className="text-[9px] text-[var(--ink)] bg-[var(--surface-soft)] border border-[var(--hairline)] px-2 py-1 rounded-md line-clamp-2" title={post.error}>
                             {getInstagramInsightIssueLabel(post.error)}
                           </div>
                         )}
 
-                        <div className="grid grid-cols-3 gap-1 bg-black/40 p-2 rounded-lg text-center font-mono text-[9px] text-muted border border-border/20">
+                        <div className="grid grid-cols-3 gap-1 bg-[var(--surface-soft)] p-2 rounded-md text-center font-mono text-[9px] text-[var(--muted)] border border-[var(--hairline)]">
                           <div>
-                            <p className="font-semibold text-foreground text-[10px]">{formatMetric(post.metrics.views)}</p>
-                            <p className="text-[8px] text-muted-foreground mt-0.5">Views</p>
+                            <p className="font-bold text-[var(--ink)] text-[10px]">{formatMetric(post.metrics.views)}</p>
+                            <p className="text-[8px] text-[var(--muted)] mt-0.5">Views</p>
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground text-[10px]">{formatMetric(post.metrics.likes)}</p>
-                            <p className="text-[8px] text-muted-foreground mt-0.5">Likes</p>
+                            <p className="font-bold text-[var(--ink)] text-[10px]">{formatMetric(post.metrics.likes)}</p>
+                            <p className="text-[8px] text-[var(--muted)] mt-0.5">Likes</p>
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground text-[10px]">{formatMetric(post.metrics.comments)}</p>
-                            <p className="text-[8px] text-muted-foreground mt-0.5">Comments</p>
+                            <p className="font-bold text-[var(--ink)] text-[10px]">{formatMetric(post.metrics.comments)}</p>
+                            <p className="text-[8px] text-[var(--muted)] mt-0.5">Comments</p>
                           </div>
                         </div>
                       </div>
@@ -753,10 +754,10 @@ export default function AnalyticsDashboard() {
                 </div>
               ) : (
                 // Table List View
-                <div className="overflow-x-auto max-h-[500px] border border-border/40 rounded-xl custom-scrollbar">
+                <div className="overflow-x-auto max-h-[500px] border border-[var(--hairline)] rounded-[var(--rounded-md)] scrollbar-thin">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-border/40 bg-black/45 text-[9px] font-mono text-muted uppercase tracking-wider">
+                      <tr className="border-b border-[var(--hairline)] bg-[var(--surface-soft)] text-[9px] font-mono text-[var(--muted)] uppercase tracking-wider">
                         <th className="p-3 pl-4 font-semibold">Title</th>
                         <th className="p-3 font-semibold">Date</th>
                         <th className="p-3 text-right font-semibold">Views</th>
@@ -765,7 +766,7 @@ export default function AnalyticsDashboard() {
                         <th className="p-3 text-right font-semibold">Eng. Rate</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/20 bg-black/10 text-xs">
+                    <tbody className="divide-y divide-[var(--hairline)] text-xs">
                       {activeAccount.posts.map((post) => {
                         const views = post.metrics.views;
                         let rate = "—";
@@ -781,32 +782,32 @@ export default function AnalyticsDashboard() {
                               setSelectedPost(post);
                               setPostAudit(null);
                             }}
-                            className="hover:bg-white/5 cursor-pointer transition duration-150"
+                            className="hover:bg-[var(--surface-soft)]/55 cursor-pointer transition-colors duration-150"
                           >
-                            <td className="p-3 pl-4 font-medium text-foreground truncate max-w-[160px]" title={post.title}>
-                              <div className="font-medium truncate">{post.title}</div>
+                            <td className="p-3 pl-4 font-semibold text-[var(--ink)] truncate max-w-[160px]" title={post.title}>
+                              <div className="font-semibold truncate">{post.title}</div>
                               {post.error && (
-                                <div className="text-[9px] text-amber-400 font-mono truncate" title={post.error}>
+                                <div className="text-[9px] text-[var(--muted)] font-mono truncate" title={post.error}>
                                   {getInstagramInsightIssueLabel(post.error)}
                                 </div>
                               )}
                             </td>
-                            <td className="p-3 text-muted-foreground font-mono text-[10px] whitespace-nowrap">
+                            <td className="p-3 text-[var(--muted)] font-mono text-[10px] whitespace-nowrap">
                               {new Date(post.publishedAt).toLocaleDateString("en-US", {
                                 month: "short",
                                 day: "numeric",
                               })}
                             </td>
-                            <td className="p-3 text-right font-mono font-semibold text-foreground">
+                            <td className="p-3 text-right font-mono font-bold text-[var(--ink)]">
                               {views !== null && views !== undefined ? views.toLocaleString() : "—"}
                             </td>
-                            <td className="p-3 text-right font-mono text-muted">
+                            <td className="p-3 text-right font-mono text-[var(--muted)]">
                               {post.metrics.likes !== null && post.metrics.likes !== undefined ? post.metrics.likes.toLocaleString() : "—"}
                             </td>
-                            <td className="p-3 text-right font-mono text-muted">
+                            <td className="p-3 text-right font-mono text-[var(--muted)]">
                               {post.metrics.comments !== null && post.metrics.comments !== undefined ? post.metrics.comments.toLocaleString() : "—"}
                             </td>
-                            <td className="p-3 text-right font-mono text-emerald-400">
+                            <td className="p-3 text-right font-mono font-bold text-[var(--ink)]">
                               {rate}
                             </td>
                           </tr>
@@ -823,31 +824,31 @@ export default function AnalyticsDashboard() {
 
       {/* Slide-Over Drawer (Media Viewer) */}
       {selectedPost && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity duration-300">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm transition-opacity duration-300">
           <div className="absolute inset-0" onClick={() => setSelectedPost(null)} />
           
-          <div className="relative w-full max-w-4xl h-full bg-[#0a0a0c] border-l border-border/80 shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
+          <div className="relative w-full max-w-4xl h-full bg-[var(--canvas)] border-l border-[var(--hairline)] shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-350">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border/40">
+            <div className="flex items-center justify-between p-6 border-b border-[var(--hairline)]">
               <div>
-                <h3 className="text-sm font-semibold text-foreground line-clamp-1">{selectedPost.title}</h3>
-                <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                <h3 className="text-lg font-bold text-[var(--ink)] line-clamp-1">{selectedPost.title}</h3>
+                <p className="text-[10px] text-[var(--muted)] mt-0.5 font-mono">
                   Published: {new Date(selectedPost.publishedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedPost(null)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-muted hover:text-foreground transition"
+                className="p-2 hover:bg-[var(--surface-soft)] rounded-[var(--rounded-md)] text-[var(--ink)] transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Body: Two columns layout */}
-            <div className="flex-1 overflow-y-auto grid md:grid-cols-2 gap-6 p-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto grid md:grid-cols-2 gap-6 p-6 scrollbar-thin">
               {/* Left Column: Embed */}
               <div className="flex flex-col justify-start space-y-4">
-                <div className="relative w-full aspect-[4/5] bg-black/40 rounded-xl overflow-hidden border border-border/40 flex items-center justify-center">
+                <div className="relative w-full aspect-[4/5] bg-[var(--surface-soft)] rounded-[var(--rounded-md)] overflow-hidden border border-[var(--hairline)] flex items-center justify-center">
                   {getInstagramShortcode(selectedPost.permalink) ? (
                     <iframe
                       src={`https://www.instagram.com/p/${getInstagramShortcode(selectedPost.permalink)}/embed`}
@@ -858,8 +859,8 @@ export default function AnalyticsDashboard() {
                     />
                   ) : (
                     <div className="text-center p-6 space-y-2">
-                      <InstagramIcon className="h-10 w-10 text-muted mx-auto" />
-                      <p className="text-xs text-muted">Preview unavailable (Private or missing permalink)</p>
+                      <InstagramIcon className="h-10 w-10 text-[var(--muted)] mx-auto" />
+                      <p className="text-xs text-[var(--muted)]">Preview unavailable (Private or missing permalink)</p>
                     </div>
                   )}
                 </div>
@@ -870,7 +871,7 @@ export default function AnalyticsDashboard() {
                       href={selectedPost.permalink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-accent hover:underline flex items-center justify-center gap-1 font-mono"
+                      className="text-xs text-[var(--ink)] hover:underline flex items-center justify-center gap-1 font-mono font-semibold"
                     >
                       View original post on Instagram <ChevronRight className="h-3 w-3" />
                     </a>
@@ -882,12 +883,12 @@ export default function AnalyticsDashboard() {
               <div className="space-y-6">
                 {/* Error Banner */}
                 {selectedPost.error && (
-                  <div className="p-4 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-400 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 font-semibold">
+                  <div className="p-4 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--danger)] text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
                       <AlertCircle className="h-4 w-4 shrink-0" />
                       Detailed Metrics Unavailable
                     </div>
-                    <p className="text-muted text-[11px] leading-relaxed">
+                    <p className="text-[var(--muted)] text-[11px] leading-relaxed">
                       {selectedPost.error}
                     </p>
                   </div>
@@ -895,11 +896,11 @@ export default function AnalyticsDashboard() {
 
                 {/* Post Metrics Grid */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-muted uppercase tracking-wider">Post Performance</h4>
+                  <h4 className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase">Post Performance</h4>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 bg-black/30 border border-border/40 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground font-mono">Views</p>
-                      <p className="text-lg font-bold text-foreground mt-0.5">
+                    <div className="p-3 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-md)]">
+                      <p className="text-[10px] text-[var(--muted)] font-mono">Views</p>
+                      <p className="text-lg font-bold text-[var(--ink)] mt-0.5">
                         {selectedPost.metrics.views !== null && selectedPost.metrics.views !== undefined
                           ? selectedPost.metrics.views.toLocaleString()
                           : "—"}
@@ -909,16 +910,16 @@ export default function AnalyticsDashboard() {
                         if (!comp) return null;
                         const isAbove = comp.viewsDiff >= 0;
                         return (
-                          <span className={`text-[8px] font-mono mt-1 block ${isAbove ? "text-emerald-400" : "text-amber-400"}`}>
+                          <span className={`text-[8px] font-mono mt-1 block ${isAbove ? "text-[var(--ink)] font-bold" : "text-[var(--muted)]"}`}>
                             {isAbove ? "+" : ""}{comp.viewsDiff.toFixed(0)}% {isAbove ? "above avg" : "below avg"}
                           </span>
                         );
                       })()}
                     </div>
 
-                    <div className="p-3 bg-black/30 border border-border/40 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground font-mono">Likes</p>
-                      <p className="text-lg font-bold text-foreground mt-0.5">
+                    <div className="p-3 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-md)]">
+                      <p className="text-[10px] text-[var(--muted)] font-mono">Likes</p>
+                      <p className="text-lg font-bold text-[var(--ink)] mt-0.5">
                         {selectedPost.metrics.likes !== null && selectedPost.metrics.likes !== undefined
                           ? selectedPost.metrics.likes.toLocaleString()
                           : "—"}
@@ -928,16 +929,16 @@ export default function AnalyticsDashboard() {
                         if (!comp) return null;
                         const isAbove = comp.likesDiff >= 0;
                         return (
-                          <span className={`text-[8px] font-mono mt-1 block ${isAbove ? "text-emerald-400" : "text-amber-400"}`}>
+                          <span className={`text-[8px] font-mono mt-1 block ${isAbove ? "text-[var(--ink)] font-bold" : "text-[var(--muted)]"}`}>
                             {isAbove ? "+" : ""}{comp.likesDiff.toFixed(0)}% {isAbove ? "above avg" : "below avg"}
                           </span>
                         );
                       })()}
                     </div>
 
-                    <div className="p-3 bg-black/30 border border-border/40 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground font-mono">Comments</p>
-                      <p className="text-lg font-bold text-foreground mt-0.5">
+                    <div className="p-3 bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-md)]">
+                      <p className="text-[10px] text-[var(--muted)] font-mono">Comments</p>
+                      <p className="text-lg font-bold text-[var(--ink)] mt-0.5">
                         {selectedPost.metrics.comments !== null && selectedPost.metrics.comments !== undefined
                           ? selectedPost.metrics.comments.toLocaleString()
                           : "—"}
@@ -947,7 +948,7 @@ export default function AnalyticsDashboard() {
                         if (!comp) return null;
                         const isAbove = comp.commentsDiff >= 0;
                         return (
-                          <span className={`text-[8px] font-mono mt-1 block ${isAbove ? "text-emerald-400" : "text-amber-400"}`}>
+                          <span className={`text-[8px] font-mono mt-1 block ${isAbove ? "text-[var(--ink)] font-bold" : "text-[var(--muted)]"}`}>
                             {isAbove ? "+" : ""}{comp.commentsDiff.toFixed(0)}% {isAbove ? "above avg" : "below avg"}
                           </span>
                         );
@@ -956,17 +957,17 @@ export default function AnalyticsDashboard() {
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div className="p-3 bg-black/20 border border-border/30 rounded-xl">
-                      <p className="text-[9px] text-muted-foreground font-mono">Shares</p>
-                      <p className="text-sm font-semibold text-foreground mt-0.5">
+                    <div className="p-3 bg-[var(--surface-soft)] border border-[var(--hairline)] rounded-[var(--rounded-md)]">
+                      <p className="text-[9px] text-[var(--muted)] font-mono">Shares</p>
+                      <p className="text-sm font-semibold text-[var(--ink)] mt-0.5">
                         {selectedPost.metrics.shares !== null && selectedPost.metrics.shares !== undefined
                           ? selectedPost.metrics.shares.toLocaleString()
                           : "—"}
                       </p>
                     </div>
-                    <div className="p-3 bg-black/20 border border-border/30 rounded-xl">
-                      <p className="text-[9px] text-muted-foreground font-mono">Saves</p>
-                      <p className="text-sm font-semibold text-foreground mt-0.5">
+                    <div className="p-3 bg-[var(--surface-soft)] border border-[var(--hairline)] rounded-[var(--rounded-md)]">
+                      <p className="text-[9px] text-[var(--muted)] font-mono">Saves</p>
+                      <p className="text-sm font-semibold text-[var(--ink)] mt-0.5">
                         {selectedPost.metrics.saves !== null && selectedPost.metrics.saves !== undefined
                           ? selectedPost.metrics.saves.toLocaleString()
                           : "—"}
@@ -975,19 +976,20 @@ export default function AnalyticsDashboard() {
                   </div>
                 </div>
 
-                <hr className="border-border/40" />
+                <div className="border-b border-[var(--hairline)]" />
 
                 {/* Quick AI Audit */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                      <Sparkles className="h-3.5 w-3.5 text-accent animate-pulse" /> AI Performance Audit
+                    <h4 className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-[var(--ink)] animate-pulse" /> AI Performance Audit
                     </h4>
                     {!postAudit && (
                       <Button
                         disabled={auditingPost || selectedPost.metrics.views === null}
                         onClick={() => handlePostAudit(selectedPost)}
-                        className="h-7 px-3 text-[10px] font-mono"
+                        className="h-8 px-3 text-xs font-semibold rounded-[var(--rounded-md)]"
+                        variant="primary"
                       >
                         {auditingPost ? "Analyzing..." : "Analyze Hook"}
                       </Button>
@@ -995,22 +997,22 @@ export default function AnalyticsDashboard() {
                   </div>
 
                   {auditingPost ? (
-                    <div className="flex flex-col items-center justify-center py-10 space-y-2 bg-black/10 border border-border/30 rounded-xl">
-                      <Loader2 className="h-5 w-5 animate-spin text-accent" />
-                      <p className="text-[10px] text-muted font-mono">Gemini is auditing post hooks & retention pacing...</p>
+                    <div className="flex flex-col items-center justify-center py-10 space-y-2 bg-[var(--surface-soft)] border border-[var(--hairline)] rounded-[var(--rounded-md)]">
+                      <Loader2 className="h-5 w-5 animate-spin text-[var(--ink)]" />
+                      <p className="text-[10px] text-[var(--muted)] font-mono">Gemini is auditing post hooks & retention pacing...</p>
                     </div>
                   ) : postAudit ? (
-                    <div className="rounded-xl border border-border/60 bg-black/35 p-5 space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+                    <div className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] p-5 space-y-4 max-h-[300px] overflow-y-auto scrollbar-thin">
                       <MarkdownViewer text={postAudit} />
-                      <div className="flex justify-end">
-                        <Button variant="secondary" onClick={() => handlePostAudit(selectedPost)} className="h-6 text-[9px] font-mono" disabled={selectedPost.metrics.views === null}>
+                      <div className="flex justify-end pt-2 border-t border-[var(--hairline)]">
+                        <Button variant="secondary" onClick={() => handlePostAudit(selectedPost)} className="h-7 px-3 text-[10px]" disabled={selectedPost.metrics.views === null}>
                           Re-Analyze
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-border/60 bg-black/10 p-5 text-center">
-                      <p className="text-xs text-muted">
+                    <div className="rounded-[var(--rounded-md)] border border-dashed border-[var(--hairline)] bg-[var(--surface-soft)]/50 p-5 text-center">
+                      <p className="text-xs text-[var(--muted)] leading-relaxed">
                         {selectedPost.metrics.views === null
                           ? `${getInstagramInsightIssueLabel(selectedPost.error)}: AI auditing requires view metrics for this post.`
                           : "Audit this post to diagnose hook pacing and get iteration script recommendations."}

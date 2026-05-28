@@ -13,6 +13,7 @@ function createBuilder(result: unknown) {
     update: vi.fn(() => builder),
     eq: vi.fn(() => builder),
     order: vi.fn(() => builder),
+    limit: vi.fn(async () => result),
     single: vi.fn(async () => result),
     maybeSingle: vi.fn(async () => result),
   };
@@ -136,14 +137,16 @@ describe("agent runtime", () => {
 
   test("getLatestAgentHistory returns the latest active thread with messages and tool calls", async () => {
     const threadBuilder = createBuilder({
-      data: {
-        id: "thread-2",
-        project_id: "project-1",
-        owner_id: "user-1",
-        title: "Latest thread",
-        status: "active",
-        metadata: {},
-      },
+      data: [
+        {
+          id: "thread-2",
+          project_id: "project-1",
+          owner_id: "user-1",
+          title: "Latest thread",
+          status: "active",
+          metadata: {},
+        },
+      ],
       error: null,
     });
     const messageBuilder = createBuilder({

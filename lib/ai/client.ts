@@ -2,7 +2,29 @@ import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { env } from "../env";
 import { getActiveProviderToken, type CreatorSettingsRow } from "@/lib/creator-settings";
+import { getChatModelPresets, type ChatModelPreset } from "@/lib/ai/model-registry";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+type ChatProvider = ChatModelPreset["provider"];
+
+export function getProviderOrderForModel(modelOverride?: string): Array<{ provider: ChatProvider; model: string }> {
+  const presets = getChatModelPresets();
+  const selected = modelOverride ? presets.find((preset) => preset.id === modelOverride) : null;
+  const defaultByProvider: Record<ChatProvider, string> = {
+    gemini: "gemini-2.5-flash",
+    openrouter: "google/gemini-2.5-flash",
+    nim: env.nimModel || "meta/llama-3.1-70b-instruct",
+  };
+  const providerOrder: ChatProvider[] = selected
+    ? [selected.provider, "gemini", "openrouter", "nim"]
+    : ["gemini", "openrouter", "nim"];
+  const deduped = providerOrder.filter((provider, index) => providerOrder.indexOf(provider) === index);
+
+  return deduped.map((provider) => ({
+    provider,
+    model: selected?.provider === provider ? selected.id : defaultByProvider[provider],
+  }));
+}
 
 function isValidApiKey(key: string): boolean {
   if (!key) return false;
@@ -80,80 +102,79 @@ export async function generateText({
     finalSystemInstruction = `${finalSystemInstruction}\n\nCreator context & background:\n${creatorContext}`.trim();
   }
 
-  // 1. Google Gemini API
-  if (isValidApiKey(activeGeminiKey)) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: modelOverride || "gemini-2.5-flash",
-          contents: prompt,
-          config: finalSystemInstruction ? { systemInstruction: finalSystemInstruction } : undefined,
-        }),
-        10000, // Increased timeout to 10s for reliability
-        "Gemini API request timed out"
-      );
-      if (response.text) {
-        return response.text;
+  for (const route of getProviderOrderForModel(modelOverride)) {
+    if (route.provider === "gemini" && isValidApiKey(activeGeminiKey)) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: route.model,
+            contents: prompt,
+            config: finalSystemInstruction ? { systemInstruction: finalSystemInstruction } : undefined,
+          }),
+          10000,
+          "Gemini API request timed out"
+        );
+        if (response.text) {
+          return response.text;
+        }
+      } catch (e) {
+        console.error("Gemini AI API error:", e);
       }
-    } catch (e) {
-      console.error("Gemini AI API error:", e);
     }
-  }
 
-  // 2. OpenRouter API
-  if (isValidApiKey(activeOpenRouterKey)) {
-    try {
-      const client = new OpenAI({
-        apiKey: activeOpenRouterKey,
-        baseURL: "https://openrouter.ai/api/v1",
-      });
-      const response = await withTimeout(
-        client.chat.completions.create({
-          model: modelOverride || "google/gemini-2.5-flash",
-          messages: [
-            ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
-            { role: "user" as const, content: prompt },
-          ],
-          temperature: 0.7,
-        }),
-        10000,
-        "OpenRouter API request timed out"
-      );
-      const text = response.choices[0]?.message?.content;
-      if (text) {
-        return text;
+    if (route.provider === "openrouter" && isValidApiKey(activeOpenRouterKey)) {
+      try {
+        const client = new OpenAI({
+          apiKey: activeOpenRouterKey,
+          baseURL: "https://openrouter.ai/api/v1",
+        });
+        const response = await withTimeout(
+          client.chat.completions.create({
+            model: route.model,
+            messages: [
+              ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+              { role: "user" as const, content: prompt },
+            ],
+            temperature: 0.7,
+          }),
+          10000,
+          "OpenRouter API request timed out"
+        );
+        const text = response.choices[0]?.message?.content;
+        if (text) {
+          return text;
+        }
+      } catch (e) {
+        console.error("OpenRouter API error:", e);
       }
-    } catch (e) {
-      console.error("OpenRouter API error:", e);
     }
-  }
 
-  // 3. NVIDIA NIM API
-  if (isValidApiKey(activeNimKey) && env.nimBaseUrl) {
-    try {
-      const client = new OpenAI({
-        apiKey: activeNimKey,
-        baseURL: env.nimBaseUrl,
-      });
-      const response = await withTimeout(
-        client.chat.completions.create({
-          model: modelOverride || env.nimModel || "meta/llama-3.1-70b-instruct",
-          messages: [
-            ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
-            { role: "user" as const, content: prompt },
-          ],
-          temperature: 0.7,
-        }),
-        10000,
-        "NVIDIA NIM API request timed out"
-      );
-      const text = response.choices[0]?.message?.content;
-      if (text) {
-        return text;
+    if (route.provider === "nim" && isValidApiKey(activeNimKey) && env.nimBaseUrl) {
+      try {
+        const client = new OpenAI({
+          apiKey: activeNimKey,
+          baseURL: env.nimBaseUrl,
+        });
+        const response = await withTimeout(
+          client.chat.completions.create({
+            model: route.model,
+            messages: [
+              ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+              { role: "user" as const, content: prompt },
+            ],
+            temperature: 0.7,
+          }),
+          10000,
+          "NVIDIA NIM API request timed out"
+        );
+        const text = response.choices[0]?.message?.content;
+        if (text) {
+          return text;
+        }
+      } catch (e) {
+        console.error("NVIDIA NIM API error:", e);
       }
-    } catch (e) {
-      console.error("NVIDIA NIM API error:", e);
     }
   }
 
@@ -210,79 +231,78 @@ export async function* generateTextStream({
     finalSystemInstruction = `${finalSystemInstruction}\n\nCreator context & background:\n${creatorContext}`.trim();
   }
 
-  // 1. Google Gemini API (Streaming)
-  if (isValidApiKey(activeGeminiKey)) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
-      const responseStream = await ai.models.generateContentStream({
-        model: modelOverride || "gemini-2.5-flash",
-        contents: prompt,
-        config: finalSystemInstruction ? { systemInstruction: finalSystemInstruction } : undefined,
-      });
-      for await (const chunk of responseStream) {
-        if (chunk.text) {
-          yield chunk.text;
+  for (const route of getProviderOrderForModel(modelOverride)) {
+    if (route.provider === "gemini" && isValidApiKey(activeGeminiKey)) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
+        const responseStream = await ai.models.generateContentStream({
+          model: route.model,
+          contents: prompt,
+          config: finalSystemInstruction ? { systemInstruction: finalSystemInstruction } : undefined,
+        });
+        for await (const chunk of responseStream) {
+          if (chunk.text) {
+            yield chunk.text;
+          }
         }
+        return;
+      } catch (e) {
+        console.error("Gemini AI API error in stream:", e);
       }
-      return;
-    } catch (e) {
-      console.error("Gemini AI API error in stream:", e);
     }
-  }
 
-  // 2. OpenRouter API (Streaming)
-  if (isValidApiKey(activeOpenRouterKey)) {
-    try {
-      const client = new OpenAI({
-        apiKey: activeOpenRouterKey,
-        baseURL: "https://openrouter.ai/api/v1",
-      });
-      const responseStream = await client.chat.completions.create({
-        model: modelOverride || "google/gemini-2.5-flash",
-        messages: [
-          ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
-          { role: "user" as const, content: prompt },
-        ],
-        temperature: 0.7,
-        stream: true,
-      });
-      for await (const chunk of responseStream) {
-        const text = chunk.choices[0]?.delta?.content;
-        if (text) {
-          yield text;
+    if (route.provider === "openrouter" && isValidApiKey(activeOpenRouterKey)) {
+      try {
+        const client = new OpenAI({
+          apiKey: activeOpenRouterKey,
+          baseURL: "https://openrouter.ai/api/v1",
+        });
+        const responseStream = await client.chat.completions.create({
+          model: route.model,
+          messages: [
+            ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+            { role: "user" as const, content: prompt },
+          ],
+          temperature: 0.7,
+          stream: true,
+        });
+        for await (const chunk of responseStream) {
+          const text = chunk.choices[0]?.delta?.content;
+          if (text) {
+            yield text;
+          }
         }
+        return;
+      } catch (e) {
+        console.error("OpenRouter API error in stream:", e);
       }
-      return;
-    } catch (e) {
-      console.error("OpenRouter API error in stream:", e);
     }
-  }
 
-  // 3. NVIDIA NIM API (Streaming)
-  if (isValidApiKey(activeNimKey) && env.nimBaseUrl) {
-    try {
-      const client = new OpenAI({
-        apiKey: activeNimKey,
-        baseURL: env.nimBaseUrl,
-      });
-      const responseStream = await client.chat.completions.create({
-        model: modelOverride || env.nimModel || "meta/llama-3.1-70b-instruct",
-        messages: [
-          ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
-          { role: "user" as const, content: prompt },
-        ],
-        temperature: 0.7,
-        stream: true,
-      });
-      for await (const chunk of responseStream) {
-        const text = chunk.choices[0]?.delta?.content;
-        if (text) {
-          yield text;
+    if (route.provider === "nim" && isValidApiKey(activeNimKey) && env.nimBaseUrl) {
+      try {
+        const client = new OpenAI({
+          apiKey: activeNimKey,
+          baseURL: env.nimBaseUrl,
+        });
+        const responseStream = await client.chat.completions.create({
+          model: route.model,
+          messages: [
+            ...(finalSystemInstruction ? [{ role: "system" as const, content: finalSystemInstruction }] : []),
+            { role: "user" as const, content: prompt },
+          ],
+          temperature: 0.7,
+          stream: true,
+        });
+        for await (const chunk of responseStream) {
+          const text = chunk.choices[0]?.delta?.content;
+          if (text) {
+            yield text;
+          }
         }
+        return;
+      } catch (e) {
+        console.error("NVIDIA NIM API error in stream:", e);
       }
-      return;
-    } catch (e) {
-      console.error("NVIDIA NIM API error in stream:", e);
     }
   }
 

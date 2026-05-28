@@ -13,6 +13,7 @@ import {
   markGenerationFailed,
   uploadGeneratedAsset,
 } from "@/lib/project-service";
+import type { JsonValue } from "@/lib/types";
 
 export async function generateProjectMedia({
   projectId,
@@ -21,6 +22,9 @@ export async function generateProjectMedia({
   modality,
   modelId,
   provider,
+  negativePrompt,
+  parameters,
+  structuredPrompt,
   title,
   sceneKey,
   folderId,
@@ -31,14 +35,20 @@ export async function generateProjectMedia({
   modality: MediaModality;
   modelId?: string;
   provider?: string;
+  negativePrompt?: string;
+  parameters?: Record<string, string | number | boolean>;
+  structuredPrompt?: Record<string, unknown>;
   title?: string;
   sceneKey?: string;
   folderId?: string;
 }) {
   const fallbackModel = getDefaultMediaModel(modality);
   const resolvedModelId = modelId ?? fallbackModel.id;
-  const resolvedProvider = provider ?? fallbackModel.provider ?? "huggingface";
+  const resolvedProvider = provider ?? fallbackModel.provider;
   let generationId: string | null = null;
+  const structuredPromptJson = structuredPrompt
+    ? (JSON.parse(JSON.stringify(structuredPrompt)) as JsonValue)
+    : null;
 
   try {
     const { supabase: rawSupabase, user, generation } = await createGenerationRecord(projectId, {
@@ -47,7 +57,10 @@ export async function generateProjectMedia({
       modality,
       prompt,
       metadata: {
-        provider: resolvedProvider,
+        provider: resolvedProvider ?? null,
+        negativePrompt: negativePrompt ?? null,
+        parameters: parameters ?? null,
+        structuredPrompt: structuredPromptJson,
       },
     });
     generationId = generation.id;
@@ -90,9 +103,12 @@ export async function generateProjectMedia({
       sceneKey: sceneKey ?? null,
       generationId: generation.id,
       metadata: {
-        provider: resolvedProvider,
+        provider: resolvedProvider ?? null,
         model: resolvedModelId,
         prompt,
+        negativePrompt: negativePrompt ?? null,
+        parameters: parameters ?? null,
+        structuredPrompt: structuredPromptJson,
         contentType: generated.contentType,
       },
     });
@@ -132,10 +148,13 @@ export async function generateProjectMedia({
     }
 
     await markGenerationCompleted(generation.id, {
-      provider: resolvedProvider,
+      provider: resolvedProvider ?? null,
       assetPath: upload.path,
       assetUrl: upload.publicUrl,
       assetId: asset.id,
+      negativePrompt: negativePrompt ?? null,
+      parameters: parameters ?? null,
+      structuredPrompt: structuredPromptJson,
     });
 
     return {
@@ -146,7 +165,7 @@ export async function generateProjectMedia({
       folderId: resolvedFolderId ?? null,
       folderName,
       model: resolvedModelId,
-      provider: resolvedProvider,
+      provider: resolvedProvider ?? "auto",
       prompt,
     };
   } catch (caught) {

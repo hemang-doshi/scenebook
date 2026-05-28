@@ -30,7 +30,7 @@ export default function AudioPanel() {
       </div>
       <div className="flex gap-1.5 overflow-x-auto ed-scrollbar pb-1">
         {categories.map((c) => (
-          <button key={c} onClick={() => setActive(c)} className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium transition ${active === c ? "bg-[var(--ed-accent)] text-white" : "bg-[var(--ed-surface-muted)] text-[var(--ed-text-muted)]"}`}>{c}</button>
+          <button key={c} onClick={() => setActive(c)} className={`shrink-0 rounded-[var(--ed-radius-sm)] px-2.5 py-1 text-[10px] font-medium transition ${active === c ? "bg-[var(--ed-accent)] text-white" : "bg-[var(--ed-surface-muted)] text-[var(--ed-text-muted)]"}`}>{c}</button>
         ))}
       </div>
       <div className="space-y-1.5">

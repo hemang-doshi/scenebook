@@ -122,12 +122,15 @@ describe("generateProjectMedia shared service", () => {
     });
 
     expect(moveAssetToFolder).toHaveBeenCalledWith("project-1", "asset-1", "folder-123");
-    expect(markGenerationCompleted).toHaveBeenCalledWith("generation-1", {
-      provider: "huggingface",
-      assetPath: "project/generated.png",
-      assetUrl: "https://example.com/generated.png",
-      assetId: "asset-1",
-    });
+    expect(markGenerationCompleted).toHaveBeenCalledWith(
+      "generation-1",
+      expect.objectContaining({
+        provider: "huggingface",
+        assetPath: "project/generated.png",
+        assetUrl: "https://example.com/generated.png",
+        assetId: "asset-1",
+      }),
+    );
   });
 
   test("runs successfully with default folder resolution", async () => {

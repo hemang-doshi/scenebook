@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 
 const variants = {
   primary:
-    "bg-accent text-accent-foreground hover:brightness-110 shadow-[0_0_18px_rgba(212,255,51,0.18)]",
+    "bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[#222] active:scale-[0.97]",
   secondary:
-    "border border-border bg-transparent text-foreground hover:border-white hover:bg-white/5",
-  ghost: "bg-transparent text-muted hover:bg-white/5 hover:text-foreground",
+    "bg-[var(--canvas)] text-[var(--ink)] border border-[var(--hairline)] hover:border-[var(--ink)] active:scale-[0.97]",
+  ghost: "bg-transparent text-[var(--ink)] hover:bg-[var(--surface-soft)]",
 };
 
 export function Button({
@@ -20,7 +20,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex h-10 items-center justify-center rounded-lg px-4 font-mono text-[11px] font-medium uppercase tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex h-9 items-center justify-center rounded-[var(--rounded-md)] px-4 text-xs font-medium whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]/20 disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         className,
       )}

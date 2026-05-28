@@ -29,7 +29,7 @@ export default function CaptionsPanel() {
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--ed-text-muted)]">Word Highlight</p>
         <div className="flex gap-1.5">
           {highlights.map((h) => (
-            <button key={h} onClick={() => setActiveHighlight(h)} className={`flex-1 rounded-full py-1 text-[10px] font-medium transition ${activeHighlight === h ? "bg-[var(--ed-accent)] text-white" : "bg-[var(--ed-surface-muted)] text-[var(--ed-text-muted)]"}`}>{h}</button>
+            <button key={h} onClick={() => setActiveHighlight(h)} className={`flex-1 rounded-[var(--ed-radius-sm)] py-1 text-[10px] font-medium transition ${activeHighlight === h ? "bg-[var(--ed-accent)] text-white" : "bg-[var(--ed-surface-muted)] text-[var(--ed-text-muted)]"}`}>{h}</button>
           ))}
         </div>
       </div>

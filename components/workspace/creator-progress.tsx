@@ -87,7 +87,7 @@ export function CreatorProgress({
 
       <div className="relative grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-2">
         {/* Connector line for large screens */}
-        <div className="absolute top-1/2 left-[10%] right-[10%] h-0.5 -translate-y-1/2 bg-border hidden md:block" />
+        <div className="absolute top-[26px] left-[10%] right-[10%] h-0.5 -translate-y-1/2 bg-border hidden md:block" />
 
         {STAGES.map((stage, idx) => {
           const Icon = stage.icon;

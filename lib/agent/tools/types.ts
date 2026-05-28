@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 
 import type { ProjectWorkspace } from "@/lib/data/repository";
+import type { AgentToolCallStatus } from "@/lib/agent/types";
 import type { JsonValue } from "@/lib/types";
 
 export type AgentToolSideEffect =
@@ -18,12 +19,14 @@ export type AgentToolContext = {
   project: ProjectWorkspace | null;
   selectedModel?: string | null;
   selectedModels?: Record<string, string> | null;
+  emitProgress?: (activity: string) => Promise<void> | void;
 };
 
 export type AgentToolResult = {
   message: string;
   output: Record<string, JsonValue>;
   saveAsAssistantMessage?: boolean;
+  status?: AgentToolCallStatus;
 };
 
 export type AgentTool<TInput = unknown> = {

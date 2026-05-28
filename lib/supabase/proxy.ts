@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import type { Database } from "@/lib/supabase/types";
 
 const authRoutes = ["/sign-in", "/sign-up", "/auth", "/forgot-password", "/reset-password"];
+const publicRoutes = ["/api/dev/seed-test-user"];
 
 export async function updateSession(request: NextRequest) {
   if (env.isSampleMode || !env.supabaseUrl || !env.supabasePublishableKey) {
@@ -41,8 +42,11 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = authRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route),
   );
+  const isPublicRoute = publicRoutes.some((route) =>
+    request.nextUrl.pathname.startsWith(route),
+  );
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
     return NextResponse.redirect(url);

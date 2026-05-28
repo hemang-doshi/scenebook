@@ -10,7 +10,6 @@ import {
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
 type BreadcrumbPart = {
@@ -28,25 +27,27 @@ export function AppBreadcrumbs({
   return (
     <motion.div
       key={items.map((item) => item.label).join("/")}
-      initial={{ opacity: 0, y: -10 }}
+      initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: "easeOut" }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
       className={className}
     >
       <Breadcrumb>
-        <BreadcrumbList className="cmd-breadcrumb min-h-11 rounded-full border border-border/70 bg-background/80 px-4 py-2 backdrop-blur-xl">
+        <BreadcrumbList className="flex flex-wrap items-center gap-2 text-xs font-mono text-[var(--muted)] tracking-wider uppercase">
           {items.map((item, index) => (
             <Fragment key={`${item.label}-${index}`}>
-              <BreadcrumbItem>
+              <BreadcrumbItem className="flex items-center">
                 {item.href ? (
-                  <BreadcrumbLink asChild>
+                  <BreadcrumbLink asChild className="hover:text-[var(--ink)] transition-colors cursor-pointer">
                     <Link href={item.href}>{item.label}</Link>
                   </BreadcrumbLink>
                 ) : (
-                  <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                  <BreadcrumbPage className="font-semibold text-[var(--ink)]">{item.label}</BreadcrumbPage>
                 )}
               </BreadcrumbItem>
-              {index < items.length - 1 ? <BreadcrumbSeparator /> : null}
+              {index < items.length - 1 ? (
+                <span className="text-[var(--hairline)] select-none ml-1">/</span>
+              ) : null}
             </Fragment>
           ))}
         </BreadcrumbList>

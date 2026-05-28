@@ -7,9 +7,8 @@ import { motion } from "motion/react";
 
 import { AppBreadcrumbs } from "@/components/ui/app-breadcrumbs";
 import { useEditorStore } from "@/lib/editor/editor-store";
-import { AuroraBackground } from "@/components/ui/aurora-background";
-import { RetroGrid } from "@/components/ui/retro-grid";
 import type { ProjectSummary } from "@/lib/data/repository";
+import { Button } from "@/components/ui/button";
 
 const templateCategories = [
   { label: "Instagram Reel", color: "#E040FB" },
@@ -32,76 +31,70 @@ export function EditorHomePageClient({
   }, [resetEditor]);
 
   return (
-    <div className="relative flex min-h-screen bg-[#08080a] text-foreground overflow-hidden flex-col">
-      <AuroraBackground />
-      <RetroGrid className="opacity-15" />
-
+    <div className="relative flex min-h-screen bg-[var(--canvas)] text-[var(--ink)] flex-col">
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className="relative z-10 flex-1 flex flex-col overflow-auto ed-scrollbar"
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="relative z-10 flex-1 flex flex-col overflow-auto scrollbar-thin"
       >
-        <header className="flex items-center justify-between border-b border-border/50 px-8 py-6 bg-black/25 backdrop-blur-md shrink-0">
+        <header className="flex items-center justify-between border-b border-[var(--hairline)] px-8 py-6 bg-[var(--canvas)] shrink-0">
           <div>
             <AppBreadcrumbs
               items={[{ label: "Projects", href: "/home" }, { label: "Editor" }]}
-              className="[&_ol]:min-h-9 [&_ol]:bg-black/35 [&_ol]:px-3 [&_ol]:py-1.5 [&_ol]:text-xs"
             />
-            <span className="mt-4 inline-block text-[10px] font-mono uppercase tracking-[0.15em] text-accent font-semibold">Video Studio</span>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground mt-0.5">Project Deck</h1>
+            <span className="mt-4 inline-block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] font-semibold">Video Studio</span>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--ink)] mt-0.5">Project Deck</h1>
           </div>
-          <Link
-            href="/home"
-            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-xs font-mono uppercase tracking-wider text-muted hover:text-foreground hover:bg-white/5 transition duration-200 cursor-pointer"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Dashboard
+          <Link href="/home">
+            <Button variant="secondary" className="h-9 px-4 text-xs border-[var(--hairline)]">
+              <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Back to Dashboard
+            </Button>
           </Link>
         </header>
 
         <div className="flex-1 px-8 py-8 space-y-8 max-w-7xl w-full mx-auto">
           <section className="space-y-4">
-            <h2 className="text-xs font-mono uppercase tracking-wider text-muted flex items-center gap-2">
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] flex items-center gap-2">
               <Plus className="h-3.5 w-3.5" /> Start Designing
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Link
                 href="/editor/new"
-                className="group flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-black/35 p-8 transition-all duration-300 hover:border-accent hover:bg-accent/5 cursor-pointer shadow-lg hover:shadow-accent/5"
+                className="group flex flex-col items-center justify-center gap-3 rounded-[var(--rounded-lg)] border border-dashed border-[var(--hairline)] bg-[var(--canvas)] p-8 transition-colors duration-250 hover:bg-[var(--surface-soft)] hover:border-[var(--ink)] cursor-pointer"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 border border-accent/20 text-accent transition duration-300 group-hover:scale-110 group-hover:bg-accent/20 group-hover:border-accent/45">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[var(--rounded-md)] bg-[var(--surface-soft)] border border-[var(--hairline)] text-[var(--ink)] transition duration-200 group-hover:scale-105">
                   <Plus className="h-5 w-5" />
                 </div>
-                <span className="text-xs font-mono uppercase tracking-wider text-foreground">Blank Project</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[var(--ink)]">Blank Project</span>
               </Link>
               {templateCategories.slice(0, 3).map((cat) => (
                 <button
                   key={cat.label}
-                  className="group flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-black/35 p-8 transition-all duration-300 hover:bg-white/5 cursor-pointer shadow-lg hover:border-border/100"
+                  className="group flex flex-col items-center justify-center gap-3 rounded-[var(--rounded-lg)] border border-[var(--hairline)] bg-[var(--canvas)] p-8 transition-colors duration-250 hover:bg-[var(--surface-soft)] cursor-pointer"
                 >
                   <div
-                    className="flex h-12 w-12 items-center justify-center rounded-lg border"
+                    className="flex h-12 w-12 items-center justify-center rounded-lg border border-[var(--hairline)]"
                     style={{
                       background: `${cat.color}0a`,
-                      borderColor: `${cat.color}25`,
                     }}
                   >
                     <LayoutTemplate className="h-5 w-5" style={{ color: cat.color }} />
                   </div>
-                  <span className="text-xs font-mono uppercase tracking-wider text-foreground">{cat.label}</span>
+                  <span className="text-xs font-mono uppercase tracking-wider text-[var(--ink)]">{cat.label}</span>
                 </button>
               ))}
             </div>
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xs font-mono uppercase tracking-wider text-muted flex items-center gap-2">
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] flex items-center gap-2">
               <Clock className="h-3.5 w-3.5" /> Recent Stories & Timelines
             </h2>
             {projects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-black/30 py-16 text-center">
-                <Film className="mb-3 h-8 w-8 text-muted animate-pulse" />
-                <p className="text-xs font-mono uppercase tracking-wider text-muted">No projects found. Create your first timeline above.</p>
+              <div className="flex flex-col items-center justify-center rounded-[var(--rounded-lg)] border border-dashed border-[var(--hairline)] bg-[var(--surface-soft)]/30 py-16 text-center">
+                <Film className="mb-3 h-8 w-8 text-[var(--muted)] animate-pulse" />
+                <p className="text-xs font-mono uppercase tracking-wider text-[var(--muted)]">No projects found. Create your first timeline above.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -109,17 +102,17 @@ export function EditorHomePageClient({
                   <Link
                     key={project.id}
                     href={`/editor/${project.id}`}
-                    className="group flex flex-col rounded-xl border border-border/80 bg-black/35 p-4 transition-all duration-300 hover:border-accent hover:bg-black/60 shadow-lg hover:shadow-accent/5 cursor-pointer"
+                    className="group flex flex-col rounded-[var(--rounded-lg)] border border-[var(--hairline)] bg-[var(--canvas)] p-4 transition-all duration-200 hover:border-[var(--ink)] hover:bg-[var(--surface-soft)]/30 cursor-pointer"
                   >
-                    <div className="mb-3.5 flex h-28 items-center justify-center rounded-lg bg-black/45 border border-border/50 group-hover:border-accent/25 transition duration-300">
-                      <Film className="h-6 w-6 text-muted group-hover:text-accent group-hover:scale-105 transition-all duration-300" />
+                    <div className="mb-3.5 flex h-28 items-center justify-center rounded-[var(--rounded-md)] bg-[var(--surface-soft)] border border-[var(--hairline)] transition duration-200">
+                      <Film className="h-6 w-6 text-[var(--muted)] group-hover:text-[var(--ink)] group-hover:scale-105 transition-all duration-200" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-foreground group-hover:text-accent transition duration-200">{project.title}</h3>
-                        <p className="mt-1.5 text-[9px] font-mono uppercase tracking-widest text-muted-foreground">{project.format || "Shorts"} · {project.status || "Draft"}</p>
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-[var(--ink)] group-hover:text-[var(--ink)] transition duration-200">{project.title}</h3>
+                        <p className="mt-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--muted)]">{project.format || "Shorts"} · {project.status || "Draft"}</p>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
+                      <ArrowRight className="h-4 w-4 text-[var(--muted)] group-hover:text-[var(--ink)] group-hover:translate-x-0.5 transition-all duration-200" />
                     </div>
                   </Link>
                 ))}
@@ -128,14 +121,14 @@ export function EditorHomePageClient({
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xs font-mono uppercase tracking-wider text-muted flex items-center gap-2">
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] flex items-center gap-2">
               <LayoutTemplate className="h-3.5 w-3.5" /> Template Categories
             </h2>
-            <div className="flex gap-2.5 overflow-x-auto pb-2 ed-scrollbar">
+            <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
               {templateCategories.map((cat) => (
                 <button
                   key={cat.label}
-                  className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-black/30 px-4 py-2 text-xs font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-white/5 transition duration-200 cursor-pointer"
+                  className="flex shrink-0 items-center gap-2 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] px-4 py-2 text-xs font-mono uppercase tracking-wider text-[var(--ink)]/80 hover:text-[var(--ink)] hover:bg-[var(--surface-soft)] transition duration-150 cursor-pointer"
                 >
                   <span className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
                   {cat.label}

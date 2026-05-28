@@ -4,6 +4,9 @@ export const agentCommands = [
   "script",
   "form-json-prompt",
   "generate",
+  "generate-image",
+  "generate-video",
+  "generate-audio",
   "storyboard",
   "tasks",
   "instagram",
@@ -14,11 +17,96 @@ export const agentCommands = [
 
 export const agentMessageRoles = ["user", "assistant", "system", "tool"] as const;
 export const agentRunStatuses = ["queued", "running", "completed", "failed"] as const;
+export const agentToolCallStatuses = [
+  "running",
+  "completed",
+  "failed",
+  "awaiting_approval",
+  "approved",
+  "rejected",
+  "awaiting_input",
+] as const;
 
 export type AgentCommand = (typeof agentCommands)[number];
+export const streamingAgentCommands = [
+  "script",
+  "form-json-prompt",
+  "storyboard",
+  "tasks",
+  "instagram",
+  "analyze",
+  "import-to-editor",
+  "export",
+] as const satisfies readonly AgentCommand[];
+
+export const assetAgentCommands = [
+  "generate",
+  "generate-image",
+  "generate-video",
+  "generate-audio",
+] as const satisfies readonly AgentCommand[];
+
+export type StreamingAgentCommand = (typeof streamingAgentCommands)[number];
+export type AssetAgentCommand = (typeof assetAgentCommands)[number];
 export type AgentMessageRole = (typeof agentMessageRoles)[number];
 export type AgentRunStatus = (typeof agentRunStatuses)[number];
+export type AgentToolCallStatus = (typeof agentToolCallStatuses)[number];
 export type AgentModelsSelection = Record<string, string>;
+
+export type PromptJsonOutput = {
+  kind: "prompt_json";
+  modality: "image" | "video" | "audio";
+  prompt: string;
+  negative_prompt?: string;
+  aspect_ratio?: "9:16" | "16:9" | "1:1";
+  width?: number;
+  height?: number;
+  duration_seconds?: number;
+  subject?: {
+    primary?: string;
+    age?: string;
+    wardrobe?: string;
+    appearance?: string;
+    action?: string;
+    emotion?: string;
+    color?: string;
+  };
+  scene?: {
+    location?: string;
+    setting?: string;
+    time_of_day?: string;
+    environment?: string;
+    background?: string;
+    atmosphere?: string;
+  };
+  camera?: {
+    shot_type?: string;
+    angle?: string;
+    lens?: string;
+    framing?: string;
+    movement?: string;
+    focus?: string;
+    reveal?: string;
+  };
+  lighting?: {
+    style?: string;
+    quality?: string;
+    direction?: string;
+    color?: string;
+  };
+  style?: {
+    aesthetic?: string;
+    color_palette?: string;
+    texture?: string;
+  };
+  output?: {
+    aspect_ratio?: "9:16" | "16:9" | "1:1";
+    width?: number;
+    height?: number;
+    duration_seconds?: number;
+  };
+  parameters?: Record<string, string | number | boolean>;
+};
 
 export type AgentThreadRecord = {
   id: string;
@@ -67,7 +155,7 @@ export type AgentToolCallRecord = {
   project_id: string;
   tool_name: string;
   command?: string | null;
-  status: string;
+  status: AgentToolCallStatus | string;
   input: Record<string, JsonValue>;
   output: Record<string, JsonValue>;
   error_message?: string | null;

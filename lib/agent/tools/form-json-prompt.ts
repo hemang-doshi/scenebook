@@ -1,72 +1,132 @@
 import { z } from "zod";
 
-import type { AgentTool } from "@/lib/agent/tools/types";
+import type { PromptJsonOutput } from "@/lib/agent/types";
+import type { AgentTool, AgentToolResult } from "@/lib/agent/tools/types";
+import {
+  generateStructuredCommandUpdate,
+  normalizePromptJsonOutput,
+  withStructuredRepairMetadata,
+} from "@/lib/agent/tools/structured-output";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1, "Provide a rough idea after /form-json-prompt."),
 });
 
-function isTooVague(prompt: string) {
+function isVaguePrompt(prompt: string) {
   const words = prompt
     .split(/\s+/)
     .map((word) => word.trim())
     .filter(Boolean);
 
-  return words.length < 4 || prompt.length < 24;
+  return words.length < 6 || prompt.length < 36;
 }
 
-function buildCamera(projectFormat?: string) {
-  if (projectFormat === "carousel" || projectFormat === "post") {
-    return "static framing with deliberate composition";
-  }
-
-  return "handheld push-in with one clean close-up";
+function buildClarifyingQuestions(prompt: string) {
+  return [
+    `How old or what type of subject should appear in "${prompt}"?`,
+    "What should they be wearing or how should they look?",
+    "What exact action or moment should the scene capture?",
+  ];
 }
 
 export const formJsonPromptTool: AgentTool<z.infer<typeof inputSchema>> = {
   name: "Form JSON Prompt",
   command: "form-json-prompt",
-  description: "Turns a rough idea into a structured cinematic JSON prompt.",
+  description: "Builds a copy-ready JSON prompt for image, video, or audio generation.",
   inputSchema,
   requiresApproval: true,
   sideEffect: "none",
-  handler(ctx, input) {
-    if (isTooVague(input.prompt)) {
-      const clarifyingQuestions = [
-        "What is the exact subject or product on screen?",
-        "What mood should the scene convey?",
-        "What final output are you trying to generate: still, video, or sequence?",
-      ];
+  async handler(ctx, input) {
+    const prompt = input.prompt.trim();
 
+    if (isVaguePrompt(prompt) && !prompt.includes("\n")) {
+      const questions = buildClarifyingQuestions(prompt);
       return {
-        message: "The idea is too vague to turn into a reliable JSON prompt yet.",
+        message: "I need a bit more visual detail before I can build a reliable prompt JSON.",
+        status: "awaiting_input",
         output: {
-          clarifyingQuestions,
+          kind: "prompt_questions",
+          status: "awaiting_input",
+          original_prompt: prompt,
+          questions,
         },
       };
     }
 
-    const project = ctx.project;
-    const subject = project?.title ?? input.prompt.split(/[,.]/)[0] ?? input.prompt;
-    const jsonPrompt = {
-      intent: input.prompt,
-      subject,
-      visual_style: project?.platform === "instagram" ? "cinematic creator reel" : "cinematic editorial",
-      camera: buildCamera(project?.format),
-      lighting: "soft key light with a practical highlight and controlled contrast",
-      scene: project?.scriptLab.angle?.trim() || `A polished scene centered on ${subject}.`,
-      motion: project?.format === "post" ? "minimal motion with subtle ambient movement" : "controlled subject motion with clear beginning and payoff",
-      negative_prompt: "muddy lighting, weak focal subject, cluttered frame, unreadable text, extra limbs, warped faces",
-      output: {
-        format: project?.format ?? "short",
-        platform: project?.platform ?? "instagram",
-        aspect_ratio: project?.platform === "youtube" ? "16:9" : "9:16",
-      },
-    };
+    const { output: parsed, repaired } = await generateStructuredCommandUpdate({
+      ctx,
+      command: "form-json-prompt",
+      prompt: [
+        "Turn the user's visual request into a strict JSON object.",
+        "Treat the user's request as primary. Do not continue the project script or beat unless the user explicitly asked for that.",
+        "Infer modality from the request when obvious; otherwise default to image.",
+        "Prioritize detailed positive direction. Keep negative_prompt brief and secondary.",
+        "Return only JSON with this shape:",
+        `{
+  "modality": "image" | "video" | "audio",
+  "prompt": "A dense production-ready prompt paragraph that already includes the critical shot details.",
+  "aspect_ratio": "9:16" | "16:9" | "1:1",
+  "subject": {
+    "primary": "string",
+    "age": "string",
+    "wardrobe": "string",
+    "appearance": "string",
+    "action": "string",
+    "emotion": "string",
+    "color": "string"
+  },
+  "scene": {
+    "location": "string",
+    "setting": "string",
+    "time_of_day": "string",
+    "environment": "string",
+    "background": "string",
+    "atmosphere": "string"
+  },
+  "camera": {
+    "shot_type": "string",
+    "angle": "string",
+    "lens": "string",
+    "framing": "string",
+    "movement": "string",
+    "focus": "string",
+    "reveal": "string"
+  },
+  "lighting": {
+    "style": "string",
+    "quality": "string",
+    "direction": "string",
+    "color": "string"
+  },
+  "style": {
+    "aesthetic": "string",
+    "color_palette": "string",
+    "texture": "string"
+  },
+  "negative_prompt": "short optional string",
+  "output": {
+    "aspect_ratio": "9:16",
+    "width": 1024,
+    "height": 1792,
+    "duration_seconds": 8
+  },
+  "parameters": {
+    "subject_age": "4-5",
+    "wardrobe": "casual summer attire"
+  }
+}`,
+        `User request:\n${prompt}`,
+      ].join("\n\n"),
+      normalize: (input) => normalizePromptJsonOutput(input) as PromptJsonOutput,
+    });
 
     return {
-      message: "Structured JSON prompt ready for approval.",
-      output: jsonPrompt,
+      message: "Prompt JSON ready.",
+      status: "awaiting_approval",
+      output: withStructuredRepairMetadata(
+        parsed as unknown as Record<string, unknown>,
+        repaired,
+      ) as AgentToolResult["output"],
     };
   },
 };

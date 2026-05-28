@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { ArrowRight, LoaderCircle, KeyRound } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,54 +15,53 @@ export default function ForgotPasswordPage() {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <main className="cmd-panel relative z-10 w-full max-w-[420px] overflow-hidden rounded-xl p-8">
-        <div className="pointer-events-none absolute inset-0 border border-accent/10" />
-        <div className="relative text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-white/5">
-            <KeyRound className="h-5 w-5 text-accent" />
-          </div>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">
+    <div className="flex min-h-screen bg-[var(--canvas)] items-center justify-center px-4 py-12">
+      <main className="w-full max-w-[420px] bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-8 md:p-10">
+        <div className="text-center mb-8">
+          <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-2">
+            Password Recovery
+          </p>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[var(--ink)]">
             SceneBook
           </h1>
-          <p className="cmd-label mt-2">Dispatched Reset Link</p>
         </div>
 
         {success ? (
-          <div className="mt-8 text-center space-y-4">
-            <p className="text-sm text-[var(--accent-secondary)]">
+          <div className="text-center space-y-4">
+            <p className="text-sm text-[var(--ink)]">
               A recovery link has been dispatched to your email address if it is registered in our database.
             </p>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-[var(--muted)]">
               Please click the link in your email to choose a new passkey.
             </p>
             <div className="pt-4">
               <Link
                 href="/sign-in"
-                className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted transition hover:text-accent"
+                className="text-xs font-semibold text-[var(--ink)] hover:underline"
               >
                 Back to Sign In
               </Link>
             </div>
           </div>
         ) : (
-          <form className="mt-8 space-y-5">
-            <label className="block">
-              <span className="cmd-label">Registered Email</span>
+          <form className="space-y-6">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+                Registered Email
+              </label>
               <Input
-                className="mt-2"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="creator@scenebook.io"
                 type="email"
                 required
               />
-            </label>
+            </div>
 
             {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
             <Button
-              className="w-full"
+              className="w-full justify-center"
               disabled={isPending}
               onClick={(event) => {
                 event.preventDefault();
@@ -90,28 +89,20 @@ export default function ForgotPasswordPage() {
               }}
               type="submit"
             >
-              {isPending ? (
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowRight className="mr-2 h-4 w-4" />
-              )}
-              Dispatch recovery link
+              {isPending && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+              Send recovery link
             </Button>
 
-            <div className="mt-5 text-center">
+            <div className="text-center pt-2">
               <Link
                 href="/sign-in"
-                className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted transition hover:text-accent"
+                className="text-xs font-semibold text-[var(--ink)] hover:underline"
               >
-                Back to sign in
+                Back to Sign In
               </Link>
             </div>
           </form>
         )}
-
-        <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-muted/60">
-          v 2.4.1 - secure terminal
-        </p>
       </main>
     </div>
   );

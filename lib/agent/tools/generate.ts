@@ -1,6 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
 
+import type { PromptJsonOutput } from "@/lib/agent/types";
 import type { AgentTool, AgentToolResult } from "@/lib/agent/tools/types";
+import { normalizePromptJsonOutput } from "@/lib/agent/tools/structured-output";
+import { getModelById } from "@/lib/ai/model-registry";
 import { generateProjectMedia } from "@/lib/generation/generate-media";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -17,33 +21,41 @@ function isTooVague(prompt: string) {
   return words.length < 4 || prompt.length < 24;
 }
 
-interface PromptJson {
-  scene?: string;
-  intent?: string;
-  subject?: string;
-  visual_style?: string;
-  camera?: string;
-  lighting?: string;
-  motion?: string;
+function convertPromptJsonToText(json: PromptJsonOutput) {
+  const lines = [json.prompt];
+
+  if (json.subject) {
+    lines.push(renderSpecLine("Subject", json.subject));
+  }
+  if (json.scene) {
+    lines.push(renderSpecLine("Scene", json.scene));
+  }
+  if (json.camera) {
+    lines.push(renderSpecLine("Camera", json.camera));
+  }
+  if (json.lighting) {
+    lines.push(renderSpecLine("Lighting", json.lighting));
+  }
+  if (json.style) {
+    lines.push(renderSpecLine("Style", json.style));
+  }
+  if (json.output) {
+    lines.push(renderSpecLine("Output", json.output));
+  }
+
+  return lines.filter(Boolean).join("\n");
 }
 
-function convertJsonPromptToText(json: PromptJson, modality: string): string {
-  if (modality === "audio") {
-    return json.scene || json.intent || json.subject || "";
+function parsePromptJson(value: string): PromptJsonOutput | null {
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    return normalizePromptJsonOutput(parsed as Record<string, unknown>);
+  } catch {
+    return null;
   }
-  const parts = [];
-  if (json.scene) {
-    parts.push(json.scene);
-  } else if (json.subject) {
-    parts.push(json.subject);
-  }
-  if (json.visual_style) parts.push(`Style: ${json.visual_style}`);
-  if (json.camera) parts.push(`Camera: ${json.camera}`);
-  if (json.lighting) parts.push(`Lighting: ${json.lighting}`);
-  if (modality === "video" && json.motion) {
-    parts.push(`Motion: ${json.motion}`);
-  }
-  return parts.join(". ").trim();
 }
 
 export const generateTool: AgentTool<z.infer<typeof inputSchema>> = {
@@ -60,12 +72,39 @@ export const generateTool: AgentTool<z.infer<typeof inputSchema>> = {
 
     let modality: "image" | "video" | "audio" | null = null;
     let promptText = "";
+    let parsedPromptJson: PromptJsonOutput | null = null;
 
     if (firstWord === "image" || firstWord === "video" || firstWord === "audio") {
       modality = firstWord;
       promptText = parts.slice(1).join(" ").trim();
     } else {
       promptText = rawInput;
+    }
+
+    if (!modality) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(promptText);
+      if (isUuid) {
+        try {
+          const rawSupabase = await createSupabaseServerClient();
+          const { data: toolCall } = await (rawSupabase as any)
+            .from("agent_tool_calls")
+            .select("*")
+            .eq("id", promptText)
+            .maybeSingle();
+          if (toolCall && toolCall.output) {
+            const promptOutput = normalizePromptJsonOutput(toolCall.output);
+            parsedPromptJson = promptOutput;
+            modality = promptOutput.modality;
+          }
+        } catch {
+          // Ignore
+        }
+      } else {
+        parsedPromptJson = parsePromptJson(promptText);
+        if (parsedPromptJson) {
+          modality = parsedPromptJson.modality;
+        }
+      }
     }
 
     if (!modality) {
@@ -103,32 +142,20 @@ export const generateTool: AgentTool<z.infer<typeof inputSchema>> = {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(promptText);
     if (isUuid) {
       approvedPromptId = promptText;
-      const toolCallClient = rawSupabase as unknown as {
-        from: (table: string) => {
-          select: (cols?: string) => {
-            eq: (col: string, val: string) => {
-              maybeSingle: () => Promise<{ data: { output?: PromptJson } | null; error: unknown }>;
-            };
-          };
-        };
-      };
-      const { data: toolCall } = await toolCallClient
+      const { data: toolCall } = await (rawSupabase as any)
         .from("agent_tool_calls")
         .select("*")
         .eq("id", approvedPromptId)
         .maybeSingle();
 
       if (toolCall && toolCall.output) {
-        finalPrompt = convertJsonPromptToText(toolCall.output, modality);
+        parsedPromptJson = normalizePromptJsonOutput(toolCall.output);
+        finalPrompt = convertPromptJsonToText(parsedPromptJson);
       }
     } else {
-      try {
-        const parsed = JSON.parse(promptText);
-        if (parsed && typeof parsed === "object") {
-          finalPrompt = convertJsonPromptToText(parsed, modality);
-        }
-      } catch {
-        // Not a JSON string
+      parsedPromptJson = parsePromptJson(promptText);
+      if (parsedPromptJson) {
+        finalPrompt = convertPromptJsonToText(parsedPromptJson);
       }
     }
 
@@ -155,17 +182,38 @@ export const generateTool: AgentTool<z.infer<typeof inputSchema>> = {
 
     const modelId = ctx.selectedModels?.[modality] || ctx.selectedModel || undefined;
 
-    const result = await generateProjectMedia({
-      projectId: ctx.projectId,
-      userId,
-      prompt: finalPrompt,
-      modality,
-      modelId,
-    });
+    let result: Awaited<ReturnType<typeof generateProjectMedia>>;
+    try {
+      result = await generateProjectMedia({
+        projectId: ctx.projectId,
+        userId,
+        prompt: finalPrompt,
+        modality,
+        modelId,
+        structuredPrompt: parsedPromptJson ? sanitizeStructuredPrompt(parsedPromptJson) : undefined,
+        parameters: parsedPromptJson?.parameters,
+        negativePrompt: parsedPromptJson?.negative_prompt,
+      });
+    } catch (caught) {
+      const selectedPreset = modelId ? getModelById(modelId) : null;
+      return {
+        message: caught instanceof Error ? caught.message : "Failed to perform inference.",
+        status: "failed",
+        output: {
+          kind: "media_error",
+          modality,
+          model: modelId ?? "default",
+          provider: selectedPreset?.provider ?? "huggingface",
+          message: caught instanceof Error ? caught.message : "Failed to perform inference.",
+          recoverable: true,
+        },
+      } as AgentToolResult;
+    }
 
     return {
       message: `${modality.toUpperCase()} generated successfully.`,
       output: {
+        kind: "media_asset",
         assetId: result.assetId,
         generationId: result.generationId,
         url: result.url,
@@ -175,7 +223,62 @@ export const generateTool: AgentTool<z.infer<typeof inputSchema>> = {
         provider: result.provider,
         prompt: result.prompt,
         modality,
+        negative_prompt: parsedPromptJson?.negative_prompt,
+        parameters: parsedPromptJson?.parameters,
       },
     } as AgentToolResult;
   },
 };
+
+export const generateImageTool: AgentTool<z.infer<typeof inputSchema>> = {
+  name: "Generate Image",
+  command: "generate-image",
+  description: "Generates project image using Hugging Face.",
+  inputSchema,
+  requiresApproval: false,
+  sideEffect: "asset_generation",
+  async handler(ctx, input) {
+    return generateTool.handler(ctx, { prompt: "image " + input.prompt });
+  },
+};
+
+export const generateVideoTool: AgentTool<z.infer<typeof inputSchema>> = {
+  name: "Generate Video",
+  command: "generate-video",
+  description: "Generates project video using Hugging Face.",
+  inputSchema,
+  requiresApproval: false,
+  sideEffect: "asset_generation",
+  async handler(ctx, input) {
+    return generateTool.handler(ctx, { prompt: "video " + input.prompt });
+  },
+};
+
+export const generateAudioTool: AgentTool<z.infer<typeof inputSchema>> = {
+  name: "Generate Audio",
+  command: "generate-audio",
+  description: "Generates project audio using Hugging Face.",
+  inputSchema,
+  requiresApproval: false,
+  sideEffect: "asset_generation",
+  async handler(ctx, input) {
+    return generateTool.handler(ctx, { prompt: "audio " + input.prompt });
+  },
+};
+
+function renderSpecLine(label: string, value: Record<string, unknown>) {
+  const parts = Object.values(value)
+    .filter((entry) => typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean")
+    .map((entry) => String(entry).trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return "";
+  }
+
+  return `${label}: ${parts.join("; ")}`;
+}
+
+function sanitizeStructuredPrompt(prompt: PromptJsonOutput) {
+  return JSON.parse(JSON.stringify(prompt)) as Record<string, unknown>;
+}
