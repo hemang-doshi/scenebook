@@ -14,6 +14,345 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_goals: {
+        Row: {
+          completed_steps: Json
+          created_at: string
+          id: string
+          metadata: Json
+          next_actions: Json
+          owner_id: string
+          project_id: string
+          status: string
+          thread_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_steps?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          next_actions?: Json
+          owner_id: string
+          project_id: string
+          status?: string
+          thread_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_steps?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          next_actions?: Json
+          owner_id?: string
+          project_id?: string
+          status?: string
+          thread_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_goals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_goals_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "agent_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_memory_snapshots: {
+        Row: {
+          created_at: string
+          decisions: Json
+          id: string
+          metadata: Json
+          open_questions: Json
+          owner_id: string
+          project_id: string
+          summary: string
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          decisions?: Json
+          id?: string
+          metadata?: Json
+          open_questions?: Json
+          owner_id: string
+          project_id: string
+          summary: string
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          decisions?: Json
+          id?: string
+          metadata?: Json
+          open_questions?: Json
+          owner_id?: string
+          project_id?: string
+          summary?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_memory_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_memory_snapshots_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "agent_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json
+          model: string | null
+          owner_id: string
+          project_id: string
+          provider: string | null
+          role: string
+          thread_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          model?: string | null
+          owner_id: string
+          project_id: string
+          provider?: string | null
+          role: string
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          model?: string | null
+          owner_id?: string
+          project_id?: string
+          provider?: string | null
+          role?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "agent_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input: string
+          metadata: Json
+          owner_id: string
+          project_id: string
+          selected_models: Json
+          started_at: string | null
+          status: string
+          thread_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input: string
+          metadata?: Json
+          owner_id: string
+          project_id: string
+          selected_models?: Json
+          started_at?: string | null
+          status?: string
+          thread_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: string
+          metadata?: Json
+          owner_id?: string
+          project_id?: string
+          selected_models?: Json
+          started_at?: string | null
+          status?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "agent_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_threads: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json
+          owner_id: string
+          project_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          owner_id: string
+          project_id: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          owner_id?: string
+          project_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_tool_calls: {
+        Row: {
+          approved_at: string | null
+          command: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input: Json
+          output: Json
+          owner_id: string
+          project_id: string
+          requires_approval: boolean
+          run_id: string
+          status: string
+          thread_id: string
+          tool_name: string
+        }
+        Insert: {
+          approved_at?: string | null
+          command?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: Json
+          output?: Json
+          owner_id: string
+          project_id: string
+          requires_approval?: boolean
+          run_id: string
+          status?: string
+          thread_id: string
+          tool_name: string
+        }
+        Update: {
+          approved_at?: string | null
+          command?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: Json
+          output?: Json
+          owner_id?: string
+          project_id?: string
+          requires_approval?: boolean
+          run_id?: string
+          status?: string
+          thread_id?: string
+          tool_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tool_calls_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tool_calls_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tool_calls_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "agent_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       applications: {
         Row: {
           appliedAt: string
@@ -55,6 +394,163 @@ export type Database = {
             columns: ["userId"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_folder_items: {
+        Row: {
+          asset_id: string
+          created_at: string
+          folder_id: string
+          id: string
+          owner_id: string
+          sort_order: number
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          folder_id: string
+          id?: string
+          owner_id: string
+          sort_order?: number
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          folder_id?: string
+          id?: string
+          owner_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_folder_items_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "card_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_folder_items_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "asset_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_folders: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json
+          name: string
+          owner_id: string
+          parent_id: string | null
+          project_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name: string
+          owner_id: string
+          parent_id?: string | null
+          project_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          owner_id?: string
+          parent_id?: string | null
+          project_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "asset_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_versions: {
+        Row: {
+          asset_id: string
+          created_at: string
+          generation_id: string | null
+          id: string
+          metadata: Json
+          model: string | null
+          owner_id: string
+          project_id: string
+          prompt: string | null
+          provider: string | null
+          url: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          generation_id?: string | null
+          id?: string
+          metadata?: Json
+          model?: string | null
+          owner_id: string
+          project_id: string
+          prompt?: string | null
+          provider?: string | null
+          url: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          generation_id?: string | null
+          id?: string
+          metadata?: Json
+          model?: string | null
+          owner_id?: string
+          project_id?: string
+          prompt?: string | null
+          provider?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_versions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "card_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_versions_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generation_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
             referencedColumns: ["id"]
           },
         ]
@@ -357,70 +853,6 @@ export type Database = {
           },
         ]
       }
-      project_artifacts: {
-        Row: {
-          artifact_type: string
-          created_at: string
-          id: string
-          metadata: Json
-          owner_id: string
-          payload: Json
-          project_id: string
-          thread_id: string
-          title: string
-          tool_call_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          artifact_type: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          owner_id: string
-          payload?: Json
-          project_id: string
-          thread_id: string
-          title: string
-          tool_call_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          artifact_type?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          owner_id?: string
-          payload?: Json
-          project_id?: string
-          thread_id?: string
-          title?: string
-          tool_call_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_artifacts_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "content_cards"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_artifacts_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "agent_threads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_artifacts_tool_call_id_fkey"
-            columns: ["tool_call_id"]
-            isOneToOne: false
-            referencedRelation: "agent_tool_calls"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       inbox_items: {
         Row: {
           card_id: string | null
@@ -571,6 +1003,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      project_creative_briefs: {
+        Row: {
+          brief: Json
+          created_at: string
+          id: string
+          metadata: Json
+          open_questions: Json
+          owner_id: string
+          project_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          brief?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          open_questions?: Json
+          owner_id: string
+          project_id: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          brief?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          open_questions?: Json
+          owner_id?: string
+          project_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_creative_briefs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "content_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       raw_jobs: {
         Row: {
