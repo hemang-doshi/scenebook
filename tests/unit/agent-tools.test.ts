@@ -1249,6 +1249,200 @@ describe("agent tools", () => {
     }));
   });
 
+  test("runtime-v2 natural language CTA update changes only CTA", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall.mockResolvedValueOnce({ id: "tool-call-cta" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    const projectWithScript = {
+      ...baseProject,
+      scriptLab: {
+        ...baseProject.scriptLab,
+        hook: "Existing hook",
+        script: "Existing script",
+        cta: "Old CTA",
+      },
+    };
+    getProjectWorkspace.mockResolvedValue(projectWithScript);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    updateCard.mockResolvedValue({
+      ...projectWithScript,
+      scriptLab: {
+        ...projectWithScript.scriptLab,
+        cta: "Save this before your next shoot.",
+      },
+    });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "make this my CTA: Save this before your next shoot.",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "tool_completed" && event.tool?.toolName === "Update Script Lab")).toBeTruthy();
+    expect(updateCard).toHaveBeenCalledWith("project-1", {
+      scriptLab: expect.objectContaining({
+        hook: "Existing hook",
+        script: "Existing script",
+        cta: "Save this before your next shoot.",
+      }),
+    });
+    expect((updateCard.mock.calls[0]?.[1]?.scriptLab as Record<string, unknown>).caption).toBe(baseProject.scriptLab.caption);
+  });
+
+  test("runtime-v2 natural language task update writes shoot pack tasks", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall.mockResolvedValueOnce({ id: "tool-call-tasks" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    updateCard.mockResolvedValue(baseProject);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "add 3 tasks: shoot intro, capture b-roll, export final",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(updateCard).toHaveBeenCalledWith("project-1", {
+      shootPack: expect.objectContaining({
+        missingAssets: [
+          expect.objectContaining({ label: "shoot intro", done: false }),
+          expect.objectContaining({ label: "capture b-roll", done: false }),
+          expect.objectContaining({ label: "export final", done: false }),
+        ],
+      }),
+    });
+  });
+
+  test("runtime-v2 natural language status update marks ready to shoot", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall.mockResolvedValueOnce({ id: "tool-call-status" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue({ ...baseProject, status: "scripted" });
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    updateCard.mockResolvedValue({ ...baseProject, status: "ready_to_shoot" });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "mark ready to shoot",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(updateCard).toHaveBeenCalledWith("project-1", { status: "ready_to_shoot" });
+    expect(completeAgentToolCall).toHaveBeenCalledWith(
+      "tool-call-status",
+      expect.objectContaining({ kind: "project_status_update", status: "ready_to_shoot", statusChanged: true }),
+      "completed",
+    );
+  });
+
+  test("runtime-v2 ambiguous asset move asks a clarifying question", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue({
+      ...baseProject,
+      assets: [
+        { id: "asset-1", type: "image", title: "Hero frame", url: "https://example.com/hero.png" },
+        { id: "asset-2", type: "image", title: "Alt frame", url: "https://example.com/alt.png" },
+      ],
+    });
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "move asset to Thumbnails",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "chunk")?.text).toContain("Which asset should I move to Thumbnails?");
+    expect(createAgentToolCall).not.toHaveBeenCalled();
+    expect(moveAssetToFolder).not.toHaveBeenCalled();
+  });
+
+  test("runtime-v2 clear folder creation creates visible folder tool call", async () => {
+    vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall.mockResolvedValueOnce({ id: "tool-call-folder" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+    getAgentHistory.mockResolvedValue({ thread: { id: "thread-1" }, messages: [], toolCalls: [] });
+    getOrCreateAssetFolderPath.mockResolvedValue({
+      folder: { id: "folder-thumbnails", name: "Thumbnails" },
+      path: "Thumbnails",
+      alreadyExisted: false,
+    });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "create a folder named Thumbnails",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.find((event) => event.type === "tool_completed" && event.tool?.toolName === "Create Asset Folder")).toBeTruthy();
+    expect(getOrCreateAssetFolderPath).toHaveBeenCalledWith("project-1", "Thumbnails", null);
+  });
+
   test("runtime-v2 failed asset generation surfaces a tool_failed event", async () => {
     vi.stubEnv("AGENT_RUNTIME_V2_ENABLED", "true");
     createAuthSupabase();

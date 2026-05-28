@@ -46,10 +46,6 @@ type CreateProjectArtifactInput = z.infer<typeof createProjectArtifactInputSchem
 type UpdateProjectStatusInput = z.infer<typeof updateProjectStatusInputSchema>;
 type UpdateShootPackInput = z.infer<typeof updateShootPackInputSchema>;
 
-function notImplementedHandler(): never {
-  throw new Error("Not implemented");
-}
-
 type ProjectArtifactOutput = Record<string, JsonValue> & {
   kind: "project_artifact";
   projectId: string;
@@ -72,7 +68,32 @@ export const updateCreativeBriefTool: AgentRuntimeTool<UpdateCreativeBriefInput>
   inputSchema: updateCreativeBriefInputSchema,
   sideEffect: "db_write",
   approvalPolicy: "auto",
-  handler: notImplementedHandler,
+  async handler(ctx, input) {
+    if (!ctx.project) {
+      throw new Error("Project not found for creative brief update.");
+    }
+
+    const brief = toJsonRecord(input.brief);
+    const updatedProject = await updateCard(ctx.projectId, {
+      scriptLab: {
+        ...ctx.project.scriptLab,
+        notes: [
+          ctx.project.scriptLab.notes,
+          `Creative brief: ${JSON.stringify(brief)}`,
+        ].filter(Boolean).join("\n"),
+      },
+    });
+
+    return {
+      message: "Creative brief updated.",
+      output: {
+        kind: "creative_brief_update",
+        projectId: ctx.projectId,
+        updatedFields: Object.keys(brief),
+        scriptLab: scriptLabToJson(updatedProject.scriptLab),
+      },
+    };
+  },
   displayFormatter: () => ({
     title: "Update Creative Brief",
     subtitle: "Persist creative brief updates.",
@@ -147,9 +168,10 @@ export const updateProjectStatusTool: AgentRuntimeTool<UpdateProjectStatusInput,
 
     const currentProject = await getProjectWorkspace(ctx.projectId);
     const previousStatus = currentProject?.status ?? ctx.project.status;
-    const shouldMoveToScripted = input.status === "scripted" && previousStatus === "idea";
+    const previousIndex = contentStatuses.indexOf(previousStatus);
+    const nextIndex = contentStatuses.indexOf(input.status);
 
-    if (!shouldMoveToScripted) {
+    if (input.status === previousStatus || (previousIndex >= 0 && nextIndex >= 0 && nextIndex <= previousIndex)) {
       return {
         message: "Project status unchanged.",
         output: {
@@ -162,10 +184,10 @@ export const updateProjectStatusTool: AgentRuntimeTool<UpdateProjectStatusInput,
       };
     }
 
-    const updatedProject = await updateCard(ctx.projectId, { status: "scripted" });
+    const updatedProject = await updateCard(ctx.projectId, { status: input.status });
 
     return {
-      message: "Project moved to scripted.",
+      message: `Project moved to ${input.status.replaceAll("_", " ")}.`,
       output: {
         kind: "project_status_update",
         projectId: ctx.projectId,
@@ -192,7 +214,41 @@ export const updateShootPackTool: AgentRuntimeTool<UpdateShootPackInput> = {
   inputSchema: updateShootPackInputSchema,
   sideEffect: "db_write",
   approvalPolicy: "auto",
-  handler: notImplementedHandler,
+  async handler(ctx, input) {
+    if (!ctx.project) {
+      throw new Error("Project not found for shoot pack update.");
+    }
+
+    const currentProject = await getProjectWorkspace(ctx.projectId);
+    const currentShootPack = currentProject?.shootPack ?? ctx.project.shootPack;
+    const nextShootPack = {
+      ...currentShootPack,
+      ...(input.aRoll ? { aRoll: mergeChecklist(currentShootPack.aRoll, input.aRoll) } : {}),
+      ...(input.bRoll ? { bRoll: mergeChecklist(currentShootPack.bRoll, input.bRoll) } : {}),
+      ...(input.screenCaptures ? { screenCaptures: mergeChecklist(currentShootPack.screenCaptures, input.screenCaptures) } : {}),
+      ...(input.props ? { props: mergeChecklist(currentShootPack.props, input.props) } : {}),
+      ...(input.missingAssets ? { missingAssets: mergeChecklist(currentShootPack.missingAssets, input.missingAssets) } : {}),
+      ...(input.locationNotes !== undefined ? { locationNotes: input.locationNotes } : {}),
+      ...(input.visualNotes !== undefined ? { visualNotes: input.visualNotes } : {}),
+    };
+
+    const updatedProject = await updateCard(ctx.projectId, {
+      shootPack: nextShootPack,
+    });
+    const updatedFields = Object.entries(input)
+      .filter(([key, value]) => key !== "overwrite" && value !== undefined)
+      .map(([key]) => key);
+
+    return {
+      message: "Shoot pack updated.",
+      output: {
+        kind: "shoot_pack_update",
+        projectId: ctx.projectId,
+        updatedFields,
+        shootPack: shootPackToJson(updatedProject.shootPack),
+      },
+    };
+  },
   displayFormatter: () => ({
     title: "Update Shoot Pack",
     subtitle: "Apply production checklist updates.",
@@ -248,4 +304,26 @@ function toJsonValue(value: unknown): JsonValue | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeChecklist<T extends { id?: string; label: string; done?: boolean }>(
+  current: Array<{ id: string; label: string; done: boolean }>,
+  next: T[],
+) {
+  return [
+    ...current,
+    ...next.map((item, index) => ({
+      id: item.id ?? `task-${Date.now()}-${index}`,
+      label: item.label,
+      done: item.done ?? false,
+    })),
+  ];
+}
+
+function scriptLabToJson(input: Record<string, string>): Record<string, JsonValue> {
+  return toJsonRecord(input);
+}
+
+function shootPackToJson(input: Record<string, unknown>): Record<string, JsonValue> {
+  return toJsonRecord(input);
 }
