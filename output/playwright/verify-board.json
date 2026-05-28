@@ -1,0 +1,14 @@
+{
+  "screenshots": {
+    "board": "output/playwright/05-board.png",
+    "projectOrChat": "output/playwright/06-project-or-chat.png"
+  },
+  "urls": {
+    "board": "http://127.0.0.1:3000/sign-in",
+    "firstChatHref": null,
+    "firstProjectHref": null,
+    "afterProjectNav": "http://127.0.0.1:3000/sign-in"
+  },
+  "errors": [],
+  "bodyExcerpt": "SceneBook\n\nCOMMAND CENTER\n\nIDENTITY\nPASSKEY\nFORGOT PASSKEY?\nINITIALIZE SESSION\nSEE THE BOARD\n\nV 2.4.1 - SECURE TERMINAL\n\nNeed an account? Create one"
+}

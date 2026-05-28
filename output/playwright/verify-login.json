@@ -1,0 +1,30 @@
+{
+  "screenshots": {
+    "signIn": "output/playwright/01-sign-in.png",
+    "afterLogin": "output/playwright/02-after-login.png",
+    "chatRoute": "output/playwright/03-chat-route.png",
+    "chatError": "output/playwright/04-chat-error.png"
+  },
+  "urls": {
+    "signIn": "http://127.0.0.1:3000/sign-in",
+    "afterLogin": "http://127.0.0.1:3000/sign-in",
+    "firstChatHref": null,
+    "firstProjectHref": null,
+    "chatPage": "http://127.0.0.1:3000/sign-in"
+  },
+  "errors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 ()"
+    },
+    {
+      "type": "warning",
+      "text": "The resource http://127.0.0.1:3000/_next/static/media/22a5144ee8d83bca-s.p.woff2?v=1779897421617 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally."
+    },
+    {
+      "type": "warning",
+      "text": "The resource http://127.0.0.1:3000/_next/static/media/bb3ef058b751a6ad-s.p.woff2?v=1779897421617 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally."
+    }
+  ],
+  "bodyExcerpt": "SceneBook\n\nCOMMAND CENTER\n\nIDENTITY\nPASSKEY\nFORGOT PASSKEY?\n\nInvalid login credentials\n\nINITIALIZE SESSION\nSEE THE BOARD\n\nV 2.4.1 - SECURE TERMINAL\n\nNeed an account? Create one"
+}

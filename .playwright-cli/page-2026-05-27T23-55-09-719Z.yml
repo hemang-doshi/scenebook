@@ -1,0 +1,208 @@
+- generic [ref=e1]:
+  - generic [ref=e42]:
+    - complementary [ref=e43]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - paragraph [ref=e48]: SceneBook
+              - paragraph [ref=e49]: Workspace
+            - button "Collapse navigation" [expanded] [ref=e50]:
+              - img [ref=e51]
+          - generic [ref=e54]:
+            - paragraph [ref=e55]: Current Project
+            - paragraph [ref=e56]: Making Scenebook
+            - paragraph [ref=e57]: Idea
+          - navigation [ref=e59]:
+            - link "Projects" [ref=e60] [cursor=pointer]:
+              - /url: /home
+              - img [ref=e61]
+              - generic [ref=e64]: Projects
+            - link "Project Hub" [ref=e211] [cursor=pointer]:
+              - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+              - img [ref=e212]
+              - generic [ref=e214]: Project Hub
+            - link "Agent" [ref=e215] [cursor=pointer]:
+              - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce/chat
+              - img [ref=e216]
+              - generic [ref=e218]: Agent
+            - link "Editor" [ref=e65] [cursor=pointer]:
+              - /url: /editor
+              - img [ref=e66]
+              - generic [ref=e68]: Editor
+            - link "Analytics" [ref=e69] [cursor=pointer]:
+              - /url: /analytics
+              - img [ref=e70]
+              - generic [ref=e72]: Analytics
+            - link "Settings" [ref=e73] [cursor=pointer]:
+              - /url: /settings
+              - img [ref=e74]
+              - generic [ref=e77]: Settings
+          - link "New project" [ref=e78] [cursor=pointer]:
+            - /url: /home?create=1
+            - button "New project" [ref=e79]:
+              - img [ref=e80]
+              - text: New project
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - img [ref=e86]
+            - generic [ref=e90]:
+              - paragraph [ref=e91]: hemangspamz@gmail.com
+              - paragraph [ref=e92]: Workspace session
+          - button "Sign out" [ref=e93]:
+            - img [ref=e94]
+            - text: Sign out
+    - generic [ref=e97]:
+      - generic [ref=e100]:
+        - navigation "breadcrumb" [ref=e286]:
+          - list [ref=e287]:
+            - listitem [ref=e288]:
+              - link "Projects" [ref=e289] [cursor=pointer]:
+                - /url: /home
+            - listitem [ref=e290]:
+              - img [ref=e291]
+            - listitem [ref=e293]:
+              - link "Making Scenebook" [ref=e294] [cursor=pointer]:
+                - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+            - listitem [ref=e295]:
+              - img [ref=e296]
+            - listitem [ref=e298]:
+              - link "Agent" [disabled] [ref=e299]
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - img
+            - textbox "Search projects..." [ref=e108]
+          - button [ref=e109]:
+            - img [ref=e110]
+          - generic [ref=e113]: Supabase Mode
+      - main [ref=e114]:
+        - generic [ref=e234]:
+          - generic [ref=e236]:
+            - 'button "Assets: 0" [ref=e300]':
+              - img [ref=e238]
+              - generic [ref=e240]: "Assets:"
+              - generic [ref=e241]: "0"
+            - generic [ref=e242]:
+              - link "Project hub" [ref=e243] [cursor=pointer]:
+                - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+                - button "Project hub" [ref=e244]:
+                  - img [ref=e245]
+                  - text: Project hub
+              - generic [ref=e248]:
+                - generic [ref=e249]: "History:"
+                - button "+ New Conversation" [ref=e251] [cursor=pointer]:
+                  - generic [ref=e252]: + New Conversation
+                  - img [ref=e253]
+          - generic [ref=e256]: done
+          - generic [ref=e302]:
+            - heading "What should we build in SceneBook?" [level=1] [ref=e303]
+            - paragraph [ref=e304]: Start with a direct prompt or use a slash command when you need a structured action.
+          - generic [ref=e262]:
+            - generic [ref=e263]:
+              - textbox "Ask the agent for the next beat, prompt bundle, storyboard, or a sharper cut." [ref=e264]: /
+              - generic [ref=e306]:
+                - button "Script /script Turn a rough idea into hook, script, caption, and CTA." [ref=e307]:
+                  - generic [ref=e308]:
+                    - generic [ref=e309]: Script
+                    - generic [ref=e310]:
+                      - generic [ref=e311]: /script
+                      - generic [ref=e312]: Turn a rough idea into hook, script, caption, and CTA.
+                - button "Prompt JSON /form-json-prompt Build a detailed generation-ready prompt package." [ref=e313]:
+                  - generic [ref=e314]:
+                    - generic [ref=e315]: Prompt JSON
+                    - generic [ref=e316]:
+                      - generic [ref=e317]: /form-json-prompt
+                      - generic [ref=e318]: Build a detailed generation-ready prompt package.
+                - button "Generate /generate Create image, video, or audio from text or JSON." [ref=e319]:
+                  - generic [ref=e320]:
+                    - generic [ref=e321]: Generate
+                    - generic [ref=e322]:
+                      - generic [ref=e323]: /generate
+                      - generic [ref=e324]: Create image, video, or audio from text or JSON.
+                - button "Image /generate-image Generate an image concept." [ref=e325]:
+                  - generic [ref=e326]:
+                    - generic [ref=e327]: Image
+                    - generic [ref=e328]:
+                      - generic [ref=e329]: /generate-image
+                      - generic [ref=e330]: Generate an image concept.
+                - button "Video /generate-video Generate a video concept." [ref=e331]:
+                  - generic [ref=e332]:
+                    - generic [ref=e333]: Video
+                    - generic [ref=e334]:
+                      - generic [ref=e335]: /generate-video
+                      - generic [ref=e336]: Generate a video concept.
+                - button "Audio /generate-audio Generate voice or sound." [ref=e337]:
+                  - generic [ref=e338]:
+                    - generic [ref=e339]: Audio
+                    - generic [ref=e340]:
+                      - generic [ref=e341]: /generate-audio
+                      - generic [ref=e342]: Generate voice or sound.
+                - button "Storyboard /storyboard Map the idea into shots and beats." [ref=e343]:
+                  - generic [ref=e344]:
+                    - generic [ref=e345]: Storyboard
+                    - generic [ref=e346]:
+                      - generic [ref=e347]: /storyboard
+                      - generic [ref=e348]: Map the idea into shots and beats.
+                - button "Tasks /tasks Plan or update production tasks." [ref=e349]:
+                  - generic [ref=e350]:
+                    - generic [ref=e351]: Tasks
+                    - generic [ref=e352]:
+                      - generic [ref=e353]: /tasks
+                      - generic [ref=e354]: Plan or update production tasks.
+                - button "Analyze /analyze Review analytics and next iterations." [ref=e355]:
+                  - generic [ref=e356]:
+                    - generic [ref=e357]: Analyze
+                    - generic [ref=e358]:
+                      - generic [ref=e359]: /analyze
+                      - generic [ref=e360]: Review analytics and next iterations.
+                - button "Instagram /instagram Prep captions, packaging, and posting." [ref=e361]:
+                  - generic [ref=e362]:
+                    - generic [ref=e363]: Instagram
+                    - generic [ref=e364]:
+                      - generic [ref=e365]: /instagram
+                      - generic [ref=e366]: Prep captions, packaging, and posting.
+            - generic [ref=e265]:
+              - generic [ref=e266]:
+                - link "Open editor" [ref=e267] [cursor=pointer]:
+                  - /url: /editor/1a49f71a-3a93-4f02-a421-6622967f97ce
+                  - button "Open editor" [ref=e268]:
+                    - generic [ref=e269]: Open editor
+                - generic [ref=e271]:
+                  - button "Routing" [expanded] [active] [ref=e272]:
+                    - img [ref=e273]
+                    - text: Routing
+                    - img [ref=e274]
+                  - generic [ref=e367]:
+                    - generic [ref=e368]:
+                      - heading "Model routing" [level=3] [ref=e369]
+                      - paragraph [ref=e370]: Choose defaults per modality.
+                    - generic [ref=e371]:
+                      - button "chat Nemotron 3 Super via NIM" [ref=e373]:
+                        - generic [ref=e374]:
+                          - generic [ref=e375]: chat
+                          - generic [ref=e376]: Nemotron 3 Super via NIM
+                        - img [ref=e377]
+                      - button "image FLUX.1 Krea Dev" [ref=e380]:
+                        - generic [ref=e381]:
+                          - generic [ref=e382]: image
+                          - generic [ref=e383]: FLUX.1 Krea Dev
+                        - img [ref=e384]
+                      - button "video HunyuanVideo" [ref=e387]:
+                        - generic [ref=e388]:
+                          - generic [ref=e389]: video
+                          - generic [ref=e390]: HunyuanVideo
+                        - img [ref=e391]
+                      - button "audio OuteTTS 0.3 500M" [ref=e394]:
+                        - generic [ref=e395]:
+                          - generic [ref=e396]: audio
+                          - generic [ref=e397]: OuteTTS 0.3 500M
+                        - img [ref=e398]
+              - generic [ref=e276]:
+                - paragraph [ref=e277]: "Use `/` commands or send freeform prompts. Submit with Cmd/Ctrl+Enter."
+                - button "Attach files" [ref=e278]:
+                  - img [ref=e279]
+                - button "Send message" [ref=e281]:
+                  - img [ref=e282]
+  - button "Open Next.js Dev Tools" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
+  - alert [ref=e40]

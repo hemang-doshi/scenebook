@@ -1,0 +1,167 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e42]:
+    - complementary [ref=e43]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - paragraph [ref=e48]: SceneBook
+              - paragraph [ref=e49]: Workspace
+            - button "Collapse navigation" [expanded] [ref=e50]:
+              - img [ref=e51]
+          - generic [ref=e54]:
+            - paragraph [ref=e55]: Current Project
+            - paragraph [ref=e56]: No active project
+            - paragraph [ref=e57]: Idle
+          - navigation [ref=e59]:
+            - link "Projects" [ref=e60] [cursor=pointer]:
+              - /url: /home
+              - img [ref=e61]
+              - generic [ref=e64]: Projects
+            - link "Editor" [ref=e65] [cursor=pointer]:
+              - /url: /editor
+              - img [ref=e66]
+              - generic [ref=e68]: Editor
+            - link "Analytics" [ref=e69] [cursor=pointer]:
+              - /url: /analytics
+              - img [ref=e70]
+              - generic [ref=e72]: Analytics
+            - link "Settings" [ref=e73] [cursor=pointer]:
+              - /url: /settings
+              - img [ref=e74]
+              - generic [ref=e77]: Settings
+          - link "New project" [ref=e78] [cursor=pointer]:
+            - /url: /home?create=1
+            - button "New project" [ref=e79]:
+              - img [ref=e80]
+              - text: New project
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - img [ref=e86]
+            - generic [ref=e90]:
+              - paragraph [ref=e91]: hemangspamz@gmail.com
+              - paragraph [ref=e92]: Workspace session
+          - button "Sign out" [ref=e93]:
+            - img [ref=e94]
+            - text: Sign out
+    - generic [ref=e97]:
+      - generic [ref=e100]:
+        - navigation "breadcrumb" [ref=e102]:
+          - list [ref=e103]:
+            - listitem [ref=e104]:
+              - link "Projects" [disabled] [ref=e105]
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - img
+            - textbox "Search projects..." [ref=e108]
+          - button [ref=e109]:
+            - img [ref=e110]
+          - generic [ref=e113]: Supabase Mode
+      - main [ref=e114]:
+        - generic [ref=e115]:
+          - generic [ref=e116]:
+            - generic [ref=e117]:
+              - generic [ref=e118]: Project Hub
+              - heading "Projects" [level=1] [ref=e119]
+              - paragraph [ref=e120]: A table-first index for every project, with direct handoff into workspace, chat, and editor.
+            - button "New project" [ref=e121]:
+              - img [ref=e122]
+              - text: New project
+          - generic [ref=e124]:
+            - generic [ref=e125]:
+              - generic [ref=e126]:
+                - paragraph [ref=e127]: Project Index
+                - heading "3 projects" [level=2] [ref=e128]
+              - generic [ref=e129]: 0 ready to shoot
+            - table [ref=e131]:
+              - rowgroup [ref=e132]:
+                - row "Project Status Format Platform Assets Updated Actions" [ref=e133]:
+                  - columnheader "Project" [ref=e134]
+                  - columnheader "Status" [ref=e135]
+                  - columnheader "Format" [ref=e136]
+                  - columnheader "Platform" [ref=e137]
+                  - columnheader "Assets" [ref=e138]
+                  - columnheader "Updated" [ref=e139]
+                  - columnheader "Actions" [ref=e140]
+              - rowgroup [ref=e141]:
+                - row "Goa Reel Project workspace Scripted REEL INSTAGRAM 0 May 27, 2026 Workspace Chat Editor" [ref=e142]:
+                  - cell "Goa Reel Project workspace" [ref=e143]:
+                    - generic [ref=e144]:
+                      - paragraph [ref=e145]: Goa Reel
+                      - paragraph [ref=e146]: Project workspace
+                  - cell "Scripted" [ref=e147]:
+                    - generic [ref=e148]: Scripted
+                  - cell "REEL" [ref=e149]
+                  - cell "INSTAGRAM" [ref=e150]
+                  - cell "0" [ref=e151]
+                  - cell "May 27, 2026" [ref=e152]
+                  - cell "Workspace Chat Editor" [ref=e153]:
+                    - generic [ref=e154]:
+                      - link "Workspace" [ref=e155] [cursor=pointer]:
+                        - /url: /projects/7fa48959-87f5-43d9-bef8-6bf96dbc4ec7
+                        - button "Workspace" [ref=e156]
+                      - link "Chat" [ref=e157] [cursor=pointer]:
+                        - /url: /projects/7fa48959-87f5-43d9-bef8-6bf96dbc4ec7/chat
+                        - button "Chat" [ref=e158]:
+                          - img [ref=e159]
+                          - text: Chat
+                      - link "Editor" [ref=e161] [cursor=pointer]:
+                        - /url: /editor/7fa48959-87f5-43d9-bef8-6bf96dbc4ec7
+                        - button "Editor" [ref=e162]:
+                          - text: Editor
+                          - img [ref=e163]
+                - row "Making Scenebook Project workspace Idea REEL INSTAGRAM 1 May 26, 2026 Workspace Chat Editor" [ref=e165]:
+                  - cell "Making Scenebook Project workspace" [ref=e166]:
+                    - generic [ref=e167]:
+                      - paragraph [ref=e168]: Making Scenebook
+                      - paragraph [ref=e169]: Project workspace
+                  - cell "Idea" [ref=e170]:
+                    - generic [ref=e171]: Idea
+                  - cell "REEL" [ref=e172]
+                  - cell "INSTAGRAM" [ref=e173]
+                  - cell "1" [ref=e174]
+                  - cell "May 26, 2026" [ref=e175]
+                  - cell "Workspace Chat Editor" [ref=e176]:
+                    - generic [ref=e177]:
+                      - link "Workspace" [ref=e178] [cursor=pointer]:
+                        - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce
+                        - button "Workspace" [ref=e179]
+                      - link "Chat" [ref=e180] [cursor=pointer]:
+                        - /url: /projects/1a49f71a-3a93-4f02-a421-6622967f97ce/chat
+                        - button "Chat" [ref=e181]:
+                          - img [ref=e182]
+                          - text: Chat
+                      - link "Editor" [ref=e184] [cursor=pointer]:
+                        - /url: /editor/1a49f71a-3a93-4f02-a421-6622967f97ce
+                        - button "Editor" [ref=e185]:
+                          - text: Editor
+                          - img [ref=e186]
+                - row "I wanna create a reel about my goa trip Project workspace Archived SHORT INSTAGRAM 0 May 26, 2026 Workspace Chat Editor" [ref=e188]:
+                  - cell "I wanna create a reel about my goa trip Project workspace" [ref=e189]:
+                    - generic [ref=e190]:
+                      - paragraph [ref=e191]: I wanna create a reel about my goa trip
+                      - paragraph [ref=e192]: Project workspace
+                  - cell "Archived" [ref=e193]:
+                    - generic [ref=e194]: Archived
+                  - cell "SHORT" [ref=e195]
+                  - cell "INSTAGRAM" [ref=e196]
+                  - cell "0" [ref=e197]
+                  - cell "May 26, 2026" [ref=e198]
+                  - cell "Workspace Chat Editor" [ref=e199]:
+                    - generic [ref=e200]:
+                      - link "Workspace" [ref=e201] [cursor=pointer]:
+                        - /url: /projects/55633d63-de36-47a8-ade8-2f1aadfff4c1
+                        - button "Workspace" [ref=e202]
+                      - link "Chat" [ref=e203] [cursor=pointer]:
+                        - /url: /projects/55633d63-de36-47a8-ade8-2f1aadfff4c1/chat
+                        - button "Chat" [ref=e204]:
+                          - img [ref=e205]
+                          - text: Chat
+                      - link "Editor" [ref=e207] [cursor=pointer]:
+                        - /url: /editor/55633d63-de36-47a8-ade8-2f1aadfff4c1
+                        - button "Editor" [ref=e208]:
+                          - text: Editor
+                          - img [ref=e209]
+  - button "Open Next.js Dev Tools" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
+  - alert [ref=e40]
