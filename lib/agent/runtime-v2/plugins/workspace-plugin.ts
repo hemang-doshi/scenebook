@@ -71,7 +71,7 @@ export const updateCreativeBriefTool: AgentRuntimeTool<UpdateCreativeBriefInput>
   description: "Merges approved discovery fields into the project's persistent creative brief.",
   inputSchema: updateCreativeBriefInputSchema,
   sideEffect: "db_write",
-  approvalPolicy: "ask_if_overwrite",
+  approvalPolicy: "auto",
   handler: notImplementedHandler,
   displayFormatter: () => ({
     title: "Update Creative Brief",
@@ -89,7 +89,7 @@ export const createProjectArtifactTool: AgentRuntimeTool<CreateProjectArtifactIn
   description: "Creates a named planning, script, prompt, or production artifact for the project.",
   inputSchema: createProjectArtifactInputSchema,
   sideEffect: "db_write",
-  approvalPolicy: "ask_if_overwrite",
+  approvalPolicy: "auto",
   async handler(ctx, input) {
     if (!ctx.threadId) {
       throw new Error("Thread id is required to create a project artifact.");
@@ -128,7 +128,7 @@ export const createProjectArtifactTool: AgentRuntimeTool<CreateProjectArtifactIn
     metadata: {
       artifactType: input.artifactType,
       sideEffect: "db_write",
-      approvalPolicy: "ask_if_overwrite",
+      approvalPolicy: "auto",
     },
   }),
 };
@@ -180,7 +180,7 @@ export const updateProjectStatusTool: AgentRuntimeTool<UpdateProjectStatusInput,
     subtitle: input.status,
     metadata: {
       sideEffect: "db_write",
-      approvalPolicy: "ask_if_overwrite",
+      approvalPolicy: "auto",
     },
   }),
 };
@@ -191,14 +191,14 @@ export const updateShootPackTool: AgentRuntimeTool<UpdateShootPackInput> = {
   description: "Applies approved A-roll, B-roll, prop, capture, and location notes to the shoot pack.",
   inputSchema: updateShootPackInputSchema,
   sideEffect: "db_write",
-  approvalPolicy: "ask_if_overwrite",
+  approvalPolicy: "auto",
   handler: notImplementedHandler,
   displayFormatter: () => ({
     title: "Update Shoot Pack",
     subtitle: "Apply production checklist updates.",
     metadata: {
       sideEffect: "db_write",
-      approvalPolicy: "ask_if_overwrite",
+      approvalPolicy: "auto",
     },
   }),
 };

@@ -18,6 +18,7 @@ export const agentCommands = [
 export const agentMessageRoles = ["user", "assistant", "system", "tool"] as const;
 export const agentRunStatuses = ["queued", "running", "completed", "failed"] as const;
 export const agentToolCallStatuses = [
+  "planned",
   "running",
   "completed",
   "failed",

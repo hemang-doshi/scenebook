@@ -35,6 +35,10 @@ export type AgentUiToolCall = {
   command?: string | null;
   status: string;
   requiresApproval: boolean;
+  approvalPolicy?: string | null;
+  sideEffect?: string | null;
+  purpose?: string | null;
+  changedFields?: string[];
   output: unknown;
   errorMessage?: string | null;
   createdAt: string;
@@ -83,10 +87,14 @@ type AgentPostResponse = {
     status: string;
     toolName: string;
     requiresApproval: boolean;
+    approvalPolicy?: string | null;
+    sideEffect?: string | null;
+    purpose?: string | null;
+    changedFields?: string[];
     errorMessage?: string | null;
-    result: {
+    result?: {
       output: unknown;
-    };
+    } | null;
   };
   activeGoal?: AgentActiveGoal | null;
 };
@@ -123,12 +131,33 @@ function toAgentEntries(history: AgentHistoryResponse): AgentUiEntry[] {
     command: toolCall.command,
     status: toolCall.status,
     requiresApproval: toolCall.requires_approval,
+    approvalPolicy: null,
+    sideEffect: null,
+    purpose: null,
+    changedFields: getChangedFields(toolCall.output ?? {}),
     output: toolCall.output ?? {},
     errorMessage: toolCall.error_message,
     createdAt: toolCall.created_at ?? new Date().toISOString(),
   }));
 
   return sortEntries([...messages, ...toolCalls]);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getChangedFields(value: unknown) {
+  const output = isRecord(value) ? value : {};
+  const fields = output.changedFields ?? output.updatedFields;
+  return Array.isArray(fields) ? fields.filter((field): field is string => typeof field === "string") : [];
+}
+
+function isToolStreamEvent(data: unknown): data is { type: string; tool: NonNullable<AgentPostResponse["tool"]> } {
+  if (!isRecord(data) || !isRecord(data.tool) || typeof data.type !== "string") {
+    return false;
+  }
+  return data.type === "tool" || data.type.startsWith("tool_");
 }
 
 type ThreadInfo = { id: string; title: string | null; updated_at: string };
@@ -222,15 +251,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
 
       const contentType = response.headers.get("Content-Type") || "";
       if (contentType.includes("text/event-stream")) {
-        const placeholderId = `stream-assistant-${Date.now()}`;
-        const placeholderMessage: AgentUiMessage = {
-          id: placeholderId,
-          kind: "message",
-          role: "assistant",
-          content: "",
-          createdAt: new Date().toISOString(),
-        };
-        setEntries((current) => sortEntries([...current, placeholderMessage]));
+        let placeholderId: string | null = null;
 
         const reader = response.body?.getReader();
         if (!reader) {
@@ -257,14 +278,27 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
             const rawData = trimmed.slice(6);
             try {
               const data = JSON.parse(rawData);
-              if (data.type === "meta") {
+              if (data.type === "meta" || data.type === "plan" || data.type === "mode") {
                 if (data.threadId) {
                   setThreadId(data.threadId);
                   lastFetchedThreadId.current = data.threadId;
                   void loadThreadsList();
                 }
-              } else if (data.type === "chunk" && data.text) {
+              }
+
+              if (data.type === "chunk" && data.text) {
                 setActivity({ label: "thinking" });
+                if (!placeholderId) {
+                  placeholderId = `stream-assistant-${Date.now()}`;
+                  const placeholderMessage: AgentUiMessage = {
+                    id: placeholderId,
+                    kind: "message",
+                    role: "assistant",
+                    content: "",
+                    createdAt: new Date().toISOString(),
+                  };
+                  setEntries((current) => sortEntries([...current, placeholderMessage]));
+                }
                 setEntries((current) =>
                   current.map((entry) =>
                     entry.id === placeholderId && entry.kind === "message"
@@ -272,11 +306,13 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                       : entry
                   )
                 );
-              } else if (data.type === "tool" && data.tool) {
+              } else if (isToolStreamEvent(data)) {
                 const tool = data.tool as AgentPostResponse["tool"];
                 sawToolEvent = true;
                 if (tool) {
-                  if (tool.status === "awaiting_input") {
+                  if (tool.status === "planned") {
+                    setActivity({ label: "planned" });
+                  } else if (tool.status === "awaiting_input") {
                     setActivity({ label: "awaiting input", tone: "warning" });
                   } else if (tool.status === "awaiting_approval") {
                     setActivity({ label: "draft ready", tone: "warning" });
@@ -302,22 +338,31 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                     setActivity({ label: "done" });
                   }
 
-                  setEntries((current) =>
-                    sortEntries([
+                  setEntries((current) => {
+                    const existing = current.find((entry) => entry.kind === "tool" && entry.id === tool.id) as
+                      | AgentUiToolCall
+                      | undefined;
+
+                    return sortEntries([
                       ...current.filter((entry) => entry.kind !== "tool" || entry.id !== tool.id),
                       {
+                        ...existing,
                         id: tool.id,
                         kind: "tool",
                         toolName: tool.toolName,
                         command: tool.command,
                         status: tool.status,
                         requiresApproval: tool.requiresApproval,
+                        approvalPolicy: tool.approvalPolicy ?? existing?.approvalPolicy ?? null,
+                        sideEffect: tool.sideEffect ?? existing?.sideEffect ?? null,
+                        purpose: tool.purpose ?? existing?.purpose ?? null,
+                        changedFields: tool.changedFields ?? getChangedFields(tool.result?.output ?? tool.result ?? {}),
                         output: tool.result?.output ?? tool.result ?? {},
                         errorMessage: "errorMessage" in tool ? (tool as { errorMessage?: string | null }).errorMessage : null,
-                        createdAt: new Date().toISOString(),
+                        createdAt: existing?.createdAt ?? new Date().toISOString(),
                       },
-                    ])
-                  );
+                    ]);
+                  });
                 }
               } else if (data.type === "goal") {
                 setActiveGoal(data.activeGoal ?? null);
@@ -380,6 +425,10 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               command: data.tool.command,
               status: data.tool.status,
               requiresApproval: data.tool.requiresApproval,
+              approvalPolicy: data.tool.approvalPolicy ?? null,
+              sideEffect: data.tool.sideEffect ?? null,
+              purpose: data.tool.purpose ?? null,
+              changedFields: data.tool.changedFields ?? getChangedFields(data.tool.result?.output ?? data.tool.result ?? {}),
               output: data.tool.result?.output ?? data.tool.result ?? {},
               errorMessage: "errorMessage" in data.tool ? (data.tool as { errorMessage?: string | null }).errorMessage : null,
               createdAt: new Date().toISOString(),

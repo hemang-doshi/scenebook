@@ -361,7 +361,7 @@ export const attachAssetToProjectTool: AgentRuntimeTool<AttachAssetToProjectInpu
   description: "Links a generated or library asset to the active project.",
   inputSchema: attachAssetToProjectInputSchema,
   sideEffect: "db_write",
-  approvalPolicy: "ask_if_overwrite",
+  approvalPolicy: "auto",
   handler: (ctx, input) => ({
     message: "Asset is attached to the project library.",
     output: {
@@ -380,7 +380,7 @@ export const attachAssetToProjectTool: AgentRuntimeTool<AttachAssetToProjectInpu
       projectId: input.projectId,
       type: input.type,
       sideEffect: "db_write",
-      approvalPolicy: "ask_if_overwrite",
+      approvalPolicy: "auto",
     },
   }),
 };
