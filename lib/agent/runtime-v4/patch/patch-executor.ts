@@ -29,6 +29,16 @@ export type PlannedPatchRecord = {
   status: PlannedPatchRecordStatus;
 };
 
+export const plannedWorkflowPatchMarker = "runtime-v4-workflow";
+
+export class SupabasePatchAuditError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = "SupabasePatchAuditError";
+    this.cause = options?.cause;
+  }
+}
+
 export type ToolExecutorLike = {
   execute(input: {
     toolName: string;
@@ -112,9 +122,9 @@ function assertMutationSucceeded(result: SupabaseMutationResult, fallback: strin
     return;
   }
 
-  throw result.error instanceof Error
-    ? result.error
-    : new Error(errorMessage(result.error, fallback));
+  throw new SupabasePatchAuditError(errorMessage(result.error, fallback), {
+    cause: result.error,
+  });
 }
 
 function plannedPatchStatus(patch: ProjectPatch): PlannedPatchRecordStatus {
@@ -158,7 +168,16 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
     const supabase = await this.client();
     const patchId = this.patchId(input.patch);
     const status = plannedPatchStatus(input.patch);
-    const storedPatch = this.storedPatch(input.patch, input.context);
+    const metadata = jsonObject({
+      ...(input.patch.metadata ?? {}),
+      ...(input.metadata ?? {}),
+      plannedBy: plannedWorkflowPatchMarker,
+    });
+    const storedPatch = this.storedPatch({
+      ...input.patch,
+      id: patchId,
+      metadata,
+    }, input.context);
 
     const result = await supabase
       .from("agent_project_patches")
@@ -178,10 +197,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
         failed_operations: 0,
         retryable: false,
         patch: jsonObject(storedPatch),
-        metadata: jsonObject({
-          ...(input.patch.metadata ?? {}),
-          ...(input.metadata ?? {}),
-        }),
+        metadata,
         updated_at: nowIso(),
         completed_at: null,
       }, { onConflict: "id" });
@@ -541,6 +557,23 @@ export class PatchExecutor {
         message: `Running ${operation.type}.`,
       });
 
+      const operationStartedAt = nowIso();
+      await this.audit(() => this.auditStore?.recordOperation?.({
+        patch,
+        context: input.context,
+        operation: {
+          operationIndex,
+          operation,
+          type: operation.type,
+          toolName,
+          input: operation.input,
+          status: "running",
+          retryable: false,
+          message: `Running ${operation.type}.`,
+          startedAt: operationStartedAt,
+        },
+      }));
+
       let toolResult: ToolExecutionLike;
       try {
         toolResult = await this.toolExecutor.execute({
@@ -573,7 +606,7 @@ export class PatchExecutor {
         error: toolResult.error,
         verification: toolResult.verification,
         toolCallId: toolResult.toolCallId,
-        startedAt: toolResult.startedAt,
+        startedAt: toolResult.startedAt ?? operationStartedAt,
         completedAt: toolResult.completedAt,
         toolResult,
       };

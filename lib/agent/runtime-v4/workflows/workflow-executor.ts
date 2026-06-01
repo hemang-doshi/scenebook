@@ -246,16 +246,6 @@ export class WorkflowExecutor {
     let observation = resultToObservation(workflowResult);
     let patchResult: GraphPatchExecutionResult | undefined;
 
-    if (workflowResult.status === "completed" && workflowResult.patch) {
-      events.push({
-        type: "workflow_patch_planned",
-        ...eventBase(input),
-        workflowName: workflow.name,
-        patch: workflowResult.patch,
-        message: workflowResult.patch.summary,
-      });
-    }
-
     if (
       workflowResult.status === "completed" &&
       workflowResult.patch &&
@@ -264,6 +254,13 @@ export class WorkflowExecutor {
     ) {
       const autoApply = workflowPatchAutoApplyDecision(workflowResult.patch);
       if (autoApply.allowed) {
+        events.push({
+          type: "workflow_patch_planned",
+          ...eventBase(input),
+          workflowName: workflow.name,
+          patch: workflowResult.patch,
+          message: workflowResult.patch.summary,
+        });
         patchResult = await this.patchExecutor.apply({
           patch: workflowResult.patch,
           context: input.context,
@@ -312,6 +309,22 @@ export class WorkflowExecutor {
           };
         }
 
+        const persistedPatch = {
+          ...workflowResult.patch,
+          id: plannedPatch.patchId,
+          projectId: workflowResult.patch.projectId ?? input.context.projectId,
+          authorUserId: workflowResult.patch.authorUserId ?? input.context.userId,
+          runId: workflowResult.patch.runId ?? input.context.runId,
+        };
+        events.push({
+          type: "workflow_patch_planned",
+          ...eventBase(input),
+          workflowName: workflow.name,
+          patch: persistedPatch,
+          patchStatus: plannedPatch.status,
+          message: workflowResult.patch.summary,
+        });
+
         observation = {
           ...observation,
           output: toJsonObject({
@@ -327,6 +340,14 @@ export class WorkflowExecutor {
           }),
         };
       }
+    } else if (workflowResult.status === "completed" && workflowResult.patch) {
+      events.push({
+        type: "workflow_patch_planned",
+        ...eventBase(input),
+        workflowName: workflow.name,
+        patch: workflowResult.patch,
+        message: workflowResult.patch.summary,
+      });
     }
 
     if (workflowResult.status === "completed") {

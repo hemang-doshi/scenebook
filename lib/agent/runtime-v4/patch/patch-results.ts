@@ -10,6 +10,7 @@ export type PatchExecutionStatus =
   | "awaiting_approval";
 
 export type PatchOperationExecutionStatus =
+  | "running"
   | "completed"
   | "failed"
   | "blocked"
