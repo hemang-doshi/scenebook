@@ -13,6 +13,7 @@ import { ToolCallCard } from "@/components/agent/tool-call-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ModelAccordion, type AgentModelSelection } from "@/components/agent/model-accordion";
+import { ProjectMindPanel } from "@/components/agent/project-mind-panel";
 import { getDefaultChatModel, getDefaultMediaModel } from "@/lib/ai/model-registry";
 import type { ProjectWorkspace } from "@/lib/data/repository";
 import { fetchJson } from "@/lib/fetcher";
@@ -250,7 +251,23 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                   lastFetchedThreadId.current = data.threadId;
                   void loadThreadsList();
                 }
+              } else if (data.type === "run_started") {
+                if (data.threadId) {
+                  setThreadId(data.threadId);
+                  lastFetchedThreadId.current = data.threadId;
+                  void loadThreadsList();
+                }
+                setActivity({ label: "thinking" });
               } else if (data.type === "chunk" && data.text) {
+                setActivity({ label: "thinking" });
+                setEntries((current) =>
+                  current.map((entry) =>
+                    entry.id === placeholderId && entry.kind === "message"
+                      ? { ...entry, content: entry.content + data.text }
+                      : entry
+                  )
+                );
+              } else if (data.type === "message_delta" && data.text) {
                 setActivity({ label: "thinking" });
                 setEntries((current) =>
                   current.map((entry) =>
@@ -298,6 +315,69 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                       },
                     ])
                   );
+                }
+              } else if (
+                data.type === "tool_planned" ||
+                data.type === "tool_running" ||
+                data.type === "tool_completed" ||
+                data.type === "tool_failed" ||
+                data.type === "approval_required"
+              ) {
+                const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : `runtime-v3-tool-${Date.now()}`;
+                const status =
+                  data.type === "tool_completed"
+                    ? "completed"
+                    : data.type === "tool_failed"
+                      ? "failed"
+                      : data.type === "approval_required"
+                        ? "awaiting_approval"
+                        : "running";
+                const output =
+                  data.type === "approval_required"
+                    ? {
+                        kind: "approval_request",
+                        risk: data.risk,
+                        reason: data.reason,
+                        preview: data.preview,
+                      }
+                    : data.type === "tool_failed"
+                      ? { kind: "tool_error", message: data.error }
+                      : typeof data.output === "object" && data.output !== null
+                        ? data.output
+                        : { kind: "tool_progress", activity: status };
+
+                sawToolEvent = true;
+                setActivity(
+                  status === "failed"
+                    ? { label: "tool failed", tone: "error" }
+                    : status === "awaiting_approval"
+                      ? { label: "approval needed", tone: "warning" }
+                      : status === "completed"
+                        ? { label: "done" }
+                        : { label: "working" },
+                );
+                setEntries((current) =>
+                  sortEntries([
+                    ...current.filter((entry) => entry.kind !== "tool" || entry.id !== toolCallId),
+                    {
+                      id: toolCallId,
+                      kind: "tool",
+                      toolName: typeof data.displayName === "string" ? data.displayName : String(data.toolName ?? "Agent Tool"),
+                      command: null,
+                      status,
+                      requiresApproval: status === "awaiting_approval",
+                      output,
+                      errorMessage: typeof data.error === "string" ? data.error : null,
+                      createdAt: new Date().toISOString(),
+                    },
+                  ])
+                );
+              } else if (data.type === "run_completed") {
+                setActivity({ label: "done" });
+              } else if (data.type === "run_failed") {
+                setActivity({ label: "error", tone: "error" });
+                if (typeof data.error === "string") {
+                  setError(data.error);
                 }
               }
             } catch (err) {
@@ -601,6 +681,8 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
           </div>
         </div>
       </div>
+
+      <ProjectMindPanel project={project} />
     </div>
   );
 }

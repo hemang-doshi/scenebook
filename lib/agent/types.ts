@@ -158,6 +158,13 @@ export type AgentToolCallRecord = {
   status: AgentToolCallStatus | string;
   input: Record<string, JsonValue>;
   output: Record<string, JsonValue>;
+  risk?: string | null;
+  approval_reason?: string | null;
+  state_snapshot_id?: string | null;
+  verification?: Record<string, JsonValue> | null;
+  availability?: string | null;
+  side_effect?: string | null;
+  approval_policy?: string | null;
   error_message?: string | null;
   requires_approval: boolean;
   approved_at?: string | null;

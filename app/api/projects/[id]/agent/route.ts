@@ -20,7 +20,14 @@ import {
 } from "@/lib/agent/runtime";
 import { createProjectArtifact } from "@/lib/agent/artifacts";
 import { createMemorySnapshot } from "@/lib/agent/memory";
-import { getAgentTool, listSupportedAgentCommands } from "@/lib/agent/tools/registry";
+import {
+  getAgentTool,
+  getAgentToolAvailability,
+  getAgentToolByName,
+  getUnavailableAgentToolMessage,
+  isAgentToolAvailable,
+  listSupportedAgentCommands,
+} from "@/lib/agent/tools/registry";
 import {
   assetAgentCommands,
   streamingAgentCommands,
@@ -50,6 +57,10 @@ const streamingCommandSet = new Set<AgentCommand>(streamingAgentCommands);
 const assetCommandSet = new Set<AgentCommand>(assetAgentCommands);
 const AGENT_RUNTIME_SETUP_ERROR =
   "Agent runtime is not set up. Run the latest Supabase migrations.";
+
+function isRuntimeV3Enabled() {
+  return process.env.AGENT_HARNESS_RUNTIME_ENABLED === "true";
+}
 
 function encodeSse(type: string, payload: Record<string, unknown>) {
   return `data: ${JSON.stringify({ type, ...payload })}\n\n`;
@@ -126,13 +137,28 @@ async function persistArtifactForToolCall(toolCall: AgentToolCallRecord, output:
 async function applyToolCallDraft(toolCallId: string, overrideOutput?: Record<string, any>) {
   const toolCall = await getAgentToolCall(toolCallId);
   const output = overrideOutput ?? toolCall.output ?? {};
+  const tool = getAgentToolByName(toolCall.tool_name);
+
+  if (!tool) {
+    throw new Error(`Tool not found for pending approval: ${toolCall.tool_name}.`);
+  }
+
+  if (toolCall.status && toolCall.status !== "awaiting_approval") {
+    throw new Error("Only tool calls awaiting approval can be applied.");
+  }
+
+  tool.inputSchema.parse(toolCall.input ?? {});
+
+  if (!isAgentToolAvailable(tool)) {
+    throw new Error(getUnavailableAgentToolMessage(tool));
+  }
 
   if (!isRecord(output)) {
     throw new Error("Tool output must be an object before it can be applied.");
   }
 
-  switch (toolCall.command) {
-    case "script": {
+  switch (tool.name) {
+    case "Script Builder": {
       const project = await getProjectWorkspace(toolCall.project_id);
       if (!project) {
         throw new Error("Project not found for script apply.");
@@ -155,7 +181,7 @@ async function applyToolCallDraft(toolCallId: string, overrideOutput?: Record<st
       });
       break;
     }
-    case "tasks": {
+    case "Production Tasks": {
       await createMemorySnapshot({
         projectId: toolCall.project_id,
         threadId: toolCall.thread_id,
@@ -167,7 +193,7 @@ async function applyToolCallDraft(toolCallId: string, overrideOutput?: Record<st
       });
       break;
     }
-    case "instagram": {
+    case "Instagram Planner": {
       await persistArtifactForToolCall(toolCall, output);
       const project = await getProjectWorkspace(toolCall.project_id);
       if (project && typeof output.caption === "string" && output.caption.trim()) {
@@ -180,7 +206,7 @@ async function applyToolCallDraft(toolCallId: string, overrideOutput?: Record<st
       }
       break;
     }
-    case "analyze": {
+    case "Content Analyzer": {
       await persistArtifactForToolCall(toolCall, output);
       const project = await getProjectWorkspace(toolCall.project_id);
       if (project) {
@@ -197,10 +223,10 @@ async function applyToolCallDraft(toolCallId: string, overrideOutput?: Record<st
       }
       break;
     }
-    case "storyboard":
-    case "form-json-prompt":
-    case "import-to-editor":
-    case "export":
+    case "Storyboard Builder":
+    case "Form JSON Prompt":
+    case "Editor Handoff":
+    case "Export Planner":
       await persistArtifactForToolCall(toolCall, output);
       break;
     default:
@@ -209,6 +235,52 @@ async function applyToolCallDraft(toolCallId: string, overrideOutput?: Record<st
 
   await completeAgentToolCall(toolCall.id, output, "approved");
   return { toolCall, output };
+}
+
+async function completeBlockedToolCall(input: {
+  projectId: string;
+  threadId: string;
+  runId: string | null;
+  toolCallId: string | null;
+  command: AgentCommand;
+  toolName: string;
+  availability: string;
+  message: string;
+  model?: string | null;
+}) {
+  const output = {
+    kind: "tool_blocked",
+    availability: input.availability,
+    message: input.message,
+  };
+
+  if (input.toolCallId) {
+    await completeAgentToolCall(input.toolCallId, output, "failed");
+  }
+
+  if (input.runId) {
+    await appendAgentMessage({
+      projectId: input.projectId,
+      threadId: input.threadId,
+      role: "assistant",
+      content: input.message,
+      model: input.model ?? null,
+      provider: "agent-runtime",
+      metadata: {
+        command: input.command,
+        toolName: input.toolName,
+        blocked: true,
+        availability: input.availability,
+      },
+    });
+    await completeAgentRun(input.runId, {
+      command: input.command,
+      respondedWith: "blocked_tool",
+      availability: input.availability,
+    });
+  }
+
+  return output;
 }
 
 export async function GET(
@@ -277,6 +349,18 @@ export async function POST(
     const { id: projectId } = await params;
     const body = requestSchema.parse(await request.json());
     const parsed = parseSlashCommand(body.message);
+
+    if (isRuntimeV3Enabled()) {
+      const { AgentKernel } = await import("@/lib/agent/runtime-v3/kernel");
+      return AgentKernel.run({
+        projectId,
+        threadId: body.threadId,
+        userId: user.id,
+        message: body.message,
+        selectedModels: body.models,
+        attachments: body.attachments,
+      });
+    }
 
     if (body.message.trim().startsWith("/") && !parsed.isCommand) {
       return NextResponse.json(
@@ -383,6 +467,81 @@ export async function POST(
         selectedModel: body.models?.chat ?? null,
         selectedModels: body.models ?? null,
       };
+
+      if (!isAgentToolAvailable(tool)) {
+        const availability = getAgentToolAvailability(tool);
+        const blockedMessage = getUnavailableAgentToolMessage(tool);
+        const blockedOutput = await completeBlockedToolCall({
+          projectId,
+          threadId,
+          runId,
+          toolCallId,
+          command: effectiveCommand,
+          toolName: tool.name,
+          availability,
+          message: blockedMessage,
+          model: body.models?.chat ?? null,
+        });
+        toolCallId = null;
+
+        if (streamingCommandSet.has(effectiveCommand)) {
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse("meta", {
+                    threadId,
+                    runId: runIdForResponse,
+                  }),
+                ),
+              );
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse("tool", {
+                    tool: {
+                      id: toolCallIdForResponse,
+                      command: effectiveCommand,
+                      status: "failed",
+                      toolName: tool.name,
+                      requiresApproval: tool.requiresApproval,
+                      errorMessage: blockedMessage,
+                      result: { output: blockedOutput },
+                    },
+                  }),
+                ),
+              );
+              controller.enqueue(encoder.encode(encodeSse("chunk", { text: blockedMessage })));
+              controller.close();
+            },
+          });
+
+          return new Response(stream, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              "Connection": "keep-alive",
+            },
+          });
+        }
+
+        return NextResponse.json({
+          threadId,
+          runId: runIdForResponse,
+          message: blockedMessage,
+          command: effectiveCommand,
+          tool: {
+            type: "tool_result",
+            id: toolCallIdForResponse,
+            command: effectiveCommand,
+            status: "failed",
+            toolName: tool.name,
+            requiresApproval: tool.requiresApproval,
+            errorMessage: blockedMessage,
+            result: { output: blockedOutput },
+          },
+        });
+      }
 
       if (streamingCommandSet.has(effectiveCommand)) {
         const systemInstruction = buildAgentSystemInstruction({
@@ -717,6 +876,19 @@ export async function PATCH(
       .parse(await request.json());
 
     if (action === "apply") {
+      if (isRuntimeV3Enabled()) {
+        const { approveRuntimeV3ToolCall } = await import("@/lib/agent/runtime-v3/tools/executor");
+        const approved = await approveRuntimeV3ToolCall({
+          toolCallId,
+          userId: user.id,
+        });
+        return NextResponse.json({
+          success: true,
+          status: "completed",
+          toolCallId: approved.toolCall.id,
+        });
+      }
+
       const applied = await applyToolCallDraft(toolCallId, output);
       return NextResponse.json({
         success: true,
