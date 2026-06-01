@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
+import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
+import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
+import { fallbackScriptPackage } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { scriptPackageOutputSchema, type ScriptPackageOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1),
@@ -11,43 +15,7 @@ const inputSchema = z.object({
   targetDurationSeconds: z.number().int().positive().optional(),
 });
 
-const outputSchema = z.object({
-  hookOptions: z.array(z.string()),
-  selectedHook: z.string(),
-  script: z.string(),
-  voiceover: z.string(),
-  onScreenText: z.string(),
-  cta: z.string(),
-  captionSeed: z.string(),
-});
-
 type ScriptPackageInput = z.infer<typeof inputSchema>;
-type ScriptPackageOutput = z.infer<typeof outputSchema>;
-
-function buildOutput(input: ScriptPackageInput, angle: string): ScriptPackageOutput {
-  const tone = input.tone ?? "honest, specific, founder-led";
-  const selectedHook = `I started building SceneBook because making short-form videos had too many scattered steps.`;
-
-  return {
-    hookOptions: [
-      selectedHook,
-      "The hardest part of making a reel was not editing. It was keeping the idea alive.",
-      "This is the tool I wanted every time a video idea turned into five disconnected tabs.",
-    ],
-    selectedHook,
-    script: [
-      selectedHook,
-      `So I am building it around one workflow: plan the angle, write the script, prep the shoot, and save every useful version in one place.`,
-      `The angle for this piece is ${angle}.`,
-      `The goal is not to make the process look polished. The goal is to show the real production system being built underneath it.`,
-      "If you are building, creating, or documenting your work, follow along. This is the build log.",
-    ].join("\n"),
-    voiceover: `Use a ${tone} voiceover. Keep sentences short and let the screen captures prove the workflow.`,
-    onScreenText: "Building the short-form video workspace I needed\nIdea -> script -> shoot pack -> saved versions",
-    cta: "Follow the SceneBook build log.",
-    captionSeed: "Building SceneBook in public: the short-form workflow tool I kept wishing existed.",
-  };
-}
 
 function patchFor(input: ScriptPackageInput, output: ScriptPackageOutput, angle: string): ProjectPatch {
   return {
@@ -59,7 +27,7 @@ function patchFor(input: ScriptPackageInput, output: ScriptPackageOutput, angle:
       {
         type: "create_script_version",
         input: {
-          title: "SceneBook launch reel script",
+          title: `${angle.slice(0, 72)} script`,
           script: output.script,
           selectedHook: output.selectedHook,
           status: "selected",
@@ -88,7 +56,7 @@ function patchFor(input: ScriptPackageInput, output: ScriptPackageOutput, angle:
         type: "create_project_artifact",
         input: {
           artifactType: "script_package",
-          title: "SceneBook launch reel script package",
+          title: "Script package",
           payload: toJsonObject(output),
           metadata: { workflowName: "create_script_package" },
         },
@@ -99,7 +67,7 @@ function patchFor(input: ScriptPackageInput, output: ScriptPackageOutput, angle:
           memoryType: "selected_output",
           content: `Selected script hook: ${output.selectedHook}`,
           importance: "medium",
-          metadata: { outputType: "script_package", title: "SceneBook launch reel script package" },
+          metadata: { outputType: "script_package", title: "Script package" },
         },
       },
     ],
@@ -112,12 +80,25 @@ export const scriptPackageWorkflow: CreativeWorkflow<ScriptPackageInput, ScriptP
   displayName: "Create Script Package",
   description: "Generates hook options, a selected hook, script, voiceover notes, captions, and save patch.",
   inputSchema,
-  outputSchema,
-  handler(input, context) {
+  outputSchema: scriptPackageOutputSchema,
+  async handler(input, context) {
     const angle = input.selectedAngle
       ?? context.projectMind.creativeBrief?.coreAngle
-      ?? "an honest founder-devlog about building SceneBook from a real creator workflow problem";
-    const output = buildOutput(input, angle);
+      ?? `a specific short-form story about ${context.projectMind.project.title}`;
+    const { output } = await generateWorkflowStructured({
+      workflowName: "create_script_package",
+      schema: scriptPackageOutputSchema,
+      schemaName: "ScriptPackageOutput",
+      schemaDescription: "Hook options, script, voiceover, captions, structure, and pacing notes.",
+      system: "You are SceneBook's short-form script producer. Return project-specific structured output only.",
+      prompt: [
+        buildWorkflowContextBlock(context, input.prompt),
+        `Selected angle: ${angle}`,
+        "Write a script package that adapts to the existing brief, rejected outputs, current script state, platform, and creator preferences.",
+      ].join("\n\n"),
+      context,
+      fallback: () => fallbackScriptPackage(input, context),
+    });
 
     return {
       status: "completed",
@@ -125,7 +106,7 @@ export const scriptPackageWorkflow: CreativeWorkflow<ScriptPackageInput, ScriptP
       response: [`Recommended hook: ${output.selectedHook}`, "", output.script, "", `Caption seed: ${output.captionSeed}`].join("\n"),
       artifacts: [{
         type: "script_package",
-        title: "SceneBook launch reel script package",
+        title: "Script package",
         summary: output.selectedHook,
         payload: toJsonObject(output),
       }],

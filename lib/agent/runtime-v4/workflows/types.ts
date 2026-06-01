@@ -17,6 +17,7 @@ export const runtimeV4WorkflowNames = [
   "create_asset_prompt_pack",
   "review_content",
   "prepare_publish_package",
+  "create_full_production_package",
 ] as const;
 
 export type RuntimeV4WorkflowName = (typeof runtimeV4WorkflowNames)[number];

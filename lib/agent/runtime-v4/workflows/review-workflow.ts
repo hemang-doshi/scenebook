@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
+import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
+import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
+import { fallbackReview } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { reviewOutputSchema, type ReviewOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
   target: z.enum(["hook", "script", "caption", "full_package"]),
@@ -10,53 +14,13 @@ const inputSchema = z.object({
   goal: z.string().optional(),
 });
 
-const outputSchema = z.object({
-  scorecard: z.object({
-    clarity: z.number(),
-    specificity: z.number(),
-    momentum: z.number(),
-    fitToGoal: z.number(),
-  }),
-  strengths: z.array(z.string()),
-  weaknesses: z.array(z.string()),
-  specificImprovements: z.array(z.string()),
-  improvedVersion: z.string(),
-});
-
 type ReviewInput = z.infer<typeof inputSchema>;
-type ReviewOutput = z.infer<typeof outputSchema>;
 
 function sourceContent(input: ReviewInput, context: Parameters<CreativeWorkflow<ReviewInput>["handler"]>[1]) {
   if (input.content?.trim()) return input.content.trim();
   if (input.target === "caption") return context.projectMind.scriptLab.caption;
   if (input.target === "hook") return context.projectMind.scriptLab.hook;
   return context.projectMind.scriptLab.script || context.projectMind.creativeBrief?.coreAngle || input.goal || "";
-}
-
-function outputFor(input: ReviewInput, content: string): ReviewOutput {
-  const targetLabel = input.target.replace("_", " ");
-  return {
-    scorecard: {
-      clarity: content ? 8 : 5,
-      specificity: content.includes("SceneBook") ? 8 : 6,
-      momentum: 7,
-      fitToGoal: input.goal ? 8 : 7,
-    },
-    strengths: [
-      "The piece has a clear creator workflow problem to anchor it.",
-      "The SceneBook build story gives the content a concrete reason to exist.",
-    ],
-    weaknesses: [
-      "The hook can become sharper by naming the pain in fewer words.",
-      "The payoff should show one visible product moment, not just describe it.",
-    ],
-    specificImprovements: [
-      "Open with the before-state: scattered ideas, scripts, shoot notes, and versions.",
-      "Use one screen recording as proof within the first five seconds.",
-      "Close with a build-log CTA instead of a generic product CTA.",
-    ],
-    improvedVersion: `Improved ${targetLabel}: I built SceneBook because every short-form idea kept turning into scattered notes, scripts, and assets. Now the whole reel workflow can move from angle to script to shoot pack in one workspace.`,
-  };
 }
 
 function patchFor(input: ReviewInput, output: ReviewOutput): ProjectPatch {
@@ -94,10 +58,25 @@ export const reviewWorkflow: CreativeWorkflow<ReviewInput, ReviewOutput> = {
   displayName: "Review Content",
   description: "Critiques hooks, scripts, captions, or a full creative package.",
   inputSchema,
-  outputSchema,
-  handler(input, context) {
+  outputSchema: reviewOutputSchema,
+  async handler(input, context) {
     const content = sourceContent(input, context);
-    const output = outputFor(input, content);
+    const { output } = await generateWorkflowStructured({
+      workflowName: "review_content",
+      profile: "critique",
+      schema: reviewOutputSchema,
+      schemaName: "ReviewOutput",
+      schemaDescription: "A critique rubric, specific improvements, and a stronger version.",
+      system: "You are SceneBook's exacting creative reviewer. Return structured critique only.",
+      prompt: [
+        buildWorkflowContextBlock(context, input.goal ?? `Review ${input.target}`),
+        `Review target: ${input.target}`,
+        `Content to review:\n${content}`,
+        "Use a real critique rubric. Preserve what works, identify what to cut, and avoid generic advice.",
+      ].join("\n\n"),
+      context,
+      fallback: () => fallbackReview(input, content, context),
+    });
 
     return {
       status: "completed",

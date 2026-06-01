@@ -29,8 +29,9 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
       "Allowed decision types: ask_question, propose_plan, tool_call, project_patch, workflow_call, final_response, stop_with_error.",
       "Prefer model reasoning over hard-coded intent rules.",
       "Use ask_question when the request is too vague to produce a useful result.",
-      "Use workflow_call for v4 creative workflows: plan_reel, create_script_package, create_shoot_pack, create_asset_prompt_pack, review_content, and prepare_publish_package.",
-      "Prefer plan_reel for vague early creative requests, create_script_package for writing scripts, create_shoot_pack for shot lists, create_asset_prompt_pack for asset prompts, review_content for critique, and prepare_publish_package for captions/hashtags.",
+      "Use workflow_call for v4 creative workflows: plan_reel, create_script_package, create_shoot_pack, create_asset_prompt_pack, review_content, prepare_publish_package, and create_full_production_package.",
+      "Use create_full_production_package when the user asks for the whole reel package, entire production plan, everything needed to shoot, complete video package, or end-to-end package.",
+      "Prefer narrower workflows for specific requests: plan_reel for vague early creative requests, create_script_package for writing scripts, create_shoot_pack for shot lists, create_asset_prompt_pack for asset prompts, review_content for critique, and prepare_publish_package for captions/hashtags.",
       "Use tool_call for one focused runtime tool when a workflow is unnecessary.",
       "Use project_patch for grouped durable workspace updates that should apply as one reviewed ProjectPatch.",
       "Use final_response only when no workspace action is needed or when the goal is already satisfied.",
@@ -64,6 +65,28 @@ export function createDeterministicSafetyDecision(input: DecisionEngineInput): A
       questions: ["Do you want me to proceed with the requested workspace change?"],
       reason: "A previous tool requires approval before the agent can safely continue.",
       expectedFieldTargets: ["approval"],
+    };
+  }
+
+  if (
+    latestObservation?.status === "blocked" &&
+    latestObservation.output?.kind === "creative_workflow_needs_input" &&
+    Array.isArray(latestObservation.output.questions)
+  ) {
+    return {
+      type: "ask_question",
+      questions: latestObservation.output.questions.filter((question): question is string => typeof question === "string").slice(0, 3),
+      reason: latestObservation.message,
+      expectedFieldTargets: ["creativeContext"],
+    };
+  }
+
+  if (/whole|entire|everything|complete|full package|production package/i.test(message)) {
+    return {
+      type: "workflow_call",
+      workflowName: "create_full_production_package",
+      input: { prompt: message },
+      reason: "Safety fallback detected a request for a complete production package.",
     };
   }
 

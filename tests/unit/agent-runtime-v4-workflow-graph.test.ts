@@ -78,7 +78,7 @@ describe("runtime-v4 workflow graph node", () => {
         },
         observation: {
           toolName: "plan_reel",
-          status: "awaiting_approval",
+          status: "blocked",
           message: "Audience is needed.",
           output: { questions: ["Who is the viewer?"] },
         },

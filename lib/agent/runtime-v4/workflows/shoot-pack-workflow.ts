@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
+import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
+import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
+import { fallbackShootPack } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { shootPackOutputSchema, type ShootPackOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1),
@@ -10,49 +14,7 @@ const inputSchema = z.object({
   visualStyle: z.string().optional(),
 });
 
-const outputSchema = z.object({
-  scenes: z.array(z.string()),
-  aRoll: z.array(z.string()),
-  bRoll: z.array(z.string()),
-  screenCaptures: z.array(z.string()),
-  props: z.array(z.string()),
-  missingAssets: z.array(z.string()),
-  visualNotes: z.string(),
-  locationNotes: z.string(),
-});
-
 type ShootPackInput = z.infer<typeof inputSchema>;
-type ShootPackOutput = z.infer<typeof outputSchema>;
-
-function outputFor(input: ShootPackInput, visualStyle: string): ShootPackOutput {
-  return {
-    scenes: [
-      "Founder on camera naming the scattered workflow problem.",
-      "Screen capture of SceneBook moving from idea to script.",
-      "Close-up of the script package and shoot prep outputs.",
-      "Final direct-to-camera build-log CTA.",
-    ],
-    aRoll: [
-      "Say the hook directly to camera in one take.",
-      "Explain why SceneBook exists in under ten seconds.",
-      "Record the CTA without sounding like a launch ad.",
-    ],
-    bRoll: [
-      "Hands on keyboard while the project is open.",
-      "Quick scroll through the SceneBook workspace.",
-      "Messy notes or previous workflow artifacts beside the polished app.",
-    ],
-    screenCaptures: [
-      "Project brief panel",
-      "Script Lab with the selected hook",
-      "Shoot pack checklist being created",
-    ],
-    props: ["Laptop", "microphone", "notebook with rough content ideas"],
-    missingAssets: ["Clean screen recording", "one thumbnail frame", "caption-safe product shot"],
-    visualNotes: input.visualStyle ?? visualStyle,
-    locationNotes: "Desk setup or quiet workspace with enough light for a practical founder-devlog feel.",
-  };
-}
 
 function patchFor(output: ShootPackOutput): ProjectPatch {
   return {
@@ -82,7 +44,7 @@ function patchFor(output: ShootPackOutput): ProjectPatch {
         type: "create_project_artifact",
         input: {
           artifactType: "shoot_pack",
-          title: "SceneBook launch reel shoot pack",
+          title: "Shoot pack",
           payload: toJsonObject(output),
           metadata: { workflowName: "create_shoot_pack" },
         },
@@ -97,11 +59,24 @@ export const shootPackWorkflow: CreativeWorkflow<ShootPackInput, ShootPackOutput
   displayName: "Create Shoot Pack",
   description: "Creates a shot list, A-roll/B-roll checklist, screen captures, props, and missing assets.",
   inputSchema,
-  outputSchema,
-  handler(input, context) {
+  outputSchema: shootPackOutputSchema,
+  async handler(input, context) {
     const visualStyle = context.projectMind.creativeBrief?.visualStyle
       ?? "screen recordings, desk footage, and clean on-screen labels";
-    const output = outputFor(input, visualStyle);
+    const { output } = await generateWorkflowStructured({
+      workflowName: "create_shoot_pack",
+      schema: shootPackOutputSchema,
+      schemaName: "ShootPackOutput",
+      schemaDescription: "A shoot pack with scenes, capture lists, assets, and feasibility notes.",
+      system: "You are SceneBook's producer preparing a practical shoot pack. Return structured output only.",
+      prompt: [
+        buildWorkflowContextBlock(context, input.prompt),
+        `Visual style to respect: ${input.visualStyle ?? visualStyle}`,
+        `Script override, if provided:\n${input.script ?? ""}`,
+      ].join("\n\n"),
+      context,
+      fallback: () => fallbackShootPack(input, context),
+    });
 
     return {
       status: "completed",
@@ -109,7 +84,7 @@ export const shootPackWorkflow: CreativeWorkflow<ShootPackInput, ShootPackOutput
       response: [`Shoot pack ready with ${output.scenes.length} scenes.`, `Visual notes: ${output.visualNotes}`].join("\n"),
       artifacts: [{
         type: "shoot_pack",
-        title: "SceneBook launch reel shoot pack",
+        title: "Shoot pack",
         summary: output.scenes.join(" / "),
         payload: toJsonObject(output),
       }],

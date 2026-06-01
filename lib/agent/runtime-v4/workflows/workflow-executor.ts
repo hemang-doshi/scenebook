@@ -10,7 +10,7 @@ import type {
   PatchExecutionContext,
 } from "@/lib/agent/runtime-v4/patch/patch-results";
 import { projectPatchExecutionResultToObservation } from "@/lib/agent/runtime-v4/patch/patch-results";
-import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
+import type { ProjectPatch, ProjectPatchOperationType } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { ToolObservation } from "@/lib/agent/runtime-v3/types";
 import { getRuntimeV4Workflow } from "@/lib/agent/runtime-v4/workflows/workflow-registry";
 import type {
@@ -70,6 +70,46 @@ function completedObservation(result: Extract<CreativeWorkflowResult, { status: 
   };
 }
 
+const workspaceSafeOperationTypes = new Set<ProjectPatchOperationType>([
+  "update_creative_brief",
+  "update_active_goal",
+  "create_script_version",
+  "update_script_lab",
+  "update_shoot_pack",
+  "create_project_artifact",
+  "record_project_memory",
+]);
+
+const maxAutoApplyOperations = 8;
+
+function workflowPatchAutoApplyDecision(patch: ProjectPatch) {
+  if (patch.riskLevel !== "low") {
+    return { allowed: false, reason: `Patch risk level is ${patch.riskLevel}.` };
+  }
+
+  if (patch.requiresApproval) {
+    return { allowed: false, reason: "Patch requires approval." };
+  }
+
+  if (patch.operations.length > maxAutoApplyOperations) {
+    return { allowed: false, reason: `Patch has ${patch.operations.length} operations; auto-apply limit is ${maxAutoApplyOperations}.` };
+  }
+
+  const unsafeOperation = patch.operations.find((operation) =>
+    !workspaceSafeOperationTypes.has(operation.type) || operation.requiresApproval,
+  );
+  if (unsafeOperation) {
+    return { allowed: false, reason: `Patch contains unsafe or approval-gated operation ${unsafeOperation.type}.` };
+  }
+
+  const serialized = JSON.stringify(patch).toLowerCase();
+  if (/\b(delete|destructive|nango)\b/.test(serialized) || /"externalpublish"\s*:\s*true/.test(serialized)) {
+    return { allowed: false, reason: "Patch appears to include external, publish, or destructive intent." };
+  }
+
+  return { allowed: true, reason: "Patch is low-risk and workspace-only." };
+}
+
 function resultToObservation(result: CreativeWorkflowResult): ToolObservation {
   if (result.status === "completed") {
     return completedObservation(result);
@@ -78,7 +118,7 @@ function resultToObservation(result: CreativeWorkflowResult): ToolObservation {
   if (result.status === "needs_input") {
     return {
       toolName: result.workflowName,
-      status: "awaiting_approval",
+      status: "blocked",
       message: result.reason,
       output: toJsonObject({
         kind: "creative_workflow_needs_input",
@@ -208,13 +248,26 @@ export class WorkflowExecutor {
       (input.applyPatch ?? this.applyPatch) &&
       this.patchExecutor
     ) {
-      patchResult = await this.patchExecutor.apply({
-        patch: workflowResult.patch,
-        context: input.context,
-      });
-      observation = projectPatchExecutionResultToObservation(patchResult);
-      observation.toolName = workflow.name;
-      events.push(...patchResult.events);
+      const autoApply = workflowPatchAutoApplyDecision(workflowResult.patch);
+      if (autoApply.allowed) {
+        patchResult = await this.patchExecutor.apply({
+          patch: workflowResult.patch,
+          context: input.context,
+        });
+        observation = projectPatchExecutionResultToObservation(patchResult);
+        observation.toolName = workflow.name;
+        events.push(...patchResult.events);
+      } else {
+        observation = {
+          ...observation,
+          output: toJsonObject({
+            ...(observation.output ?? {}),
+            patchAutoApplySkipped: true,
+            patchAutoApplyReason: autoApply.reason,
+            patchPlanned: true,
+          }),
+        };
+      }
     }
 
     if (workflowResult.status === "completed") {

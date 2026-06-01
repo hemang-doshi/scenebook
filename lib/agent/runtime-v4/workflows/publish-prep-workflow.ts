@@ -3,42 +3,17 @@ import { z } from "zod";
 import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
+import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
+import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
+import { fallbackPublishPrep } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { publishPrepOutputSchema, type PublishPrepOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1),
   platform: z.enum(["instagram", "youtube_shorts", "tiktok"]).optional(),
 });
 
-const outputSchema = z.object({
-  caption: z.string(),
-  hashtags: z.array(z.string()),
-  postingChecklist: z.array(z.string()),
-  thumbnailText: z.string(),
-  description: z.string(),
-  firstComment: z.string(),
-  readinessWarnings: z.array(z.string()),
-});
-
 type PublishPrepInput = z.infer<typeof inputSchema>;
-type PublishPrepOutput = z.infer<typeof outputSchema>;
-
-function outputFor(input: PublishPrepInput, hasScript: boolean): PublishPrepOutput {
-  const platform = input.platform ?? "instagram";
-  return {
-    caption: "Building SceneBook in public: the short-form video workflow tool I kept needing. This one goes from idea to script to shoot pack without losing the thread.",
-    hashtags: ["#buildinpublic", "#founderdevlog", "#shortformvideo", "#creatorworkflow", "#scenebook"],
-    postingChecklist: [
-      "Confirm the first frame clearly shows SceneBook or the founder.",
-      "Keep burned-in text inside caption-safe margins.",
-      "Check audio levels against the music bed.",
-      `Preview the post natively on ${platform} before publishing later.`,
-    ],
-    thumbnailText: "Building the video workflow I needed",
-    description: "A founder-devlog reel about why SceneBook exists and how it supports short-form production.",
-    firstComment: "What part of your video workflow gets scattered first: ideas, scripts, assets, or feedback?",
-    readinessWarnings: hasScript ? ["No external publishing is wired in Phase 8."] : ["Script is not complete yet.", "No external publishing is wired in Phase 8."],
-  };
-}
 
 function patchFor(output: PublishPrepOutput): ProjectPatch {
   return {
@@ -51,7 +26,7 @@ function patchFor(output: PublishPrepOutput): ProjectPatch {
         type: "create_project_artifact",
         input: {
           artifactType: "publish_package",
-          title: "SceneBook launch reel publish package",
+          title: "Publish package",
           payload: toJsonObject(output),
           metadata: { workflowName: "prepare_publish_package", externalPublish: false },
         },
@@ -73,9 +48,22 @@ export const publishPrepWorkflow: CreativeWorkflow<PublishPrepInput, PublishPrep
   displayName: "Prepare Publish Package",
   description: "Prepares captions, hashtags, thumbnail text, and a posting checklist without publishing.",
   inputSchema,
-  outputSchema,
-  handler(input, context) {
-    const output = outputFor(input, Boolean(context.projectMind.scriptLab.script));
+  outputSchema: publishPrepOutputSchema,
+  async handler(input, context) {
+    const { output } = await generateWorkflowStructured({
+      workflowName: "prepare_publish_package",
+      schema: publishPrepOutputSchema,
+      schemaName: "PublishPrepOutput",
+      schemaDescription: "Manual publish prep with captions, hashtags, checklist, and readiness warnings.",
+      system: "You are SceneBook's publish-prep producer. Never publish externally. Return structured output only.",
+      prompt: [
+        buildWorkflowContextBlock(context, input.prompt),
+        `Target platform: ${input.platform ?? context.projectMind.creativeBrief?.platform ?? context.projectMind.project.platform ?? "unknown"}`,
+        "Prepare a manual publish package. Include readiness warnings for missing script, shoot pack, caption, or assets.",
+      ].join("\n\n"),
+      context,
+      fallback: () => fallbackPublishPrep(input, context),
+    });
 
     return {
       status: "completed",
@@ -83,7 +71,7 @@ export const publishPrepWorkflow: CreativeWorkflow<PublishPrepInput, PublishPrep
       response: [`Caption: ${output.caption}`, `Hashtags: ${output.hashtags.join(" ")}`, "No external publishing was performed."].join("\n"),
       artifacts: [{
         type: "publish_package",
-        title: "SceneBook launch reel publish package",
+        title: "Publish package",
         summary: output.caption,
         payload: toJsonObject(output),
       }],
