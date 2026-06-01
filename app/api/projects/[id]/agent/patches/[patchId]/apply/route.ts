@@ -32,16 +32,21 @@ type SupabaseSelectChain<T> = {
   maybeSingle(): PromiseLike<{ data: T | null; error: Error | null }>;
 };
 
+type SupabaseUpdateChain<T> = {
+  eq(column: string, value: string): SupabaseUpdateChain<T>;
+  select(columns: string): SupabaseUpdateChain<T>;
+  maybeSingle(): PromiseLike<{ data: T | null; error: Error | null }>;
+};
+
 type ApplyPatchSupabaseClient = {
   auth: {
     getUser(): PromiseLike<{ data: { user: SupabaseUser | null } }>;
   };
   from(table: string): {
     select(columns: string): SupabaseSelectChain<Record<string, unknown>>;
+    update(payload: Record<string, unknown>): SupabaseUpdateChain<Record<string, unknown>>;
   };
 };
-
-const applicablePatchStatuses = new Set(["planned", "awaiting_approval"]);
 
 class PatchApplyEligibilityError extends Error {
   status: number;
@@ -88,8 +93,8 @@ function patchForApply(input: {
   patchId: string;
 }): ProjectPatch {
   const { row } = input;
-  if (!applicablePatchStatuses.has(row.status)) {
-    throw new PatchApplyEligibilityError("Only planned or awaiting approval patches can be applied.");
+  if (row.status !== "planned") {
+    throw new PatchApplyEligibilityError("Only planned patches can be applied.");
   }
 
   const metadata = isRecord(row.metadata) ? row.metadata : {};
@@ -187,6 +192,34 @@ async function loadOwnedPatch(input: {
   return data as StoredPatchRow | null;
 }
 
+async function claimPlannedPatch(input: {
+  supabase: ApplyPatchSupabaseClient;
+  patchId: string;
+  projectId: string;
+  userId: string;
+}) {
+  const { data, error } = await input.supabase
+    .from("agent_project_patches")
+    .update({
+      status: "applying",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.patchId)
+    .eq("project_id", input.projectId)
+    .eq("owner_id", input.userId)
+    .eq("status", "planned")
+    .select("id, status")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new PatchApplyEligibilityError("Patch is no longer planned and cannot be applied.");
+  }
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string; patchId: string }> },
@@ -229,6 +262,13 @@ export async function POST(
       userId: user.id,
       patchId,
     });
+    await claimPlannedPatch({
+      supabase,
+      patchId,
+      projectId,
+      userId: user.id,
+    });
+
     const toolExecutor = new ToolExecutor({
       registry: createRuntimeV4ToolRegistry(),
     });

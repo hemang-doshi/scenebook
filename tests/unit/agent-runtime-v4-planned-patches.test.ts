@@ -74,6 +74,7 @@ type SupabaseMockOptions = {
   userId?: string | null;
   projectRow?: Record<string, unknown> | null;
   patchRow?: Record<string, unknown> | null;
+  claimSucceeds?: boolean;
   upsertErrors?: Record<string, Error>;
   updateErrors?: Record<string, Error>;
   upsertErrorForPayload?: (table: string, payload: Record<string, unknown>) => Error | null | undefined;
@@ -101,6 +102,7 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
         metadata: { plannedBy: "runtime-v4-workflow" },
       }
     : options.patchRow;
+  let currentPatchRow = patchRow ? { ...patchRow } : patchRow;
 
   const matches = (row: Record<string, unknown> | null, filters: Record<string, unknown>) =>
     Boolean(row) && Object.entries(filters).every(([key, value]) => row?.[key] === value);
@@ -135,7 +137,7 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
 
               if (table === "agent_project_patches") {
                 return {
-                  data: matches(patchRow, filters) ? patchRow : null,
+                  data: matches(currentPatchRow, filters) ? currentPatchRow : null,
                   error: null,
                 };
               }
@@ -154,15 +156,42 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
         }),
         update: vi.fn((payload: Record<string, unknown>) => {
           const filters: Record<string, unknown> = {};
+          let returnsRows = false;
+          const executeUpdate = async () => {
+            calls.updates.push({ table, payload, filters: { ...filters } });
+            const error = options.updateErrorForPayload?.(table, payload) ?? options.updateErrors?.[table] ?? null;
+            if (error) {
+              return { data: null, error };
+            }
+
+            if (
+              table === "agent_project_patches"
+              && payload.status === "applying"
+              && filters.status === "planned"
+              && options.claimSucceeds === false
+            ) {
+              return { data: null, error: null };
+            }
+
+            if (table === "agent_project_patches" && matches(currentPatchRow, filters) && currentPatchRow) {
+              currentPatchRow = { ...currentPatchRow, ...payload };
+              return { data: returnsRows ? currentPatchRow : null, error: null };
+            }
+
+            return { data: null, error: null };
+          };
           const chain = {
-            eq: vi.fn(async (column: string, value: unknown) => {
+            eq: vi.fn((column: string, value: unknown) => {
               filters[column] = value;
-              calls.updates.push({ table, payload, filters: { ...filters } });
-              return {
-                data: null,
-                error: options.updateErrorForPayload?.(table, payload) ?? options.updateErrors?.[table] ?? null,
-              };
+              return chain;
             }),
+            select: vi.fn(() => {
+              returnsRows = true;
+              return chain;
+            }),
+            maybeSingle: vi.fn(executeUpdate),
+            then: (resolve: (value: { data: Record<string, unknown> | null; error: Error | null }) => unknown, reject?: (reason: unknown) => unknown) =>
+              executeUpdate().then(resolve, reject),
           };
           return chain;
         }),
@@ -507,6 +536,67 @@ describe("runtime-v4 planned workflow patches", () => {
     expect(toolExecute).not.toHaveBeenCalled();
   });
 
+  test("apply endpoint rejects awaiting approval patches until an approval flow exists", async () => {
+    const supabase = createSupabaseMock({
+      patchRow: {
+        id: storedPatchId,
+        owner_id: context.userId,
+        project_id: context.projectId,
+        thread_id: context.threadId,
+        run_id: context.runId,
+        status: "awaiting_approval",
+        patch: {
+          ...storedPatch,
+          requiresApproval: true,
+        },
+        metadata: { plannedBy: "runtime-v4-workflow" },
+      },
+    });
+    createSupabaseServerClient.mockResolvedValue(supabase.client);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/patches/[patchId]/apply/route");
+    const response = await POST(
+      new Request(`http://localhost/api/projects/${context.projectId}/agent/patches/${storedPatchId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: context.projectId, patchId: storedPatchId }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(toolExecute).not.toHaveBeenCalled();
+    expect(supabase.calls.updates).toEqual([]);
+  });
+
+  test("apply endpoint rejects already applying patch replay", async () => {
+    const supabase = createSupabaseMock({
+      patchRow: {
+        id: storedPatchId,
+        owner_id: context.userId,
+        project_id: context.projectId,
+        thread_id: context.threadId,
+        run_id: context.runId,
+        status: "applying",
+        patch: storedPatch,
+        metadata: { plannedBy: "runtime-v4-workflow" },
+      },
+    });
+    createSupabaseServerClient.mockResolvedValue(supabase.client);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/patches/[patchId]/apply/route");
+    const response = await POST(
+      new Request(`http://localhost/api/projects/${context.projectId}/agent/patches/${storedPatchId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: context.projectId, patchId: storedPatchId }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(toolExecute).not.toHaveBeenCalled();
+    expect(supabase.calls.updates).toEqual([]);
+  });
+
   test("apply endpoint rejects rows missing the runtime planned marker", async () => {
     const supabase = createSupabaseMock({
       patchRow: {
@@ -535,6 +625,37 @@ describe("runtime-v4 planned workflow patches", () => {
     expect(toolExecute).not.toHaveBeenCalled();
   });
 
+  test("apply endpoint returns 409 when a planned patch cannot be claimed", async () => {
+    const supabase = createSupabaseMock({ claimSucceeds: false });
+    createSupabaseServerClient.mockResolvedValue(supabase.client);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/patches/[patchId]/apply/route");
+    const response = await POST(
+      new Request(`http://localhost/api/projects/${context.projectId}/agent/patches/${storedPatchId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: context.projectId, patchId: storedPatchId }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(toolExecute).not.toHaveBeenCalled();
+    expect(supabase.calls.updates).toEqual([
+      expect.objectContaining({
+        table: "agent_project_patches",
+        payload: expect.objectContaining({
+          status: "applying",
+        }),
+        filters: expect.objectContaining({
+          id: storedPatchId,
+          project_id: context.projectId,
+          owner_id: context.userId,
+          status: "planned",
+        }),
+      }),
+    ]);
+  });
+
   test("apply endpoint executes stored patch only and records operation results", async () => {
     const supabase = createSupabaseMock();
     createSupabaseServerClient.mockResolvedValue(supabase.client);
@@ -561,6 +682,55 @@ describe("runtime-v4 planned workflow patches", () => {
         }),
       }),
     ]));
+  });
+
+  test("successful apply claims a planned patch before executing tools", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseServerClient.mockResolvedValue(supabase.client);
+    let claimWasRecordedBeforeTool = false;
+    toolExecute.mockImplementationOnce(async ({ toolName }) => {
+      claimWasRecordedBeforeTool = supabase.calls.updates.some((call) =>
+        call.table === "agent_project_patches"
+        && call.payload.status === "applying"
+        && call.filters.id === storedPatchId
+        && call.filters.project_id === context.projectId
+        && call.filters.owner_id === context.userId
+        && call.filters.status === "planned"
+      );
+
+      return {
+        toolName,
+        status: "completed",
+        output: { kind: "creative_brief_update", changedFields: ["tone"] },
+        startedAt: "2026-06-02T00:00:00.000Z",
+        completedAt: "2026-06-02T00:00:01.000Z",
+      };
+    });
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/patches/[patchId]/apply/route");
+    const response = await POST(
+      new Request(`http://localhost/api/projects/${context.projectId}/agent/patches/${storedPatchId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: context.projectId, patchId: storedPatchId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(toolExecute).toHaveBeenCalledTimes(1);
+    expect(claimWasRecordedBeforeTool).toBe(true);
+    expect(supabase.calls.updates[0]).toEqual(expect.objectContaining({
+      table: "agent_project_patches",
+      payload: expect.objectContaining({
+        status: "applying",
+      }),
+      filters: expect.objectContaining({
+        id: storedPatchId,
+        project_id: context.projectId,
+        owner_id: context.userId,
+        status: "planned",
+      }),
+    }));
   });
 
   test("required-audit apply writes a running operation placeholder before executing", async () => {
