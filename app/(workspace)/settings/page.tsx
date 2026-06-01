@@ -4,9 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Plus, Shield, Sparkles, Trash2 } from "lucide-react";
-import Link from "next/link";
 
-import { PageHeading } from "@/components/page-heading";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

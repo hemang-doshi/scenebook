@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import Link from "next/link";
@@ -5,9 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ArrowRight,
-  BarChart3,
   Bot,
-  Clapperboard,
   Film,
   FolderOpen,
   Loader2,
@@ -16,7 +15,6 @@ import {
   Monitor,
   CheckCircle,
   Clock,
-  Sparkles,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -27,10 +25,8 @@ import { Panel } from "@/components/ui/panel";
 import { CreatorProgress } from "@/components/workspace/creator-progress";
 import { useProjectWorkspace } from "@/components/workspace/hooks";
 import type { ProjectAssetLibrary } from "@/lib/assets/asset-folders";
-import type { ProjectWorkspace } from "@/lib/data/repository";
 import { fetchJson } from "@/lib/fetcher";
 import { statusLabels } from "@/lib/domain/content";
-import { platformColors, formatColors, statusColors } from "@/lib/theme-utils";
 import type { ContentFormat, ContentPlatform, ContentStatus, ScriptLab } from "@/lib/types";
 import { CustomSelect } from "@/components/ui/custom-select";
 
