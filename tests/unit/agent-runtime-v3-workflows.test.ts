@@ -4,9 +4,14 @@ import type { AgentDecision, ProjectSnapshot, ToolObservation } from "@/lib/agen
 import type { WorkflowRunInput } from "@/lib/agent/runtime-v3/workflows/types";
 
 const executeRuntimeV3Tool = vi.fn();
+const generateText = vi.fn();
 
 vi.mock("@/lib/agent/runtime-v3/tools/executor", () => ({
   executeRuntimeV3Tool,
+}));
+
+vi.mock("@/lib/ai/client", () => ({
+  generateText,
 }));
 
 function observation(toolName: string, output: Record<string, unknown> = {}, status: ToolObservation["status"] = "completed"): ToolObservation {
@@ -142,6 +147,7 @@ describe("runtime-v3 Phase 6A workflows", () => {
   beforeEach(() => {
     vi.resetModules();
     executeRuntimeV3Tool.mockReset();
+    generateText.mockReset();
     executeRuntimeV3Tool.mockImplementation(async ({ toolName }: { toolName: string }) => {
       if (toolName === "generate_script_package") {
         return observation(toolName, {
@@ -185,6 +191,9 @@ describe("runtime-v3 Phase 6A workflows", () => {
       }
       if (toolName === "update_active_goal") {
         return observation(toolName, { kind: "active_goal", stage: "asset_planning" });
+      }
+      if (toolName === "update_creative_brief") {
+        return observation(toolName, { kind: "creative_brief" });
       }
       if (toolName === "update_shoot_pack") {
         return observation(toolName, { kind: "shoot_pack_update" });
@@ -343,6 +352,62 @@ describe("runtime-v3 Phase 6A workflows", () => {
     expect(toolNames()).toEqual(["update_script_lab"]);
     expect(rawInputs()[0]).toEqual({ hook: "I wasted 6 months planning content instead of posting." });
     expect(result.finalResponse).toContain("Hook changed");
+  });
+
+  test("SceneBook positioning correction updates brief, hook, CTA, and active goal", async () => {
+    generateText.mockResolvedValue(JSON.stringify({
+      creativeBrief: {
+        audience: "solo and small-team short-form creators",
+        tone: "sharp, creative, slightly cinematic, creator-native",
+        coreAngle: "SceneBook is the AI production workspace and creator OS for short-form video.",
+        viewerPromise: "Turn messy ideas into polished reels without juggling scattered tools.",
+        visualStyle: "clean, fast, visual, tasteful, modern, cinematic",
+        cta: "Start with a raw idea and build the whole reel inside one workspace.",
+      },
+      scriptLab: {
+        angle: "SceneBook as the creator operating system for short-form video builders.",
+        hook: "Every creator has 100 ideas and zero system.",
+        cta: "Follow the build as SceneBook becomes the creative OS for short-form creators.",
+        notes: "SceneBook is not a generic AI content generator; it is a project workspace for the full creator loop.",
+      },
+      goal: {
+        title: "Turn updated SceneBook positioning into a launch reel",
+        stage: "scripting",
+        completedSteps: ["positioning"],
+        nextActions: ["Draft the launch reel script", "Plan the shot list", "Generate asset prompts"],
+        blockers: [],
+      },
+    }));
+
+    const request = [
+      "i want to chnage this. scenebook is something completely different:",
+      "SceneBook is basically a **creator operating system for short-form video builders**.",
+      "SceneBook helps creators plan, generate, organize, edit, and improve short-form videos from idea to final edit.",
+    ].join("\n");
+
+    const { runWorkflow } = await import("@/lib/agent/runtime-v3/workflows");
+    const result = await runWorkflow(workflowInput({
+      type: "workflow_call",
+      workflowName: "workspace_control_workflow",
+      input: { request, mode: "positioning_update" },
+      reason: "test",
+    }));
+
+    expect(toolNames()).toEqual(["update_creative_brief", "update_script_lab", "update_active_goal"]);
+    expect(rawInputs()[0]).toMatchObject({
+      audience: "solo and small-team short-form creators",
+      coreAngle: "SceneBook is the AI production workspace and creator OS for short-form video.",
+    });
+    expect(rawInputs()[1]).toMatchObject({
+      hook: "Every creator has 100 ideas and zero system.",
+      cta: "Follow the build as SceneBook becomes the creative OS for short-form creators.",
+    });
+    expect(rawInputs()[2]).toMatchObject({
+      stage: "scripting",
+      completedSteps: ["positioning"],
+      nextActions: ["Draft the launch reel script", "Plan the shot list", "Generate asset prompts"],
+    });
+    expect(result.finalResponse).toContain("SceneBook positioning updated");
   });
 
   test("add shoot tasks calls only update_shoot_pack", async () => {

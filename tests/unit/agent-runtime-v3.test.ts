@@ -482,6 +482,29 @@ describe("runtime-v3 foundation", () => {
     });
   });
 
+  test("decideNextStep routes SceneBook positioning corrections to workspace control", async () => {
+    const { decideNextStep } = await import("@/lib/agent/runtime-v3/decision/decide-next-step");
+    const baseSnapshot = snapshot();
+    const correction = [
+      "i want to chnage this. scenebook is something completely different:",
+      "SceneBook is basically a **creator operating system for short-form video builders**.",
+      "It helps creators plan, generate, organize, edit, and improve reels from idea to analytics.",
+    ].join("\n");
+
+    const decision = await decideNextStep({
+      message: correction,
+      snapshot: baseSnapshot,
+      toolSummaries: [],
+    });
+
+    expect(decision).toEqual({
+      type: "workflow_call",
+      workflowName: "workspace_control_workflow",
+      input: { request: correction, mode: "positioning_update" },
+      reason: "User corrected SceneBook positioning and asked the workspace to change.",
+    });
+  });
+
   test("policy requires finalized script approval and blocks unavailable editor and publish tools", async () => {
     const { checkPolicy } = await import("@/lib/agent/runtime-v3/policy/policy-engine");
     const { getRuntimeV3Tool } = await import("@/lib/agent/runtime-v3/tools/registry");

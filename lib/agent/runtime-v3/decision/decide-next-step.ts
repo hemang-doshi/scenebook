@@ -55,6 +55,17 @@ function looksLikeWorkspaceControl(message: string) {
   );
 }
 
+function looksLikePositioningCorrection(message: string) {
+  const normalized = message.toLowerCase();
+  const asksToChangeDirection = /\b(change this|change the positioning|something completely different|not just|not another|product thesis|real thesis|what scenebook is)\b/i
+    .test(message);
+  const namesSceneBook = /\bscenebook\b/.test(normalized);
+  const describesProduct = /\b(creator os|creator operating system|creative workspace|production workspace|short-form creators?|short-form video|ai production workspace)\b/i
+    .test(message);
+
+  return namesSceneBook && describesProduct && asksToChangeDirection;
+}
+
 function looksLikeAssetRequest(message: string) {
   return /\b(generate|create|make)\b/i.test(message) && /\b(thumbnail|image|video|audio|asset|b-roll|voiceover)\b/i.test(message);
 }
@@ -102,6 +113,15 @@ export async function decideNextStep(input: {
   }
 
   const message = input.message.trim();
+  if (looksLikePositioningCorrection(message)) {
+    return {
+      type: "workflow_call",
+      workflowName: "workspace_control_workflow",
+      input: { request: message, mode: "positioning_update" },
+      reason: "User corrected SceneBook positioning and asked the workspace to change.",
+    };
+  }
+
   if (looksLikeWorkspaceControl(message)) {
     return {
       type: "workflow_call",
