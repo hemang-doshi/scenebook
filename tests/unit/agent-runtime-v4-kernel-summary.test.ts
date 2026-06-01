@@ -27,6 +27,10 @@ const SupabasePatchAuditStore = vi.fn(function SupabasePatchAuditStore() {
 const PatchExecutor = vi.fn(function PatchExecutor() {
   return { apply: patchExecutorApply };
 });
+const workflowExecutorExecute = vi.fn();
+const WorkflowExecutor = vi.fn(function WorkflowExecutor() {
+  return { execute: workflowExecutorExecute };
+});
 const originalAgentOrchestrator = process.env.AGENT_ORCHESTRATOR;
 
 function restoreAgentOrchestrator() {
@@ -80,6 +84,14 @@ vi.mock("@/lib/agent/runtime-v4/patch/patch-executor", async (importOriginal) =>
     ...actual,
     PatchExecutor,
     SupabasePatchAuditStore,
+  };
+});
+
+vi.mock("@/lib/agent/runtime-v4/workflows/workflow-executor", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agent/runtime-v4/workflows/workflow-executor")>();
+  return {
+    ...actual,
+    WorkflowExecutor,
   };
 });
 
@@ -228,6 +240,34 @@ describe("runtime-v4 run summaries", () => {
       failedOperations: 0,
       retryable: false,
       events: [],
+    });
+    workflowExecutorExecute.mockResolvedValue({
+      workflowResult: {
+        status: "completed",
+        workflowName: "create_full_production_package",
+        response: "Package planned.",
+        artifacts: [],
+      },
+      observation: {
+        toolName: "create_full_production_package",
+        status: "completed",
+        message: "Package planned.",
+        output: {
+          kind: "creative_workflow",
+          workflowName: "create_full_production_package",
+          patchAutoApplySkipped: true,
+          patchId: "patch-1",
+        },
+      },
+      events: [
+        {
+          type: "workflow_completed",
+          runId: "run-1",
+          threadId: "thread-1",
+          workflowName: "create_full_production_package",
+          message: "Package planned.",
+        },
+      ],
     });
     createRuntimeV4ModelGateway.mockReturnValue({});
     buildProjectContext.mockResolvedValue({
@@ -477,6 +517,66 @@ describe("runtime-v4 run summaries", () => {
           message: "Saved patch.",
         }),
       ],
+    }));
+  });
+
+  test("custom runtime executes workflow_call decisions through WorkflowExecutor", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    decideNextStep.mockResolvedValue({
+      type: "workflow_call",
+      workflowName: "create_full_production_package",
+      input: { prompt: "Make the complete production package" },
+      reason: "The request needs the full production workflow.",
+    });
+
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "Make the complete production package.",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(WorkflowExecutor).toHaveBeenCalledWith(expect.objectContaining({
+      modelGateway: {},
+      patchExecutor: expect.objectContaining({
+        apply: patchExecutorApply,
+      }),
+      plannedPatchStore: expect.objectContaining({
+        source: "supabase-patch-audit",
+      }),
+    }));
+    expect(workflowExecutorExecute).toHaveBeenCalledWith(expect.objectContaining({
+      workflowName: "create_full_production_package",
+      input: { prompt: "Make the complete production package" },
+      projectMind: expect.objectContaining({
+        project: expect.objectContaining({
+          id: "project-1",
+        }),
+      }),
+      context: expect.objectContaining({
+        userId: "user-1",
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        source: "agent",
+      }),
+    }));
+    expect(checkGoalProgress).toHaveBeenCalledWith(expect.objectContaining({
+      observations: [
+        expect.objectContaining({
+          toolName: "create_full_production_package",
+          output: expect.objectContaining({
+            patchAutoApplySkipped: true,
+            patchId: "patch-1",
+          }),
+        }),
+      ],
+      workflowFinalResponse: "Package planned.",
     }));
   });
 

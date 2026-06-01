@@ -6,12 +6,11 @@ import {
   failAgentRun,
 } from "@/lib/agent/runtime";
 import { createAgentSseResponse } from "@/lib/agent/runtime-v3/stream";
-import { runWorkflow } from "@/lib/agent/runtime-v3/workflows";
 import type {
-  AgentDecision as RuntimeV3AgentDecision,
   AgentRunRequest,
   ToolObservation,
 } from "@/lib/agent/runtime-v3/types";
+import type { ModelGateway } from "@/lib/ai/model-gateway";
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
 import type { AgentDecision, GoalCheck } from "@/lib/agent/runtime-v4/decision/schemas";
@@ -35,6 +34,7 @@ import {
   createRuntimeV4ToolRegistry,
   summarizeRuntimeV4Tools,
 } from "@/lib/agent/runtime-v4/tools/registry";
+import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 import type { JsonValue } from "@/lib/types";
 
 function responseForQuestions(decision: Extract<AgentDecision, { type: "ask_question" }>) {
@@ -58,10 +58,6 @@ function responseForGoalQuestions(progress: Extract<GoalCheck, { status: "ask_us
   ].join("\n");
 }
 
-function asRuntimeV3WorkflowDecision(decision: Extract<AgentDecision, { type: "workflow_call" }>) {
-  return decision as Extract<RuntimeV3AgentDecision, { type: "workflow_call" }>;
-}
-
 export type AgentOrchestrator = "custom" | "langgraph";
 
 export function resolveAgentOrchestrator(value = process.env.AGENT_ORCHESTRATOR): AgentOrchestrator {
@@ -72,7 +68,7 @@ function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? null)) as JsonValue;
 }
 
-function createRuntimeV4Execution() {
+function createRuntimeV4Execution(options: { modelGateway?: ModelGateway } = {}) {
   const patchAuditStore = new SupabasePatchAuditStore();
   const toolExecutor = new ToolExecutor({
     registry: createRuntimeV4ToolRegistry(),
@@ -81,11 +77,17 @@ function createRuntimeV4Execution() {
     toolExecutor,
     auditStore: patchAuditStore,
   });
+  const workflowExecutor = new WorkflowExecutor({
+    modelGateway: options.modelGateway,
+    patchExecutor,
+    plannedPatchStore: patchAuditStore,
+  });
 
   return {
     toolExecutor,
     patchExecutor,
     plannedPatchStore: patchAuditStore,
+    workflowExecutor,
   };
 }
 
@@ -238,7 +240,7 @@ export class AgentKernel {
         const modelGateway = createRuntimeV4ModelGateway({
           model: request.selectedModels?.chat,
         });
-        const runtimeV4Execution = createRuntimeV4Execution();
+        const runtimeV4Execution = createRuntimeV4Execution({ modelGateway });
         const previousObservations: ToolObservation[] = [];
         const toolSummaries = summarizeRuntimeV4Tools();
 
@@ -330,17 +332,6 @@ export class AgentKernel {
             return;
           }
 
-          const context = {
-            projectId: request.projectId,
-            threadId: thread.id,
-            runId: run.id,
-            userId: request.userId,
-            source: "agent",
-            rawInput: request.message,
-            snapshot,
-            selectedModels: request.selectedModels,
-          };
-
           let newObservations: ToolObservation[] = [];
           let workflowFinalResponse: string | undefined;
 
@@ -410,14 +401,29 @@ export class AgentKernel {
           }
 
           if (decision.type === "workflow_call") {
-            const result = await runWorkflow({
-              decision: asRuntimeV3WorkflowDecision(decision),
-              context,
-              snapshot,
-              stream,
+            const result = await runtimeV4Execution.workflowExecutor.execute({
+              workflowName: decision.workflowName,
+              input: decision.input,
+              projectMind: snapshot,
+              context: {
+                userId: request.userId,
+                projectId: request.projectId,
+                threadId: thread.id,
+                runId: run.id,
+                source: "agent",
+                rawInput: request.message,
+                selectedModels: request.selectedModels,
+              },
             });
-            newObservations = result.observations;
-            workflowFinalResponse = result.finalResponse;
+            for (const event of result.events) {
+              for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
+                stream.emit(legacyEvent.type, legacyEvent.payload);
+              }
+            }
+            newObservations = [result.observation];
+            workflowFinalResponse = result.workflowResult.status === "completed"
+              ? result.workflowResult.response
+              : result.observation.message;
           }
 
           if (decision.type === "stop_with_error") {

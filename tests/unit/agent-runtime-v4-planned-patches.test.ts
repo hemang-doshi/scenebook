@@ -312,6 +312,41 @@ describe("runtime-v4 planned workflow patches", () => {
     });
   });
 
+  test("skipped auto-apply without a planned patch store does not report a planned patch without an id", async () => {
+    const patchExecutor = {
+      apply: vi.fn(),
+    };
+    const executor = new WorkflowExecutor({
+      patchExecutor,
+      modelGateway: failingGateway(),
+    });
+
+    const result = await executor.execute({
+      workflowName: "create_full_production_package",
+      input: { prompt: "Make the complete production package" },
+      projectMind: projectMind(),
+      context,
+    });
+
+    expect(patchExecutor.apply).not.toHaveBeenCalled();
+    expect(result.workflowResult.status).toBe("failed");
+    expect(result.observation).toMatchObject({
+      toolName: "create_full_production_package",
+      status: "blocked",
+      output: {
+        kind: "creative_workflow_failed",
+        error: {
+          code: "WORKFLOW_PATCH_PERSISTENCE_FAILED",
+        },
+      },
+    });
+    expect(result.observation.output).not.toMatchObject({
+      patchAutoApplySkipped: true,
+      patchPlanned: true,
+    });
+    expect(result.observation.output?.patchId).toBeUndefined();
+  });
+
   test("apply endpoint ignores client-supplied patch JSON and executes the stored patch", async () => {
     const supabase = createSupabaseMock();
     createSupabaseServerClient.mockResolvedValue(supabase.client);

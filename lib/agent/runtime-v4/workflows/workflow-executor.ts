@@ -272,17 +272,45 @@ export class WorkflowExecutor {
         observation.toolName = workflow.name;
         events.push(...patchResult.events);
       } else {
-        const plannedPatch = await this.plannedPatchStore?.recordPlannedPatch({
-          patch: workflowResult.patch,
-          context: input.context,
-          reason: autoApply.reason,
-          metadata: {
-            autoApplySkipped: true,
-            autoApplyReason: autoApply.reason,
-            operationCount: workflowResult.patch.operations.length,
+        let plannedPatch: PlannedPatchRecord;
+        try {
+          if (!this.plannedPatchStore) {
+            throw new Error("Planned patch persistence is required when workflow auto-apply is skipped.");
+          }
+
+          plannedPatch = await this.plannedPatchStore.recordPlannedPatch({
+            patch: workflowResult.patch,
+            context: input.context,
+            reason: autoApply.reason,
+            metadata: {
+              autoApplySkipped: true,
+              autoApplyReason: autoApply.reason,
+              operationCount: workflowResult.patch.operations.length,
+              workflowName: workflow.name,
+            },
+          });
+
+          if (!plannedPatch.patchId) {
+            throw new Error("Planned patch persistence did not return a patch id.");
+          }
+        } catch (caught) {
+          workflowResult = failedResult(workflow.name, "WORKFLOW_PATCH_PERSISTENCE_FAILED", caught);
+          observation = resultToObservation(workflowResult);
+          events.push({
+            type: "workflow_failed",
+            ...eventBase(input),
             workflowName: workflow.name,
-          },
-        });
+            observation,
+            error: observation.message,
+          });
+
+          return {
+            workflowResult,
+            observation,
+            events,
+            patchResult,
+          };
+        }
 
         observation = {
           ...observation,

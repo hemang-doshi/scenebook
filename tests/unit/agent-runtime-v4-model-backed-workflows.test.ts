@@ -288,8 +288,14 @@ describe("model-backed runtime-v4 creative workflows", () => {
         events: [],
       })),
     };
+    const plannedPatchStore = {
+      recordPlannedPatch: vi.fn(async () => ({
+        patchId: "planned-patch-1",
+        status: "planned" as const,
+      })),
+    };
 
-    const executor = new WorkflowExecutor({ patchExecutor, modelGateway: failingGateway() });
+    const executor = new WorkflowExecutor({ patchExecutor, plannedPatchStore, modelGateway: failingGateway() });
     const safe = await executor.execute({
       workflowName: "plan_reel",
       input: { prompt: "Plan a reel" },
@@ -306,7 +312,16 @@ describe("model-backed runtime-v4 creative workflows", () => {
     expect(safe.observation.message).toBe("Applied patch.");
     expect(patchExecutor.apply).toHaveBeenCalledTimes(1);
     expect(large.patchResult).toBeUndefined();
-    expect(large.observation.output).toMatchObject({ patchAutoApplySkipped: true });
+    expect(plannedPatchStore.recordPlannedPatch).toHaveBeenCalledWith(expect.objectContaining({
+      patch: expect.objectContaining({
+        title: "Save full production package",
+      }),
+      reason: expect.stringContaining("auto-apply limit"),
+    }));
+    expect(large.observation.output).toMatchObject({
+      patchAutoApplySkipped: true,
+      patchId: "planned-patch-1",
+    });
   });
 
   test("needs_input is blocked creative input, not approval", async () => {
