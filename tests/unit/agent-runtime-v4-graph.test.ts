@@ -394,4 +394,18 @@ describe("runtime-v4 LangGraph runtime", () => {
 
     expect(nodeSources.join("\n")).not.toMatch(/@ai-sdk\/google|@ai-sdk\/openai-compatible/);
   });
+
+  test("graph nodes do not directly mutate database state", async () => {
+    const nodesDir = path.join(process.cwd(), "lib", "agent", "runtime-v4", "graph", "nodes");
+    const filenames = await readdir(nodesDir);
+    const nodeSources = await Promise.all(
+      filenames
+        .filter((filename) => filename.endsWith(".ts"))
+        .map(async (filename) => readFile(path.join(nodesDir, filename), "utf8")),
+    );
+
+    expect(nodeSources.join("\n")).not.toMatch(
+      /createSupabaseServerClient|updateCard|upsertCreativeBrief|upsertActiveGoal|createScriptVersion|saveProjectMemory|createProjectArtifact/,
+    );
+  });
 });

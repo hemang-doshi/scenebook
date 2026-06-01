@@ -5,7 +5,7 @@ import type { JsonValue } from "@/lib/types";
 type ProjectArtifactInput = {
   projectId: string;
   threadId: string;
-  toolCallId: string;
+  toolCallId?: string | null;
   artifactType: string;
   title: string;
   payload: Record<string, JsonValue>;
@@ -33,7 +33,7 @@ export async function createProjectArtifact(input: ProjectArtifactInput) {
       owner_id: user.id,
       project_id: input.projectId,
       thread_id: input.threadId,
-      tool_call_id: input.toolCallId,
+      tool_call_id: input.toolCallId ?? null,
       artifact_type: input.artifactType,
       title: input.title,
       payload: input.payload,

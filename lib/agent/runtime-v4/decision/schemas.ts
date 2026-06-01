@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { agentWorkflowNames } from "@/lib/agent/runtime-v3/types";
+import { projectPatchSchema } from "@/lib/agent/runtime-v4/patch/project-patch";
 
 export const agentPlanSchema = z.object({
   title: z.string(),
@@ -30,6 +31,11 @@ export const agentDecisionSchema = z.discriminatedUnion("type", [
     type: z.literal("tool_call"),
     toolName: z.string(),
     input: z.unknown(),
+    reason: z.string(),
+  }),
+  z.object({
+    type: z.literal("project_patch"),
+    patch: projectPatchSchema,
     reason: z.string(),
   }),
   z.object({

@@ -241,6 +241,7 @@ function workspaceChangeFromObservation(observation: ToolObservation): Record<st
     "asset_move",
     "media_asset",
     "project_artifact",
+    "project_memory",
     "active_goal",
     "creative_brief",
     "editor_handoff",
@@ -258,6 +259,37 @@ function workspaceChangeFromObservation(observation: ToolObservation): Record<st
     message: observation.message,
     output: jsonObject(observation.output),
   };
+}
+
+function observationStatus(value: unknown, fallback: ToolObservation["status"]): ToolObservation["status"] {
+  return value === "completed"
+    || value === "failed"
+    || value === "blocked"
+    || value === "awaiting_approval"
+    ? value
+    : fallback;
+}
+
+function patchOperationObservations(observation: ToolObservation): ToolObservation[] {
+  if (observation.output?.kind !== "project_patch" || !Array.isArray(observation.output.operations)) {
+    return [observation];
+  }
+
+  const operations = observation.output.operations
+    .filter((operation): operation is Record<string, JsonValue> =>
+      Boolean(operation) && typeof operation === "object" && !Array.isArray(operation),
+    )
+    .map((operation) => {
+      const toolName = stringValue(operation.toolName) ?? stringValue(operation.type) ?? observation.toolName;
+      return {
+        toolName,
+        status: observationStatus(operation.status, observation.status),
+        message: stringValue(operation.message) ?? observation.message,
+        output: jsonObject(operation.output),
+      } satisfies ToolObservation;
+    });
+
+  return operations.length ? operations : [observation];
 }
 
 export function buildRunSummaryFromObservations(input: {
@@ -279,13 +311,14 @@ export function buildRunSummaryFromObservations(input: {
   const actionsTaken = input.observations.map((observation) =>
     `${observation.toolName}: ${observation.message}`,
   );
-  const workspaceChanges = input.observations
+  const summaryObservations = input.observations.flatMap(patchOperationObservations);
+  const workspaceChanges = summaryObservations
     .map(workspaceChangeFromObservation)
     .filter((change): change is Record<string, JsonValue> => Boolean(change));
-  const selectedOutputs = input.observations
+  const selectedOutputs = summaryObservations
     .map(selectedOutputFromObservation)
     .filter((output): output is RunSummaryOutput => Boolean(output));
-  const rejectedOutputs = input.observations
+  const rejectedOutputs = summaryObservations
     .map(rejectedOutputFromObservation)
     .filter((output): output is RunSummaryOutput => Boolean(output));
   const openNextSteps = input.observations

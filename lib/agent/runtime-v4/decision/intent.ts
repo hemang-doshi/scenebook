@@ -26,11 +26,12 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
     prompt: [
       "Return exactly one JSON object for the next SceneBook agent action.",
       "Choose the decision with the best next step for the user's goal.",
-      "Allowed decision types: ask_question, propose_plan, tool_call, workflow_call, final_response, stop_with_error.",
+      "Allowed decision types: ask_question, propose_plan, tool_call, project_patch, workflow_call, final_response, stop_with_error.",
       "Prefer model reasoning over hard-coded intent rules.",
       "Use ask_question when the request is too vague to produce a useful result.",
       "Use workflow_call for multi-step SceneBook workflows such as script_workflow, workspace_control_workflow, asset_workflow, goal_workflow, editor_handoff_workflow, and publish_workflow.",
       "Use tool_call for one focused runtime tool when a workflow is unnecessary.",
+      "Use project_patch for grouped durable workspace updates that should apply as one reviewed ProjectPatch.",
       "Use final_response only when no workspace action is needed or when the goal is already satisfied.",
       "Do not finalize only because a previous tool observation exists. Consider whether the original user goal is complete.",
       `Project snapshot:\n${compactJson(input.snapshot)}`,

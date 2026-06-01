@@ -42,7 +42,7 @@ export async function repairAgentDecision(input: {
     system: "Repair malformed SceneBook decision JSON. Return strict JSON only.",
     prompt: [
       "Repair this into a valid runtime-v4 AgentDecision JSON object.",
-      "Allowed decision types: ask_question, propose_plan, tool_call, workflow_call, final_response, stop_with_error.",
+      "Allowed decision types: ask_question, propose_plan, tool_call, project_patch, workflow_call, final_response, stop_with_error.",
       "If uncertain, return a helpful final_response.",
       `Parse error:\n${input.parseError instanceof Error ? input.parseError.message : String(input.parseError)}`,
       `Original decision prompt:\n${input.originalPrompt}`,

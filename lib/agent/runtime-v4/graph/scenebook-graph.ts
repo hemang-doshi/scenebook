@@ -6,6 +6,7 @@ import { createComposeResponseNode } from "@/lib/agent/runtime-v4/graph/nodes/co
 import { createDecideNextStepNode } from "@/lib/agent/runtime-v4/graph/nodes/decide-next-step";
 import {
   createExecuteStepNode,
+  type RuntimeV4GraphPatchExecutor,
   type RuntimeV4GraphStepExecutor,
 } from "@/lib/agent/runtime-v4/graph/nodes/execute-step";
 import { createLoadProjectMindNode } from "@/lib/agent/runtime-v4/graph/nodes/load-project-mind";
@@ -17,6 +18,7 @@ import {
   type SceneBookGraphState,
 } from "@/lib/agent/runtime-v4/graph/state";
 import type { ProjectMindStores } from "@/lib/agent/runtime-v4/memory/memory-types";
+import type { ToolExecutorLike } from "@/lib/agent/runtime-v4/patch/patch-executor";
 
 export type CreateSceneBookGraphOptions = {
   stores?: ProjectMindStores;
@@ -24,6 +26,8 @@ export type CreateSceneBookGraphOptions = {
   modelGateway?: ModelGateway;
   toolSummaries?: unknown;
   executeStep?: RuntimeV4GraphStepExecutor;
+  toolExecutor?: ToolExecutorLike;
+  patchExecutor?: RuntimeV4GraphPatchExecutor;
 };
 
 function routeAfterGoalCheck(state: SceneBookGraphState) {
@@ -42,7 +46,11 @@ export function createSceneBookGraph(options: CreateSceneBookGraphOptions = {}) 
       modelGateway: options.modelGateway,
       toolSummaries: options.toolSummaries,
     }))
-    .addNode("execute_step", createExecuteStepNode({ executeStep: options.executeStep }))
+    .addNode("execute_step", createExecuteStepNode({
+      executeStep: options.executeStep,
+      toolExecutor: options.toolExecutor,
+      patchExecutor: options.patchExecutor,
+    }))
     .addNode("observe_result", observeResultNode)
     .addNode("check_goal", createCheckGoalNode({
       model: options.model,
@@ -75,6 +83,8 @@ export async function runSceneBookGraph(
     modelGateway: input.modelGateway,
     toolSummaries: input.toolSummaries,
     executeStep: input.executeStep,
+    toolExecutor: input.toolExecutor,
+    patchExecutor: input.patchExecutor,
   });
   const messages = input.messages?.length
     ? input.messages

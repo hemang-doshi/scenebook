@@ -1,6 +1,7 @@
 import type { AgentEventType } from "@/lib/agent/runtime-v3/types";
 import type { AgentDecision } from "@/lib/agent/runtime-v4/decision/schemas";
 import type { AgentPlan, ToolObservation } from "@/lib/agent/runtime-v3/types";
+import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 
 export type RuntimeV4EventType =
   | "run_started"
@@ -10,7 +11,19 @@ export type RuntimeV4EventType =
   | "tool_running"
   | "tool_completed"
   | "tool_failed"
+  | "tool_verification_completed"
+  | "tool_verification_failed"
   | "approval_required"
+  | "patch_planned"
+  | "patch_applying"
+  | "patch_operation_running"
+  | "patch_operation_completed"
+  | "patch_operation_failed"
+  | "patch_operation_awaiting_approval"
+  | "patch_completed"
+  | "patch_partial_failed"
+  | "patch_failed"
+  | "patch_approval_required"
   | "memory_updated"
   | "final_response"
   | "run_completed";
@@ -25,6 +38,12 @@ export type RuntimeV4Event = {
   toolName?: string;
   toolCallId?: string;
   observation?: ToolObservation;
+  patch?: ProjectPatch;
+  patchStatus?: string;
+  operationIndex?: number;
+  operationType?: string;
+  operationStatus?: string;
+  verification?: unknown;
   response?: string;
   waitingForUser?: boolean;
   snapshot?: unknown;
@@ -83,6 +102,132 @@ export function mapRuntimeV4EventToLegacy(event: RuntimeV4Event): LegacyAgentEve
           toolCallId: event.toolCallId ?? event.observation?.toolCallId ?? null,
           observation: event.observation ?? null,
           error: event.error ?? null,
+        },
+      }];
+    case "tool_verification_completed":
+      return [{
+        type: "tool_completed",
+        payload: {
+          toolName: event.toolName ?? null,
+          toolCallId: event.toolCallId ?? null,
+          operationIndex: event.operationIndex ?? null,
+          operationType: event.operationType ?? null,
+          verification: event.verification ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "tool_verification_failed":
+      return [{
+        type: "tool_failed",
+        payload: {
+          toolName: event.toolName ?? null,
+          toolCallId: event.toolCallId ?? null,
+          operationIndex: event.operationIndex ?? null,
+          operationType: event.operationType ?? null,
+          verification: event.verification ?? null,
+          error: event.error ?? event.message ?? null,
+        },
+      }];
+    case "patch_planned":
+      return [{
+        type: "tool_planned",
+        payload: {
+          toolName: "project_patch",
+          patch: event.patch ?? null,
+          patchStatus: event.patchStatus ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "patch_applying":
+      return [{
+        type: "tool_running",
+        payload: {
+          toolName: "project_patch",
+          patch: event.patch ?? null,
+          patchStatus: event.patchStatus ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "patch_operation_running":
+      return [{
+        type: "tool_running",
+        payload: {
+          toolName: event.toolName ?? null,
+          patch: event.patch ?? null,
+          operationIndex: event.operationIndex ?? null,
+          operationType: event.operationType ?? null,
+          operationStatus: event.operationStatus ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "patch_operation_completed":
+      return [{
+        type: "tool_completed",
+        payload: {
+          toolName: event.toolName ?? null,
+          toolCallId: event.toolCallId ?? null,
+          patch: event.patch ?? null,
+          operationIndex: event.operationIndex ?? null,
+          operationType: event.operationType ?? null,
+          operationStatus: event.operationStatus ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "patch_operation_failed":
+      return [{
+        type: "tool_failed",
+        payload: {
+          toolName: event.toolName ?? null,
+          toolCallId: event.toolCallId ?? null,
+          patch: event.patch ?? null,
+          operationIndex: event.operationIndex ?? null,
+          operationType: event.operationType ?? null,
+          operationStatus: event.operationStatus ?? null,
+          error: event.error ?? event.message ?? null,
+        },
+      }];
+    case "patch_operation_awaiting_approval":
+      return [{
+        type: "approval_required",
+        payload: {
+          toolName: event.toolName ?? null,
+          toolCallId: event.toolCallId ?? null,
+          patch: event.patch ?? null,
+          operationIndex: event.operationIndex ?? null,
+          operationType: event.operationType ?? null,
+          operationStatus: event.operationStatus ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "patch_completed":
+      return [{
+        type: "tool_completed",
+        payload: {
+          toolName: "project_patch",
+          patch: event.patch ?? null,
+          patchStatus: event.patchStatus ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "patch_partial_failed":
+    case "patch_failed":
+      return [{
+        type: "tool_failed",
+        payload: {
+          toolName: "project_patch",
+          patch: event.patch ?? null,
+          patchStatus: event.patchStatus ?? null,
+          error: event.error ?? event.message ?? null,
+        },
+      }];
+    case "patch_approval_required":
+      return [{
+        type: "approval_required",
+        payload: {
+          toolName: "project_patch",
+          patch: event.patch ?? null,
+          patchStatus: event.patchStatus ?? null,
+          message: event.message ?? null,
         },
       }];
     case "memory_updated":

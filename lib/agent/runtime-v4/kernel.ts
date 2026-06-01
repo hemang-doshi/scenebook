@@ -6,8 +6,6 @@ import {
   failAgentRun,
 } from "@/lib/agent/runtime";
 import { createAgentSseResponse } from "@/lib/agent/runtime-v3/stream";
-import { executeRuntimeV3Tool } from "@/lib/agent/runtime-v3/tools/executor";
-import { summarizeRuntimeV3Tools } from "@/lib/agent/runtime-v3/tools/registry";
 import { runWorkflow } from "@/lib/agent/runtime-v3/workflows";
 import type {
   AgentDecision as RuntimeV3AgentDecision,
@@ -17,7 +15,7 @@ import type {
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
 import type { AgentDecision, GoalCheck } from "@/lib/agent/runtime-v4/decision/schemas";
-import { mapRuntimeV4EventToLegacy } from "@/lib/agent/runtime-v4/events";
+import { mapRuntimeV4EventToLegacy, type RuntimeV4Event } from "@/lib/agent/runtime-v4/events";
 import { runSceneBookGraph } from "@/lib/agent/runtime-v4/graph/scenebook-graph";
 import { buildProjectContext } from "@/lib/agent/runtime-v4/context/context-builder";
 import {
@@ -25,6 +23,18 @@ import {
   saveRunSummary,
 } from "@/lib/agent/runtime-v4/memory/run-summary-store";
 import { createRuntimeV4ModelGateway } from "@/lib/agent/runtime-v4/model";
+import {
+  PatchExecutor,
+  SupabasePatchAuditStore,
+} from "@/lib/agent/runtime-v4/patch/patch-executor";
+import { projectPatchExecutionResultToObservation } from "@/lib/agent/runtime-v4/patch/patch-results";
+import { toolVerificationEvent } from "@/lib/agent/runtime-v4/patch/patch-verifier";
+import { ToolExecutor } from "@/lib/agent/runtime-v4/tools/executor";
+import { toolExecutionResultToObservation } from "@/lib/agent/runtime-v4/tools/tool-results";
+import {
+  createRuntimeV4ToolRegistry,
+  summarizeRuntimeV4Tools,
+} from "@/lib/agent/runtime-v4/tools/registry";
 import type { JsonValue } from "@/lib/types";
 
 function responseForQuestions(decision: Extract<AgentDecision, { type: "ask_question" }>) {
@@ -62,6 +72,21 @@ function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? null)) as JsonValue;
 }
 
+function createRuntimeV4Execution() {
+  const toolExecutor = new ToolExecutor({
+    registry: createRuntimeV4ToolRegistry(),
+  });
+  const patchExecutor = new PatchExecutor({
+    toolExecutor,
+    auditStore: new SupabasePatchAuditStore(),
+  });
+
+  return {
+    toolExecutor,
+    patchExecutor,
+  };
+}
+
 function runLangGraphRuntime(request: AgentRunRequest) {
   return createAgentSseResponse(async (stream) => {
     let runId: string | null = null;
@@ -94,6 +119,7 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         runId: run.id,
       });
 
+      const runtimeV4Execution = createRuntimeV4Execution();
       const graphState = await runSceneBookGraph({
         projectId: request.projectId,
         threadId: thread.id,
@@ -102,7 +128,9 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         goal: request.message,
         messages: [{ role: "user", content: request.message }],
         model: request.selectedModels?.chat,
-        toolSummaries: summarizeRuntimeV3Tools(),
+        toolSummaries: summarizeRuntimeV4Tools(),
+        toolExecutor: runtimeV4Execution.toolExecutor,
+        patchExecutor: runtimeV4Execution.patchExecutor,
       });
 
       for (const event of graphState.events) {
@@ -207,8 +235,9 @@ export class AgentKernel {
         const modelGateway = createRuntimeV4ModelGateway({
           model: request.selectedModels?.chat,
         });
+        const runtimeV4Execution = createRuntimeV4Execution();
         const previousObservations: ToolObservation[] = [];
-        const toolSummaries = summarizeRuntimeV3Tools();
+        const toolSummaries = summarizeRuntimeV4Tools();
 
         const finish = async (response: string, metadata: Record<string, JsonValue>, waitingForUser = false) => {
           const runSummaryInput = buildRunSummaryFromObservations({
@@ -303,6 +332,7 @@ export class AgentKernel {
             threadId: thread.id,
             runId: run.id,
             userId: request.userId,
+            source: "agent",
             rawInput: request.message,
             snapshot,
             selectedModels: request.selectedModels,
@@ -312,14 +342,68 @@ export class AgentKernel {
           let workflowFinalResponse: string | undefined;
 
           if (decision.type === "tool_call") {
-            const observation = await executeRuntimeV3Tool({
+            const toolResult = await runtimeV4Execution.toolExecutor.execute({
               toolName: decision.toolName,
-              rawInput: decision.input,
-              context,
-              snapshot,
-              stream,
+              input: decision.input,
+              context: {
+                userId: request.userId,
+                projectId: request.projectId,
+                threadId: thread.id,
+                runId: run.id,
+                source: "agent",
+                rawInput: request.message,
+                selectedModels: request.selectedModels,
+              },
             });
+            const observation = toolExecutionResultToObservation(toolResult);
+            const verificationEvent = toolVerificationEvent({
+              result: toolResult,
+              runId: run.id,
+              threadId: thread.id,
+            });
+            const toolEvents: RuntimeV4Event[] = [
+              ...(verificationEvent ? [verificationEvent] : []),
+              {
+                type: toolResult.status === "completed"
+                  ? "tool_completed"
+                  : toolResult.status === "awaiting_approval"
+                    ? "approval_required"
+                    : "tool_failed",
+                runId: run.id,
+                threadId: thread.id,
+                toolName: toolResult.toolName,
+                toolCallId: toolResult.toolCallId,
+                observation,
+                error: toolResult.status === "completed" ? undefined : observation.message,
+              },
+            ];
+            for (const event of toolEvents) {
+              for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
+                stream.emit(legacyEvent.type, legacyEvent.payload);
+              }
+            }
             newObservations = [observation];
+          }
+
+          if (decision.type === "project_patch") {
+            const patchResult = await runtimeV4Execution.patchExecutor.apply({
+              patch: decision.patch,
+              context: {
+                userId: request.userId,
+                projectId: request.projectId,
+                threadId: thread.id,
+                runId: run.id,
+                source: "agent",
+                rawInput: request.message,
+                selectedModels: request.selectedModels,
+              },
+            });
+            for (const event of patchResult.events) {
+              for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
+                stream.emit(legacyEvent.type, legacyEvent.payload);
+              }
+            }
+            newObservations = [projectPatchExecutionResultToObservation(patchResult)];
           }
 
           if (decision.type === "workflow_call") {
@@ -338,6 +422,14 @@ export class AgentKernel {
           }
 
           previousObservations.push(...newObservations);
+          const awaitingApproval = newObservations.find((observation) => observation.status === "awaiting_approval");
+          if (awaitingApproval) {
+            await finish(awaitingApproval.message, {
+              decisionType: decision.type,
+              goalStatus: "awaiting_approval",
+            }, true);
+            return;
+          }
 
           const progress = await checkGoalProgress({
             message: request.message,

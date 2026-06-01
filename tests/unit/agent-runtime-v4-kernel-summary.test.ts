@@ -10,10 +10,23 @@ const decideNextStep = vi.fn();
 const checkGoalProgress = vi.fn();
 const executeRuntimeV3Tool = vi.fn();
 const summarizeRuntimeV3Tools = vi.fn();
+const summarizeRuntimeV4Tools = vi.fn();
+const createRuntimeV4ToolRegistry = vi.fn();
 const runWorkflow = vi.fn();
 const createRuntimeV4ModelGateway = vi.fn();
 const saveRunSummary = vi.fn();
 const runSceneBookGraph = vi.fn();
+const toolExecutorExecute = vi.fn();
+const ToolExecutor = vi.fn(function ToolExecutor() {
+  return { execute: toolExecutorExecute };
+});
+const patchExecutorApply = vi.fn();
+const SupabasePatchAuditStore = vi.fn(function SupabasePatchAuditStore() {
+  return { source: "supabase-patch-audit" };
+});
+const PatchExecutor = vi.fn(function PatchExecutor() {
+  return { apply: patchExecutorApply };
+});
 const originalAgentOrchestrator = process.env.AGENT_ORCHESTRATOR;
 
 function restoreAgentOrchestrator() {
@@ -51,6 +64,24 @@ vi.mock("@/lib/agent/runtime-v3/tools/executor", () => ({
 vi.mock("@/lib/agent/runtime-v3/tools/registry", () => ({
   summarizeRuntimeV3Tools,
 }));
+
+vi.mock("@/lib/agent/runtime-v4/tools/registry", () => ({
+  createRuntimeV4ToolRegistry,
+  summarizeRuntimeV4Tools,
+}));
+
+vi.mock("@/lib/agent/runtime-v4/tools/executor", () => ({
+  ToolExecutor,
+}));
+
+vi.mock("@/lib/agent/runtime-v4/patch/patch-executor", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agent/runtime-v4/patch/patch-executor")>();
+  return {
+    ...actual,
+    PatchExecutor,
+    SupabasePatchAuditStore,
+  };
+});
 
 vi.mock("@/lib/agent/runtime-v3/workflows", () => ({
   runWorkflow,
@@ -168,6 +199,36 @@ describe("runtime-v4 run summaries", () => {
     completeAgentRun.mockResolvedValue(undefined);
     failAgentRun.mockResolvedValue(undefined);
     summarizeRuntimeV3Tools.mockReturnValue([]);
+    summarizeRuntimeV4Tools.mockReturnValue([{ name: "update_script_lab" }]);
+    createRuntimeV4ToolRegistry.mockReturnValue({ id: "runtime-v4-registry" });
+    toolExecutorExecute.mockResolvedValue({
+      toolName: "update_script_lab",
+      status: "completed",
+      message: "Script Lab updated.",
+      output: {
+        kind: "script_lab_update",
+        changedFields: ["hook"],
+        patch: { hook: "The clasp tells you everything." },
+      },
+      startedAt: "2026-06-02T00:00:00.000Z",
+      completedAt: "2026-06-02T00:00:01.000Z",
+    });
+    patchExecutorApply.mockResolvedValue({
+      status: "completed",
+      patch: {
+        title: "Save patch",
+        summary: "Save patch.",
+        riskLevel: "low",
+        requiresApproval: false,
+        operations: [],
+      },
+      operations: [],
+      summary: "Saved patch.",
+      successfulOperations: 0,
+      failedOperations: 0,
+      retryable: false,
+      events: [],
+    });
     createRuntimeV4ModelGateway.mockReturnValue({});
     buildProjectContext.mockResolvedValue({
       snapshot: snapshot(),
@@ -274,6 +335,18 @@ describe("runtime-v4 run summaries", () => {
 
     expect(buildProjectContext).toHaveBeenCalled();
     expect(decideNextStep).toHaveBeenCalled();
+    expect(toolExecutorExecute).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: "update_script_lab",
+      input: { hook: "The clasp tells you everything." },
+      context: expect.objectContaining({
+        userId: "user-1",
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        source: "agent",
+      }),
+    }));
+    expect(executeRuntimeV3Tool).not.toHaveBeenCalled();
     expect(runSceneBookGraph).not.toHaveBeenCalled();
     expect(saveRunSummary).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
@@ -324,6 +397,18 @@ describe("runtime-v4 run summaries", () => {
       userId: "user-1",
       runId: "run-1",
       goal: "Help me make a reel about building SceneBook.",
+      toolSummaries: [{ name: "update_script_lab" }],
+      toolExecutor: expect.objectContaining({
+        execute: toolExecutorExecute,
+      }),
+      patchExecutor: expect.objectContaining({
+        apply: patchExecutorApply,
+      }),
+    }));
+    expect(PatchExecutor).toHaveBeenCalledWith(expect.objectContaining({
+      auditStore: expect.objectContaining({
+        source: "supabase-patch-audit",
+      }),
     }));
     expect(appendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
@@ -339,5 +424,132 @@ describe("runtime-v4 run summaries", () => {
       graphStepCount: 1,
     }));
     expect(text).toContain("Plan a reel about building SceneBook");
+  });
+
+  test("custom runtime executes project_patch decisions through PatchExecutor", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    decideNextStep.mockResolvedValue({
+      type: "project_patch",
+      reason: "Save grouped workspace state.",
+      patch: {
+        title: "Save SceneBook launch direction",
+        summary: "Save launch reel direction.",
+        riskLevel: "low",
+        requiresApproval: false,
+        operations: [
+          {
+            type: "update_script_lab",
+            input: { hook: "SceneBook keeps the idea alive." },
+          },
+        ],
+      },
+    });
+
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "Save this hook.",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(PatchExecutor).toHaveBeenCalled();
+    expect(patchExecutorApply).toHaveBeenCalledWith(expect.objectContaining({
+      patch: expect.objectContaining({
+        title: "Save SceneBook launch direction",
+      }),
+      context: expect.objectContaining({
+        userId: "user-1",
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        source: "agent",
+      }),
+    }));
+    expect(checkGoalProgress).toHaveBeenCalledWith(expect.objectContaining({
+      observations: [
+        expect.objectContaining({
+          toolName: "project_patch",
+          status: "completed",
+          message: "Saved patch.",
+        }),
+      ],
+    }));
+  });
+
+  test("custom runtime waits for approval without goal checking", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    decideNextStep.mockResolvedValue({
+      type: "project_patch",
+      reason: "Save grouped workspace state.",
+      patch: {
+        title: "Save SceneBook launch direction",
+        summary: "Save launch reel direction.",
+        riskLevel: "low",
+        requiresApproval: false,
+        operations: [
+          {
+            type: "update_script_lab",
+            input: { hook: "SceneBook keeps the idea alive." },
+            requiresApproval: true,
+          },
+        ],
+      },
+    });
+    patchExecutorApply.mockResolvedValue({
+      status: "awaiting_approval",
+      patch: {
+        title: "Save SceneBook launch direction",
+        summary: "Save launch reel direction.",
+        riskLevel: "low",
+        requiresApproval: false,
+        operations: [],
+      },
+      operations: [],
+      summary: "ProjectPatch awaits approval.",
+      successfulOperations: 0,
+      failedOperations: 0,
+      retryable: false,
+      approvalRequired: true,
+      events: [],
+    });
+
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "Save this hook.",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(checkGoalProgress).not.toHaveBeenCalled();
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      waitingForUser: true,
+      goalStatus: "awaiting_approval",
+    }));
+  });
+
+  test("custom runtime uses runtime-v4 tool summaries for decisions", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "hook: The clasp tells you everything.",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(decideNextStep).toHaveBeenCalledWith(expect.objectContaining({
+      toolSummaries: [{ name: "update_script_lab" }],
+    }));
   });
 });
