@@ -22,6 +22,13 @@ import type { RuntimeV4Event } from "@/lib/agent/runtime-v4/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { JsonValue } from "@/lib/types";
 
+export type PlannedPatchRecordStatus = "planned" | "awaiting_approval";
+
+export type PlannedPatchRecord = {
+  patchId: string;
+  status: PlannedPatchRecordStatus;
+};
+
 export type ToolExecutorLike = {
   execute(input: {
     toolName: string;
@@ -31,6 +38,12 @@ export type ToolExecutorLike = {
 };
 
 export type PatchAuditStore = {
+  recordPlannedPatch?(input: {
+    patch: ProjectPatch;
+    context: PatchExecutionContext;
+    reason?: string;
+    metadata?: Record<string, JsonValue>;
+  }): Promise<PlannedPatchRecord> | PlannedPatchRecord;
   recordPatchStarted?(input: {
     patch: ProjectPatch;
     context: PatchExecutionContext;
@@ -77,6 +90,10 @@ function nullable(value: string | undefined) {
   return value ?? null;
 }
 
+function plannedPatchStatus(patch: ProjectPatch): PlannedPatchRecordStatus {
+  return patch.requiresApproval || patch.riskLevel === "blocked" ? "awaiting_approval" : "planned";
+}
+
 export class SupabasePatchAuditStore implements PatchAuditStore {
   private readonly patchIds = new WeakMap<ProjectPatch, string>();
 
@@ -95,15 +112,68 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
     return (await createSupabaseServerClient()) as unknown as SupabasePatchAuditClient;
   }
 
+  private storedPatch(patch: ProjectPatch, context: PatchExecutionContext) {
+    return {
+      ...patch,
+      id: this.patchId(patch),
+      projectId: patch.projectId ?? context.projectId,
+      authorUserId: patch.authorUserId ?? context.userId,
+      runId: patch.runId ?? context.runId,
+    };
+  }
+
+  async recordPlannedPatch(input: {
+    patch: ProjectPatch;
+    context: PatchExecutionContext;
+    reason?: string;
+    metadata?: Record<string, JsonValue>;
+  }): Promise<PlannedPatchRecord> {
+    const supabase = await this.client();
+    const patchId = this.patchId(input.patch);
+    const status = plannedPatchStatus(input.patch);
+    const storedPatch = this.storedPatch(input.patch, input.context);
+
+    await supabase
+      .from("agent_project_patches")
+      .upsert({
+        id: patchId,
+        owner_id: input.context.userId,
+        project_id: input.context.projectId,
+        thread_id: nullable(input.context.threadId),
+        run_id: nullable(input.context.runId),
+        title: input.patch.title,
+        summary: input.patch.summary,
+        reason: input.reason ?? input.patch.reason ?? null,
+        risk_level: input.patch.riskLevel,
+        status,
+        requires_approval: input.patch.requiresApproval,
+        successful_operations: 0,
+        failed_operations: 0,
+        retryable: false,
+        patch: jsonObject(storedPatch),
+        metadata: jsonObject({
+          ...(input.patch.metadata ?? {}),
+          ...(input.metadata ?? {}),
+        }),
+        updated_at: nowIso(),
+        completed_at: null,
+      }, { onConflict: "id" });
+
+    return { patchId, status };
+  }
+
   async recordPatchStarted(input: {
     patch: ProjectPatch;
     context: PatchExecutionContext;
   }) {
     const supabase = await this.client();
+    const patchId = this.patchId(input.patch);
+    const storedPatch = this.storedPatch(input.patch, input.context);
+
     await supabase
       .from("agent_project_patches")
       .upsert({
-        id: this.patchId(input.patch),
+        id: patchId,
         owner_id: input.context.userId,
         project_id: input.context.projectId,
         thread_id: nullable(input.context.threadId),
@@ -117,8 +187,8 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
         successful_operations: 0,
         failed_operations: 0,
         retryable: false,
-        patch: jsonObject(input.patch),
-        metadata: jsonObject(input.patch.metadata),
+        patch: jsonObject(storedPatch),
+        metadata: jsonObject(storedPatch.metadata),
         updated_at: nowIso(),
       }, { onConflict: "id" });
   }

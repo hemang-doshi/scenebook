@@ -10,6 +10,7 @@ import type {
   PatchExecutionContext,
 } from "@/lib/agent/runtime-v4/patch/patch-results";
 import { projectPatchExecutionResultToObservation } from "@/lib/agent/runtime-v4/patch/patch-results";
+import type { PlannedPatchRecord } from "@/lib/agent/runtime-v4/patch/patch-executor";
 import type { ProjectPatch, ProjectPatchOperationType } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { ToolObservation } from "@/lib/agent/runtime-v3/types";
 import { getRuntimeV4Workflow } from "@/lib/agent/runtime-v4/workflows/workflow-registry";
@@ -18,12 +19,22 @@ import type {
   RuntimeV4WorkflowName,
 } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
+import type { JsonValue } from "@/lib/types";
 
 export type WorkflowPatchExecutor = {
   apply(input: {
     patch: ProjectPatch;
     context: PatchExecutionContext;
   }): Promise<GraphPatchExecutionResult> | GraphPatchExecutionResult;
+};
+
+export type WorkflowPlannedPatchStore = {
+  recordPlannedPatch(input: {
+    patch: ProjectPatch;
+    context: PatchExecutionContext;
+    reason?: string;
+    metadata?: Record<string, JsonValue>;
+  }): Promise<PlannedPatchRecord> | PlannedPatchRecord;
 };
 
 export type WorkflowExecutionInput = {
@@ -46,6 +57,7 @@ export type WorkflowExecutionResult = {
 export type WorkflowExecutorOptions = {
   modelGateway?: ModelGateway;
   patchExecutor?: WorkflowPatchExecutor;
+  plannedPatchStore?: WorkflowPlannedPatchStore;
   applyPatch?: boolean;
 };
 
@@ -165,11 +177,13 @@ function failedResult(
 export class WorkflowExecutor {
   private readonly modelGateway?: ModelGateway;
   private readonly patchExecutor?: WorkflowPatchExecutor;
+  private readonly plannedPatchStore?: WorkflowPlannedPatchStore;
   private readonly applyPatch: boolean;
 
   constructor(options: WorkflowExecutorOptions = {}) {
     this.modelGateway = options.modelGateway;
     this.patchExecutor = options.patchExecutor;
+    this.plannedPatchStore = options.plannedPatchStore;
     this.applyPatch = options.applyPatch ?? true;
   }
 
@@ -258,13 +272,30 @@ export class WorkflowExecutor {
         observation.toolName = workflow.name;
         events.push(...patchResult.events);
       } else {
+        const plannedPatch = await this.plannedPatchStore?.recordPlannedPatch({
+          patch: workflowResult.patch,
+          context: input.context,
+          reason: autoApply.reason,
+          metadata: {
+            autoApplySkipped: true,
+            autoApplyReason: autoApply.reason,
+            operationCount: workflowResult.patch.operations.length,
+            workflowName: workflow.name,
+          },
+        });
+
         observation = {
           ...observation,
           output: toJsonObject({
             ...(observation.output ?? {}),
+            patchId: plannedPatch?.patchId,
             patchAutoApplySkipped: true,
             patchAutoApplyReason: autoApply.reason,
+            patchTitle: workflowResult.patch.title,
+            patchSummary: workflowResult.patch.summary,
+            patchOperationCount: workflowResult.patch.operations.length,
             patchPlanned: true,
+            patchStatus: plannedPatch?.status,
           }),
         };
       }

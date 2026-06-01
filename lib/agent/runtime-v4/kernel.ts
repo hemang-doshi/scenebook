@@ -73,17 +73,19 @@ function jsonSafe(value: unknown) {
 }
 
 function createRuntimeV4Execution() {
+  const patchAuditStore = new SupabasePatchAuditStore();
   const toolExecutor = new ToolExecutor({
     registry: createRuntimeV4ToolRegistry(),
   });
   const patchExecutor = new PatchExecutor({
     toolExecutor,
-    auditStore: new SupabasePatchAuditStore(),
+    auditStore: patchAuditStore,
   });
 
   return {
     toolExecutor,
     patchExecutor,
+    plannedPatchStore: patchAuditStore,
   };
 }
 
@@ -131,6 +133,7 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         toolSummaries: summarizeRuntimeV4Tools(),
         toolExecutor: runtimeV4Execution.toolExecutor,
         patchExecutor: runtimeV4Execution.patchExecutor,
+        plannedPatchStore: runtimeV4Execution.plannedPatchStore,
       });
 
       for (const event of graphState.events) {

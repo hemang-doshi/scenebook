@@ -20,7 +20,10 @@ import {
 } from "@/lib/agent/runtime-v4/graph/state";
 import type { ProjectMindStores } from "@/lib/agent/runtime-v4/memory/memory-types";
 import { PatchExecutor, type ToolExecutorLike } from "@/lib/agent/runtime-v4/patch/patch-executor";
-import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
+import {
+  WorkflowExecutor,
+  type WorkflowPlannedPatchStore,
+} from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 
 export type CreateSceneBookGraphOptions = {
   stores?: ProjectMindStores;
@@ -30,6 +33,7 @@ export type CreateSceneBookGraphOptions = {
   executeStep?: RuntimeV4GraphStepExecutor;
   toolExecutor?: ToolExecutorLike;
   patchExecutor?: RuntimeV4GraphPatchExecutor;
+  plannedPatchStore?: WorkflowPlannedPatchStore;
   workflowExecutor?: RuntimeV4GraphWorkflowExecutor;
 };
 
@@ -44,6 +48,7 @@ export function createSceneBookGraph(options: CreateSceneBookGraphOptions = {}) 
     ?? new WorkflowExecutor({
       modelGateway: options.modelGateway,
       patchExecutor,
+      plannedPatchStore: options.plannedPatchStore,
       applyPatch: Boolean(patchExecutor),
     });
 
@@ -98,6 +103,7 @@ export async function runSceneBookGraph(
     executeStep: input.executeStep,
     toolExecutor: input.toolExecutor,
     patchExecutor: input.patchExecutor,
+    plannedPatchStore: input.plannedPatchStore,
     workflowExecutor: input.workflowExecutor,
   });
   const messages = input.messages?.length
