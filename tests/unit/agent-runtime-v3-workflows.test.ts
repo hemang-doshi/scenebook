@@ -410,6 +410,71 @@ describe("runtime-v3 Phase 6A workflows", () => {
     expect(result.finalResponse).toContain("SceneBook positioning updated");
   });
 
+  test("SceneBook positioning correction reports partial failures without claiming full success", async () => {
+    generateText.mockResolvedValue(JSON.stringify({
+      creativeBrief: {
+        audience: "solo creators",
+        coreAngle: "SceneBook is a creative production workspace.",
+      },
+      scriptLab: {
+        hook: "Every creator has ideas scattered everywhere.",
+        cta: "Follow the build.",
+      },
+      goal: {
+        title: "Turn positioning into a launch reel",
+        stage: "scripting",
+        completedSteps: ["positioning"],
+        nextActions: ["Draft the launch reel script"],
+        blockers: [],
+      },
+    }));
+    executeRuntimeV3Tool.mockImplementation(async ({ toolName }: { toolName: string }) => {
+      if (toolName === "update_creative_brief") {
+        return observation(
+          toolName,
+          {
+            kind: "tool_error",
+            message: "new row violates row-level security policy",
+            error: {
+              code: "42501",
+              message: "new row violates row-level security policy",
+              table: "project_creative_briefs",
+              operation: "upsert",
+              projectId: "project-1",
+              recoverable: false,
+            },
+          },
+          "failed",
+        );
+      }
+      if (toolName === "update_script_lab") {
+        return observation(toolName, { kind: "script_lab_update" });
+      }
+      if (toolName === "update_active_goal") {
+        return observation(toolName, { kind: "active_goal" });
+      }
+      return observation(toolName);
+    });
+
+    const request = "SceneBook is basically a creator operating system for short-form video builders.";
+
+    const { runWorkflow } = await import("@/lib/agent/runtime-v3/workflows");
+    const result = await runWorkflow(workflowInput({
+      type: "workflow_call",
+      workflowName: "workspace_control_workflow",
+      input: { request, mode: "positioning_update" },
+      reason: "test",
+    }));
+
+    expect(toolNames()).toEqual(["update_creative_brief", "update_script_lab", "update_active_goal"]);
+    expect(result.finalResponse).toContain("Partial update");
+    expect(result.finalResponse).toContain("Successful: update_script_lab, update_active_goal");
+    expect(result.finalResponse).toContain("Failed: update_creative_brief");
+    expect(result.finalResponse).toContain("Reason: new row violates row-level security policy");
+    expect(result.finalResponse).toContain("Retry safe: no");
+    expect(result.finalResponse).not.toContain("SceneBook positioning updated");
+  });
+
   test("add shoot tasks calls only update_shoot_pack", async () => {
     const { runWorkflow } = await import("@/lib/agent/runtime-v3/workflows");
     await runWorkflow(workflowInput({

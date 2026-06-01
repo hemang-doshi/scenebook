@@ -600,6 +600,140 @@ describe("runtime-v3 foundation", () => {
     expect(stream.emit).toHaveBeenCalledWith("tool_completed", expect.objectContaining({ toolCallId: "tool-call-1" }));
   });
 
+  test("executor verifies update_creative_brief by re-reading changed fields", async () => {
+    const persistedBrief = {
+      audience: "short-form creators",
+      platform: "instagram",
+      format: "reel",
+      tone: "cinematic",
+      open_questions: [],
+    };
+    const upsertBuilder = createBuilder({ data: persistedBrief, error: null });
+    const readBuilder = createBuilder({ data: persistedBrief, error: null });
+    const from = vi.fn()
+      .mockReturnValueOnce(upsertBuilder)
+      .mockReturnValueOnce(readBuilder);
+    createSupabaseServerClient.mockResolvedValue({ from });
+    createAgentToolCall.mockResolvedValue(toolCall({ id: "tool-call-brief", tool_name: "update_creative_brief" }));
+    completeAgentToolCall.mockResolvedValue(undefined);
+    const stream = { emit: vi.fn(), emitLegacyTool: vi.fn() };
+
+    const testSnapshot = snapshot();
+    const { executeRuntimeV3Tool } = await import("@/lib/agent/runtime-v3/tools/executor");
+    const result = await executeRuntimeV3Tool({
+      toolName: "update_creative_brief",
+      rawInput: { audience: "short-form creators", tone: "cinematic" },
+      context: {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        userId: "user-1",
+        rawInput: "Update the brief audience and tone",
+        snapshot: testSnapshot,
+        selectedModels: {},
+      },
+      snapshot: testSnapshot,
+      stream: stream as never,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(from).toHaveBeenCalledTimes(2);
+    expect(completeAgentToolCall).toHaveBeenCalledWith(
+      "tool-call-brief",
+      expect.objectContaining({
+        kind: "creative_brief",
+        changedFields: ["audience", "tone"],
+        verification: expect.objectContaining({
+          verified: true,
+          evidence: expect.objectContaining({
+            changedFields: ["audience", "tone"],
+            projectId: "project-1",
+            table: "project_creative_briefs",
+            operation: "verify_update",
+          }),
+        }),
+      }),
+      "completed",
+      expect.objectContaining({
+        verification: expect.objectContaining({ verified: true }),
+      }),
+    );
+  });
+
+  test("executor surfaces structured update_creative_brief Supabase errors", async () => {
+    const supabaseError = {
+      code: "42501",
+      message: "new row violates row-level security policy",
+      details: "Failing row contains project-1.",
+      hint: "Check project_creative_briefs RLS policies.",
+    };
+    const upsertBuilder = createBuilder({ data: null, error: supabaseError });
+    createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => upsertBuilder) });
+    createAgentToolCall.mockResolvedValue(toolCall({ id: "tool-call-brief", tool_name: "update_creative_brief" }));
+    failAgentToolCall.mockResolvedValue(undefined);
+    const stream = { emit: vi.fn(), emitLegacyTool: vi.fn() };
+
+    const testSnapshot = snapshot();
+    const { executeRuntimeV3Tool } = await import("@/lib/agent/runtime-v3/tools/executor");
+    const result = await executeRuntimeV3Tool({
+      toolName: "update_creative_brief",
+      rawInput: { audience: "short-form creators" },
+      context: {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        userId: "user-1",
+        rawInput: "Update the brief audience",
+        snapshot: testSnapshot,
+        selectedModels: {},
+      },
+      snapshot: testSnapshot,
+      stream: stream as never,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.message).toBe("new row violates row-level security policy");
+    expect(result.output).toMatchObject({
+      kind: "tool_error",
+      message: "new row violates row-level security policy",
+      error: {
+        code: "42501",
+        message: "new row violates row-level security policy",
+        details: "Failing row contains project-1.",
+        hint: "Check project_creative_briefs RLS policies.",
+        table: "project_creative_briefs",
+        operation: "upsert",
+        projectId: "project-1",
+        recoverable: false,
+      },
+    });
+    expect(failAgentToolCall).toHaveBeenCalledWith(
+      "tool-call-brief",
+      "new row violates row-level security policy",
+      expect.objectContaining({
+        verification: expect.objectContaining({
+          verified: false,
+          error: expect.objectContaining({
+            code: "42501",
+            operation: "upsert",
+            projectId: "project-1",
+          }),
+        }),
+      }),
+    );
+    expect(stream.emit).toHaveBeenCalledWith(
+      "tool_failed",
+      expect.objectContaining({
+        toolCallId: "tool-call-brief",
+        error: "new row violates row-level security policy",
+        errorMetadata: expect.objectContaining({
+          code: "42501",
+          operation: "upsert",
+        }),
+      }),
+    );
+  });
+
   test("executor persists approval metadata for finalized script overwrites", async () => {
     createAgentToolCall.mockResolvedValue(toolCall({ id: "tool-call-approval" }));
     completeAgentToolCall.mockResolvedValue(undefined);
@@ -697,6 +831,73 @@ describe("runtime-v3 foundation", () => {
     );
     expect(completeAgentToolCall).not.toHaveBeenCalledWith(
       "tool-call-asset",
+      expect.anything(),
+      "completed",
+      expect.anything(),
+    );
+    expect(stream.emit).not.toHaveBeenCalledWith("tool_completed", expect.anything());
+  });
+
+  test("executor keeps failed verification as a failed tool result", async () => {
+    const before = project({ status: "idea" });
+    const staleAfterRead = project({ status: "idea", scriptLab: { hook: "Old hook" } });
+    getProjectWorkspace.mockResolvedValueOnce(before).mockResolvedValueOnce(staleAfterRead);
+    updateCard.mockResolvedValue(undefined);
+    createAgentToolCall.mockResolvedValue(toolCall({ id: "tool-call-verify" }));
+    failAgentToolCall.mockResolvedValue(undefined);
+    const stream = { emit: vi.fn(), emitLegacyTool: vi.fn() };
+
+    const draftSnapshot = snapshot({
+      project: {
+        id: "project-1",
+        title: "Bronze watch hero reel",
+        platform: "instagram",
+        format: "reel",
+        status: "idea",
+      },
+    });
+    const { executeRuntimeV3Tool } = await import("@/lib/agent/runtime-v3/tools/executor");
+    const result = await executeRuntimeV3Tool({
+      toolName: "update_script_lab",
+      rawInput: { hook: "New hook" },
+      context: {
+        projectId: "project-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        userId: "user-1",
+        rawInput: "hook: New hook",
+        snapshot: draftSnapshot,
+        selectedModels: {},
+      },
+      snapshot: draftSnapshot,
+      stream: stream as never,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.output).toMatchObject({
+      kind: "tool_error",
+      error: {
+        type: "verification_failed",
+        operation: "verify",
+        toolName: "update_script_lab",
+        recoverable: true,
+      },
+    });
+    expect(failAgentToolCall).toHaveBeenCalledWith(
+      "tool-call-verify",
+      "Script Lab re-read did not match patch.",
+      expect.objectContaining({
+        verification: expect.objectContaining({
+          verified: false,
+          error: expect.objectContaining({
+            type: "verification_failed",
+            toolName: "update_script_lab",
+          }),
+        }),
+      }),
+    );
+    expect(completeAgentToolCall).not.toHaveBeenCalledWith(
+      "tool-call-verify",
       expect.anything(),
       "completed",
       expect.anything(),

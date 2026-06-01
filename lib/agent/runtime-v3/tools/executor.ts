@@ -21,6 +21,22 @@ function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? {})) as Record<string, JsonValue>;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function optionalBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function jsonSafeError(value: Record<string, JsonValue>) {
+  return jsonSafe(value);
+}
+
 function toolEventPayload(input: {
   id: string;
   toolName: string;
@@ -64,11 +80,72 @@ function verificationPayload(input: {
   verified: boolean;
   evidence?: Record<string, JsonValue>;
   message?: string | null;
+  error?: Record<string, JsonValue>;
 }) {
   return {
     verified: input.verified,
     evidence: input.evidence ?? {},
     message: input.message ?? null,
+    ...(input.error ? { error: input.error } : {}),
+  };
+}
+
+function createVerificationError(input: {
+  toolName: string;
+  message: string;
+  evidence?: Record<string, JsonValue>;
+}) {
+  const error = new Error(input.message) as Error & {
+    metadata?: Record<string, JsonValue>;
+  };
+  error.name = "ToolVerificationError";
+  error.metadata = {
+    type: "verification_failed",
+    message: input.message,
+    operation: "verify",
+    toolName: input.toolName,
+    recoverable: true,
+    evidence: input.evidence ?? {},
+  };
+  return error;
+}
+
+function normalizeToolError(input: {
+  caught: unknown;
+  toolName: string;
+  displayName: string;
+  operation: string;
+}) {
+  const caughtRecord = isRecord(input.caught) ? input.caught : {};
+  const metadata = isRecord(caughtRecord.metadata) ? caughtRecord.metadata : caughtRecord;
+  const message = optionalString(metadata.message)
+    ?? (input.caught instanceof Error ? input.caught.message : undefined)
+    ?? `${input.displayName} failed.`;
+  const error: Record<string, JsonValue> = {
+    message,
+    details: optionalString(metadata.details) ?? null,
+    hint: optionalString(metadata.hint) ?? null,
+    operation: optionalString(metadata.operation) ?? input.operation,
+    toolName: optionalString(metadata.toolName) ?? input.toolName,
+    recoverable: optionalBoolean(metadata.recoverable) ?? false,
+  };
+  const type = optionalString(metadata.type);
+  const name = optionalString(metadata.name) ?? (input.caught instanceof Error ? input.caught.name : undefined);
+  const code = optionalString(metadata.code);
+  const table = optionalString(metadata.table);
+  const projectId = optionalString(metadata.projectId);
+
+  if (type) error.type = type;
+  if (name) error.name = name;
+  if (code) error.code = code;
+  if (table) error.table = table;
+  if (projectId) error.projectId = projectId;
+  if (isRecord(metadata.context)) error.context = jsonSafe(metadata.context);
+  if (isRecord(metadata.evidence)) error.evidence = jsonSafe(metadata.evidence);
+
+  return {
+    message,
+    error: jsonSafeError(error),
   };
 }
 
@@ -254,7 +331,11 @@ export async function executeRuntimeV3Tool(input: {
       : { verified: tool.sideEffect === "none" ? true : true };
 
     if (tool.sideEffect !== "none" && !verification.verified) {
-      throw new Error(verification.message ?? `${tool.displayName} could not verify persistence.`);
+      throw createVerificationError({
+        toolName: tool.name,
+        message: verification.message ?? `${tool.displayName} could not verify persistence.`,
+        evidence: verification.evidence ?? {},
+      });
     }
 
     const output = {
@@ -295,11 +376,23 @@ export async function executeRuntimeV3Tool(input: {
       record: toolCall,
     };
   } catch (caught) {
-    const message = caught instanceof Error ? caught.message : `${tool.displayName} failed.`;
+    const structuredError = normalizeToolError({
+      caught,
+      toolName: tool.name,
+      displayName: tool.displayName,
+      operation: "execute",
+    });
+    const message = structuredError.message;
+    const output = {
+      kind: "tool_error",
+      message,
+      error: structuredError.error,
+    };
     await failAgentToolCall(toolCall.id, message, {
       verification: verificationPayload({
         verified: false,
         message,
+        error: structuredError.error,
       }),
     }).catch(() => null);
     input.stream.emit("tool_failed", {
@@ -307,6 +400,7 @@ export async function executeRuntimeV3Tool(input: {
       toolName: tool.name,
       displayName: tool.displayName,
       error: message,
+      errorMetadata: structuredError.error,
     });
     input.stream.emitLegacyTool(toolEventPayload({
       id: toolCall.id,
@@ -314,10 +408,7 @@ export async function executeRuntimeV3Tool(input: {
       displayName: tool.displayName,
       status: "failed",
       requiresApproval: false,
-      output: {
-        kind: "tool_error",
-        message,
-      },
+      output,
       errorMessage: message,
     }) as any);
 
@@ -326,10 +417,7 @@ export async function executeRuntimeV3Tool(input: {
       toolCallId: toolCall.id,
       status: "failed",
       message,
-      output: {
-        kind: "tool_error",
-        message,
-      },
+      output,
       policy: policy as PolicyResult,
       record: toolCall,
     };
@@ -390,7 +478,11 @@ export async function approveRuntimeV3ToolCall(input: {
       : { verified: true };
 
     if (tool.sideEffect !== "none" && !verification.verified) {
-      throw new Error(verification.message ?? `${tool.displayName} could not verify persistence.`);
+      throw createVerificationError({
+        toolName: tool.name,
+        message: verification.message ?? `${tool.displayName} could not verify persistence.`,
+        evidence: verification.evidence ?? {},
+      });
     }
 
     const output = {
@@ -411,11 +503,18 @@ export async function approveRuntimeV3ToolCall(input: {
       output,
     };
   } catch (caught) {
-    const message = caught instanceof Error ? caught.message : `${tool.displayName} failed.`;
+    const structuredError = normalizeToolError({
+      caught,
+      toolName: tool.name,
+      displayName: tool.displayName,
+      operation: "execute",
+    });
+    const message = structuredError.message;
     await failAgentToolCall(toolCall.id, message, {
       verification: verificationPayload({
         verified: false,
         message,
+        error: structuredError.error,
       }),
     }).catch(() => null);
     throw caught;

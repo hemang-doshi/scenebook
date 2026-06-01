@@ -10,7 +10,7 @@ import {
 } from "@/lib/assets/asset-folders";
 import { createProjectArtifact } from "@/lib/agent/artifacts";
 import { createMemorySnapshot } from "@/lib/agent/memory";
-import { upsertCreativeBrief } from "@/lib/agent/runtime-v3/memory/creative-brief-store";
+import { loadCreativeBrief, upsertCreativeBrief } from "@/lib/agent/runtime-v3/memory/creative-brief-store";
 import { upsertActiveGoal } from "@/lib/agent/runtime-v3/memory/goal-store";
 import { createScriptVersion, loadScriptVersion } from "@/lib/agent/runtime-v3/memory/script-version-store";
 import { normalizePromptJsonOutput } from "@/lib/agent/tools/structured-output";
@@ -21,9 +21,14 @@ import type { PromptJsonOutput } from "@/lib/agent/types";
 import type { ChecklistItem, JsonValue } from "@/lib/types";
 
 const jsonObjectSchema = z.record(z.string(), z.any()) as z.ZodType<Record<string, JsonValue>>;
+const creativeBriefTable = "project_creative_briefs";
 
 function toJsonObject(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? {})) as Record<string, JsonValue>;
+}
+
+function jsonEqual(a: unknown, b: unknown) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
 function extractJsonObject(text: string) {
@@ -704,30 +709,83 @@ const updateCreativeBriefTool: AgentTool<z.infer<typeof creativeBriefInput>> = {
   approvalPolicy: "auto",
   availability: "available",
   async handler(ctx, input) {
+    const patch = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined),
+    );
+    if (Object.keys(patch).length === 0) {
+      throw new Error("No Creative Brief fields were provided.");
+    }
+
     const brief = await upsertCreativeBrief({
       ownerId: ctx.userId,
       projectId: ctx.projectId,
-      patch: {
-        audience: input.audience,
-        platform: input.platform,
-        format: input.format,
-        durationSeconds: input.durationSeconds,
-        tone: input.tone,
-        coreAngle: input.coreAngle,
-        viewerPromise: input.viewerPromise,
-        visualStyle: input.visualStyle,
-        cta: input.cta,
-        openQuestions: input.openQuestions,
-      },
+      patch,
     });
 
     return {
       message: "Creative brief updated.",
       output: {
         kind: "creative_brief",
-        changedFields: Object.keys(input),
+        changedFields: Object.keys(patch),
+        patch: toJsonObject(patch),
         brief: toJsonObject(brief),
       },
+    };
+  },
+  async verify(ctx, result) {
+    const patch = result.output.patch;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      const evidence: Record<string, JsonValue> = {
+        projectId: ctx.projectId,
+        table: creativeBriefTable,
+        operation: "verify_update",
+      };
+      return {
+        verified: false,
+        evidence,
+        message: "Creative brief output did not include a patch to verify.",
+      };
+    }
+
+    const persisted = await loadCreativeBrief(ctx.projectId, {
+      throwOnError: true,
+      operation: "verify_update",
+    });
+    if (!persisted) {
+      const evidence: Record<string, JsonValue> = {
+        projectId: ctx.projectId,
+        table: creativeBriefTable,
+        operation: "verify_update",
+        changedFields: Object.keys(patch),
+      };
+      return {
+        verified: false,
+        evidence,
+        message: "Creative brief could not be re-read after update.",
+      };
+    }
+
+    const changedFields = Object.keys(patch);
+    const mismatches = changedFields.filter((field) => {
+      const expected = (patch as Record<string, JsonValue>)[field];
+      const actual = persisted[field as keyof typeof persisted];
+      return !jsonEqual(actual, expected);
+    });
+
+    const evidence: Record<string, JsonValue> = {
+      projectId: ctx.projectId,
+      table: creativeBriefTable,
+      operation: "verify_update",
+      changedFields,
+      mismatches,
+    };
+
+    return {
+      verified: mismatches.length === 0,
+      evidence,
+      message: mismatches.length === 0
+        ? "Re-read creative brief and confirmed changed fields."
+        : "Creative brief re-read did not match patch.",
     };
   },
 };

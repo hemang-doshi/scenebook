@@ -262,6 +262,43 @@ function askTarget() {
   };
 }
 
+function outputRecord(observation: { output?: Record<string, unknown> }) {
+  return isRecord(observation.output) ? observation.output : {};
+}
+
+function errorRecord(observation: { output?: Record<string, unknown> }) {
+  const output = outputRecord(observation);
+  return isRecord(output.error) ? output.error : {};
+}
+
+function failureReason(observation: { message: string; output?: Record<string, unknown> }) {
+  const output = outputRecord(observation);
+  const error = errorRecord(observation);
+
+  return firstNonEmpty(error.message, output.message, observation.message) ?? "Unknown failure.";
+}
+
+function retrySafe(observation: { output?: Record<string, unknown> }) {
+  const error = errorRecord(observation);
+  return typeof error.recoverable === "boolean" ? error.recoverable : false;
+}
+
+function summarizePartialUpdate(observations: WorkflowResult["observations"]) {
+  const successful = observations.filter((observation) => observation.status === "completed");
+  const failed = observations.filter((observation) => observation.status !== "completed");
+  const retryIsSafe = failed.length > 0 && failed.every(retrySafe);
+  const failedReasons = failed.map(failureReason).join("; ");
+
+  return [
+    "Partial update: some workspace changes completed, but the full operation did not.",
+    `Successful: ${successful.length > 0 ? successful.map((item) => item.toolName).join(", ") : "none"}.`,
+    `Failed: ${failed.length > 0 ? failed.map((item) => item.toolName).join(", ") : "none"}.`,
+    failedReasons ? `Reason: ${failedReasons}.` : null,
+    `Retry safe: ${retryIsSafe ? "yes" : "no"}.`,
+    "I did not mark the whole operation as succeeded; the tool cards show which mutations were verified.",
+  ].filter(Boolean).join(" ");
+}
+
 async function runPositioningUpdate(input: WorkflowHandlerInput, request: string): Promise<WorkflowResult> {
   const patch = await extractPositioningPatch(input, request);
   const observations = [
@@ -274,7 +311,7 @@ async function runPositioningUpdate(input: WorkflowHandlerInput, request: string
   if (failed.length > 0) {
     return {
       observations,
-      finalResponse: `I tried to update the SceneBook positioning, but ${failed.map((item) => `${item.toolName}: ${item.message}`).join("; ")}`,
+      finalResponse: summarizePartialUpdate(observations),
     };
   }
 
