@@ -31,10 +31,15 @@ export type SceneBookGraphObservation = {
 };
 
 export type SceneBookGraphIntent = {
+  intentType?: "create_reel" | "revise_script" | "workspace_update" | "integration_request" | "general_chat";
   summary: string;
   requestedFormat: string | null;
   topic: string | null;
   confidence: number;
+  creativeMode?: "plan" | "goal" | "create" | "review" | "workspace";
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+  inferredGoal?: string;
   needsWorkspaceMutation: boolean;
 };
 

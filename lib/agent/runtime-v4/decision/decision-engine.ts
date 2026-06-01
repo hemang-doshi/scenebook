@@ -1,5 +1,7 @@
 import type { ModelGateway } from "@/lib/ai/model-gateway";
+import { ModelStructuredOutputError } from "@/lib/ai/model-gateway/errors";
 import { createRuntimeV4ModelGateway } from "@/lib/agent/runtime-v4/model";
+import { generateAgentDecision } from "@/lib/agent/runtime-v4/model";
 import {
   createDecisionPrompt,
   createDeterministicSafetyDecision,
@@ -7,7 +9,6 @@ import {
   type DecisionEngineInput,
 } from "@/lib/agent/runtime-v4/decision/intent";
 import {
-  parseAgentDecision,
   repairAgentDecision,
 } from "@/lib/agent/runtime-v4/decision/repair";
 import type { AgentDecision } from "@/lib/agent/runtime-v4/decision/schemas";
@@ -23,20 +24,25 @@ export async function decideNextStep(input: DecideNextStepInput): Promise<AgentD
   const request = createDecisionPrompt(input);
 
   try {
-    const response = await gateway.generateText(request);
-    try {
-      return parseAgentDecision(response);
-    } catch (parseError) {
+    const response = await generateAgentDecision({
+      prompt: request.prompt,
+      system: request.system,
+      model: input.model,
+      modelGateway: gateway,
+    });
+    return response.object;
+  } catch (caught) {
+    if (caught instanceof ModelStructuredOutputError && caught.rawText) {
       const repaired = await repairAgentDecision({
         gateway,
-        malformedResponse: response,
-        parseError,
+        malformedResponse: caught.rawText,
+        parseError: caught.cause ?? caught,
         originalPrompt: request.prompt,
         model: input.model,
       });
       return repaired ?? createGracefulDecisionFallback(input.message);
     }
-  } catch {
+
     return createDeterministicSafetyDecision(input) ?? createGracefulDecisionFallback(input.message);
   }
 }

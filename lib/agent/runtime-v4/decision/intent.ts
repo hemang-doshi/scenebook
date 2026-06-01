@@ -1,4 +1,3 @@
-import type { ModelGatewayTextRequest } from "@/lib/ai/model-gateway";
 import type { ProjectSnapshot, ToolObservation } from "@/lib/agent/runtime-v3/types";
 import type { AgentDecision } from "@/lib/agent/runtime-v4/decision/schemas";
 
@@ -14,10 +13,16 @@ function compactJson(value: unknown) {
   return JSON.stringify(value);
 }
 
-export function createDecisionPrompt(input: DecisionEngineInput): ModelGatewayTextRequest {
+export type DecisionPrompt = {
+  system: string;
+  prompt: string;
+  model?: string;
+};
+
+export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt {
   return {
     model: input.model,
-    systemInstruction: "You are SceneBook's runtime-v4 model-first decision engine. Return strict JSON only.",
+    system: "You are SceneBook's runtime-v4 model-first decision engine. Return structured output only.",
     prompt: [
       "Return exactly one JSON object for the next SceneBook agent action.",
       "Choose the decision with the best next step for the user's goal.",

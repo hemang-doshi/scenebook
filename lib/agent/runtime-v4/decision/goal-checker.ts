@@ -5,7 +5,6 @@ import {
   goalCheckSchema,
   type GoalCheck,
 } from "@/lib/agent/runtime-v4/decision/schemas";
-import { parseStructuredJson } from "@/lib/agent/runtime-v4/decision/repair";
 
 export type GoalCheckerInput = {
   message: string;
@@ -66,12 +65,16 @@ export async function checkGoalProgress(input: GoalCheckerInput): Promise<GoalCh
   ].join("\n\n");
 
   try {
-    const response = await gateway.generateText({
+    const response = await gateway.generateStructured({
+      profile: "critique",
       model: input.model,
-      systemInstruction: "You are SceneBook's runtime-v4 goal checker. Return strict JSON only.",
+      schema: goalCheckSchema,
+      schemaName: "GoalCheck",
+      schemaDescription: "Whether the SceneBook runtime has satisfied the user's goal.",
+      system: "You are SceneBook's runtime-v4 goal checker. Return structured output only.",
       prompt,
     });
-    return parseStructuredJson(response, goalCheckSchema);
+    return response.object;
   } catch {
     return deterministicGoalFallback(input);
   }

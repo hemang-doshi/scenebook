@@ -2,7 +2,7 @@ import { END, START, StateGraph } from "@langchain/langgraph";
 
 import type { ModelGateway } from "@/lib/ai/model-gateway";
 import { createCheckGoalNode } from "@/lib/agent/runtime-v4/graph/nodes/check-goal";
-import { composeResponseNode } from "@/lib/agent/runtime-v4/graph/nodes/compose-response";
+import { createComposeResponseNode } from "@/lib/agent/runtime-v4/graph/nodes/compose-response";
 import { createDecideNextStepNode } from "@/lib/agent/runtime-v4/graph/nodes/decide-next-step";
 import {
   createExecuteStepNode,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/agent/runtime-v4/graph/nodes/execute-step";
 import { createLoadProjectMindNode } from "@/lib/agent/runtime-v4/graph/nodes/load-project-mind";
 import { observeResultNode } from "@/lib/agent/runtime-v4/graph/nodes/observe-result";
-import { understandIntentNode } from "@/lib/agent/runtime-v4/graph/nodes/understand-intent";
+import { createUnderstandIntentNode } from "@/lib/agent/runtime-v4/graph/nodes/understand-intent";
 import {
   SceneBookGraphAnnotation,
   type SceneBookGraphInput,
@@ -33,7 +33,10 @@ function routeAfterGoalCheck(state: SceneBookGraphState) {
 export function createSceneBookGraph(options: CreateSceneBookGraphOptions = {}) {
   return new StateGraph(SceneBookGraphAnnotation)
     .addNode("load_project_mind", createLoadProjectMindNode({ stores: options.stores }))
-    .addNode("understand_intent", understandIntentNode)
+    .addNode("understand_intent", createUnderstandIntentNode({
+      model: options.model,
+      modelGateway: options.modelGateway,
+    }))
     .addNode("decide_next_step", createDecideNextStepNode({
       model: options.model,
       modelGateway: options.modelGateway,
@@ -45,7 +48,10 @@ export function createSceneBookGraph(options: CreateSceneBookGraphOptions = {}) 
       model: options.model,
       modelGateway: options.modelGateway,
     }))
-    .addNode("compose_response", composeResponseNode)
+    .addNode("compose_response", createComposeResponseNode({
+      model: options.model,
+      modelGateway: options.modelGateway,
+    }))
     .addEdge(START, "load_project_mind")
     .addEdge("load_project_mind", "understand_intent")
     .addEdge("understand_intent", "decide_next_step")

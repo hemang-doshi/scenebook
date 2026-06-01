@@ -1,25 +1,58 @@
 import { describe, expect, test, vi } from "vitest";
 
 import type { ModelGateway } from "@/lib/ai/model-gateway";
+import { ModelStructuredOutputError } from "@/lib/ai/model-gateway/errors";
 import type { ProjectSnapshot, ToolObservation } from "@/lib/agent/runtime-v3/types";
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
 
-function queuedTextGateway(...responses: string[]): ModelGateway & { generateText: ReturnType<typeof vi.fn> } {
+function queuedStructuredGateway(...responses: unknown[]): ModelGateway & {
+  generateStructured: ReturnType<typeof vi.fn>;
+  generateText: ReturnType<typeof vi.fn>;
+} {
   const queue = [...responses];
-  const generateText = vi.fn(async () => {
-    return queue.shift() ?? responses.at(-1) ?? "";
-  });
+  const generateStructured = vi.fn(async (request) => ({
+    object: request.schema.parse(queue.shift() ?? responses.at(-1)),
+    finishReason: "stop",
+  }));
 
   return {
     provider: "fake",
-    generateText,
-    async generateStructured() {
-      throw new Error("These tests use raw structured text parsing.");
-    },
-    async *streamText() {
-      yield "";
-    },
+    generateText: vi.fn(async () => ({ text: "", finishReason: "stop" })),
+    generateStructured,
+    streamText: vi.fn(async () => ({
+      textStream: (async function* stream() {
+        yield "";
+      })(),
+    })),
+  };
+}
+
+function repairableMalformedGateway(rawText: string, repairedResponse: unknown): ModelGateway & {
+  generateStructured: ReturnType<typeof vi.fn>;
+  generateText: ReturnType<typeof vi.fn>;
+} {
+  return {
+    provider: "fake",
+    generateStructured: vi.fn(async (request) => {
+      throw new ModelStructuredOutputError({
+        provider: "fake",
+        profile: request.profile,
+        schemaName: request.schemaName,
+        message: "Malformed structured output",
+        rawText,
+        cause: new Error("Malformed structured output"),
+      });
+    }),
+    generateText: vi.fn(async () => ({
+      text: JSON.stringify(repairedResponse),
+      finishReason: "stop",
+    })),
+    streamText: vi.fn(async () => ({
+      textStream: (async function* stream() {
+        yield "";
+      })(),
+    })),
   };
 }
 
@@ -110,12 +143,12 @@ function observation(overrides: Partial<ToolObservation> = {}): ToolObservation 
 
 describe("runtime-v4 decision engine", () => {
   test("vague creative request asks a useful question or proposes a plan", async () => {
-    const gateway = queuedTextGateway(JSON.stringify({
+    const gateway = queuedStructuredGateway({
       type: "ask_question",
       questions: ["Who is the target viewer for this idea?"],
       reason: "The creative request needs audience context.",
       expectedFieldTargets: ["audience"],
-    }));
+    });
 
     const decision = await decideNextStep({
       message: "make this better",
@@ -126,16 +159,19 @@ describe("runtime-v4 decision engine", () => {
 
     expect(["ask_question", "propose_plan"]).toContain(decision.type);
     expect(JSON.stringify(decision)).toMatch(/viewer|audience|plan|step/i);
-    expect(gateway.generateText).toHaveBeenCalledTimes(1);
+    expect(gateway.generateStructured).toHaveBeenCalledWith(expect.objectContaining({
+      profile: "agent_decision",
+      schemaName: "AgentDecision",
+    }));
   });
 
   test("direct script request proposes script workflow", async () => {
-    const gateway = queuedTextGateway(JSON.stringify({
+    const gateway = queuedStructuredGateway({
       type: "workflow_call",
       workflowName: "script_workflow",
       input: { prompt: "write a punchier script" },
       reason: "The user requested script generation.",
-    }));
+    });
 
     await expect(decideNextStep({
       message: "write a punchier script",
@@ -151,10 +187,10 @@ describe("runtime-v4 decision engine", () => {
   });
 
   test("tool observation does not automatically finalize if the goal is incomplete", async () => {
-    const gateway = queuedTextGateway(JSON.stringify({
+    const gateway = queuedStructuredGateway({
       status: "continue",
       reason: "The script package exists, but the workspace still needs an update.",
-    }));
+    });
 
     const result = await checkGoalProgress({
       message: "write and save a script",
@@ -169,14 +205,14 @@ describe("runtime-v4 decision engine", () => {
     });
   });
 
-  test("malformed model JSON is repaired", async () => {
-    const gateway = queuedTextGateway(
+  test("malformed structured output is repaired when raw text is preserved", async () => {
+    const gateway = repairableMalformedGateway(
       "not json",
-      JSON.stringify({
+      {
         type: "final_response",
         response: "I can help shape that into a tighter reel idea.",
         confidence: 0.7,
-      }),
+      },
     );
 
     await expect(decideNextStep({
@@ -188,12 +224,16 @@ describe("runtime-v4 decision engine", () => {
       type: "final_response",
       response: "I can help shape that into a tighter reel idea.",
     });
-    expect(gateway.generateText).toHaveBeenCalledTimes(2);
-    expect(gateway.generateText.mock.calls[1][0].prompt).toContain("Repair");
+    expect(gateway.generateStructured).toHaveBeenCalledTimes(1);
+    expect(gateway.generateText).toHaveBeenCalledTimes(1);
+    expect(gateway.generateText.mock.calls[0][0]).toMatchObject({
+      profile: "agent_decision",
+    });
+    expect(gateway.generateText.mock.calls[0][0].prompt).toContain("Repair");
   });
 
-  test("unrecoverable malformed JSON produces graceful fallback", async () => {
-    const gateway = queuedTextGateway("not json", "still not json");
+  test("unrecoverable structured output produces graceful fallback", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
 
     const decision = await decideNextStep({
       message: "help me plan a reel",

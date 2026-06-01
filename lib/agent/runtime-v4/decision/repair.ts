@@ -37,8 +37,9 @@ export async function repairAgentDecision(input: {
   model?: string;
 }): Promise<AgentDecision | null> {
   const repaired = await input.gateway.generateText({
+    profile: "agent_decision",
     model: input.model,
-    systemInstruction: "Repair malformed SceneBook decision JSON. Return strict JSON only.",
+    system: "Repair malformed SceneBook decision JSON. Return strict JSON only.",
     prompt: [
       "Repair this into a valid runtime-v4 AgentDecision JSON object.",
       "Allowed decision types: ask_question, propose_plan, tool_call, workflow_call, final_response, stop_with_error.",
@@ -50,7 +51,7 @@ export async function repairAgentDecision(input: {
   });
 
   try {
-    return parseAgentDecision(repaired);
+    return parseAgentDecision(repaired.text);
   } catch {
     return null;
   }

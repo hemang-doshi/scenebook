@@ -1,25 +1,48 @@
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
+
 import { describe, expect, test, vi } from "vitest";
 
 import type { ModelGateway } from "@/lib/ai/model-gateway";
+import { createFakeModelGateway } from "@/lib/ai/model-gateway/providers/fake";
 import {
   createSceneBookGraph,
   runSceneBookGraph,
 } from "@/lib/agent/runtime-v4/graph/scenebook-graph";
+import { createUnderstandIntentNode } from "@/lib/agent/runtime-v4/graph/nodes/understand-intent";
 import type { ProjectMindStores } from "@/lib/agent/runtime-v4/memory/memory-types";
 
-function queuedTextGateway(...responses: string[]): ModelGateway & { generateText: ReturnType<typeof vi.fn> } {
+function queuedStructuredGateway(...responses: unknown[]): ModelGateway & { generateStructured: ReturnType<typeof vi.fn> } {
   const queue = [...responses];
-  const generateText = vi.fn(async () => queue.shift() ?? responses.at(-1) ?? "");
+  const generateStructured = vi.fn(async (request) => {
+    if (request.profile === "structured_extraction") {
+      return {
+        object: request.schema.parse({
+          intentType: "create_reel",
+          confidence: 0.84,
+          creativeMode: "plan",
+          needsClarification: false,
+          inferredGoal: "Help me make a reel about building SceneBook",
+        }),
+        finishReason: "stop",
+      };
+    }
+
+    return {
+      object: request.schema.parse(queue.shift() ?? responses.at(-1)),
+      finishReason: "stop",
+    };
+  });
 
   return {
     provider: "fake",
-    generateText,
-    async generateStructured() {
-      throw new Error("Graph tests use raw structured text parsing.");
-    },
-    async *streamText() {
-      yield "";
-    },
+    generateText: vi.fn(async () => ({ text: "Fake composed response.", finishReason: "stop" })),
+    generateStructured,
+    streamText: vi.fn(async () => ({
+      textStream: (async function* stream() {
+        yield "";
+      })(),
+    })),
   };
 }
 
@@ -144,6 +167,38 @@ describe("runtime-v4 LangGraph runtime", () => {
     ]));
   });
 
+  test("understand-intent graph node calls the structured extraction model profile", async () => {
+    const gateway = queuedStructuredGateway({
+      intentType: "create_reel",
+      confidence: 0.88,
+      creativeMode: "plan",
+      needsClarification: false,
+      inferredGoal: "Make a reel about building SceneBook",
+    });
+    const node = createUnderstandIntentNode({ modelGateway: gateway });
+
+    const update = await node({
+      goal: "Help me make a reel about building SceneBook",
+      projectMind: {
+        project: {
+          title: "Building SceneBook in public",
+          format: "reel",
+        },
+      },
+      runId: "run-1",
+      threadId: "thread-1",
+    } as never);
+
+    expect(gateway.generateStructured).toHaveBeenCalledWith(expect.objectContaining({
+      profile: "structured_extraction",
+      schemaName: "IntentUnderstanding",
+    }));
+    expect(update.currentIntent).toMatchObject({
+      intentType: "create_reel",
+      confidence: 0.84,
+    });
+  });
+
   test("produces a plan for a SceneBook reel request", async () => {
     const state = await runSceneBookGraph({
       projectId: "project-1",
@@ -160,11 +215,11 @@ describe("runtime-v4 LangGraph runtime", () => {
   });
 
   test("stops when a final response is produced", async () => {
-    const gateway = queuedTextGateway(JSON.stringify({
+    const gateway = queuedStructuredGateway({
       type: "final_response",
       response: "Here is the concise production answer.",
       confidence: 0.9,
-    }));
+    });
 
     const state = await runSceneBookGraph({
       projectId: "project-1",
@@ -186,12 +241,12 @@ describe("runtime-v4 LangGraph runtime", () => {
   });
 
   test("stops when the next step is a clarifying question", async () => {
-    const gateway = queuedTextGateway(JSON.stringify({
+    const gateway = queuedStructuredGateway({
       type: "ask_question",
       questions: ["Who is the viewer for this reel?"],
       reason: "Audience is needed before planning.",
       expectedFieldTargets: ["audience"],
-    }));
+    });
 
     const state = await runSceneBookGraph({
       projectId: "project-1",
@@ -208,27 +263,27 @@ describe("runtime-v4 LangGraph runtime", () => {
   });
 
   test("stops when max steps are reached", async () => {
-    const gateway = queuedTextGateway(
-      JSON.stringify({
+    const gateway = queuedStructuredGateway(
+      {
         type: "tool_call",
         toolName: "update_script_lab",
         input: { hook: "First hook" },
         reason: "Try a workspace update.",
-      }),
-      JSON.stringify({
+      },
+      {
         status: "continue",
         reason: "The goal is not satisfied yet.",
-      }),
-      JSON.stringify({
+      },
+      {
         type: "tool_call",
         toolName: "update_script_lab",
         input: { hook: "Second hook" },
         reason: "Try another workspace update.",
-      }),
-      JSON.stringify({
+      },
+      {
         status: "continue",
         reason: "Still not satisfied.",
-      }),
+      },
     );
 
     const state = await runSceneBookGraph({
@@ -248,17 +303,17 @@ describe("runtime-v4 LangGraph runtime", () => {
   });
 
   test("does not execute mutating decisions without a graph executor", async () => {
-    const gateway = queuedTextGateway(
-      JSON.stringify({
+    const gateway = queuedStructuredGateway(
+      {
         type: "tool_call",
         toolName: "update_script_lab",
         input: { hook: "Do not write this directly" },
         reason: "The model requested a workspace mutation.",
-      }),
-      JSON.stringify({
+      },
+      {
         status: "continue",
         reason: "The stubbed tool did not satisfy the goal.",
-      }),
+      },
     );
 
     const state = await runSceneBookGraph({
@@ -279,5 +334,64 @@ describe("runtime-v4 LangGraph runtime", () => {
       }),
     ]);
     expect(state.events.map((event) => event.type)).toContain("tool_failed");
+  });
+
+  test("LangGraph runtime works end-to-end with the fake model provider", async () => {
+    const gateway = createFakeModelGateway({
+      structuredResponses: {
+        structured_extraction: {
+          intentType: "create_reel",
+          confidence: 0.9,
+          creativeMode: "plan",
+          needsClarification: false,
+          inferredGoal: "Make a reel about building SceneBook",
+        },
+        agent_decision: {
+          type: "propose_plan",
+          plan: {
+            title: "Fake SceneBook launch reel plan",
+            steps: [
+              {
+                label: "Frame the build-in-public hook.",
+                sideEffect: "none",
+              },
+            ],
+          },
+          reason: "Fake gateway proposed a no-write plan.",
+        },
+      },
+      textResponses: {
+        final_response: "Fake final SceneBook response.",
+      },
+    });
+
+    const state = await runSceneBookGraph({
+      projectId: "project-1",
+      userId: "user-1",
+      runId: "run-1",
+      goal: "Help me make a reel about building SceneBook",
+      stores: projectMindStores(),
+      modelGateway: gateway,
+    });
+
+    expect(state.plan?.title).toBe("Fake SceneBook launch reel plan");
+    expect(state.finalResponse).toBe("Fake final SceneBook response.");
+    expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      "decision_made",
+      "final_response",
+      "run_completed",
+    ]));
+  });
+
+  test("graph nodes do not import provider SDKs directly", async () => {
+    const nodesDir = path.join(process.cwd(), "lib", "agent", "runtime-v4", "graph", "nodes");
+    const filenames = await readdir(nodesDir);
+    const nodeSources = await Promise.all(
+      filenames
+        .filter((filename) => filename.endsWith(".ts"))
+        .map(async (filename) => readFile(path.join(nodesDir, filename), "utf8")),
+    );
+
+    expect(nodeSources.join("\n")).not.toMatch(/@ai-sdk\/google|@ai-sdk\/openai-compatible/);
   });
 });
