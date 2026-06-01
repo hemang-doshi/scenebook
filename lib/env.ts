@@ -10,6 +10,10 @@ const rawEnv = {
   nimModel:
     process.env.NVIDIA_NIM_MODEL ?? "meta/llama-3.1-70b-instruct",
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  agentDefaultModelProvider:
+    process.env.AGENT_DEFAULT_MODEL_PROVIDER ?? "gemini",
+  agentDefaultModel:
+    process.env.AGENT_DEFAULT_MODEL ?? "gemini-2.5-flash",
   openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
   huggingFaceApiKey: process.env.HUGGINGFACE_API_KEY ?? "",
 };
