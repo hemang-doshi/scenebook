@@ -50,7 +50,7 @@ function looksLikeWorkspaceControl(message: string) {
     /\b(cta|caption)\s*:/i.test(message) ||
     /\bmake this(?: the)? (hook|cta|caption|script)\s*:/i.test(message) ||
     /\b(add|create|make)\b.*\bfolder\b/i.test(message) ||
-    /\bmove\b.*\basset\b.*\bto\b/i.test(message) ||
+    /\bmove\b.*\b(asset|thumbnail|image|video|audio)\b.*\b(to|into)\b/i.test(message) ||
     /\b(instagram package|publish package|prepare instagram)\b/i.test(message)
   );
 }

@@ -25,7 +25,7 @@ export async function runEditorHandoffWorkflow(input: WorkflowHandlerInput): Pro
 }
 
 export async function runPublishWorkflow(input: WorkflowHandlerInput): Promise<WorkflowResult> {
-  const observation = await executeRuntimeV3Tool({
+  const packageObservation = await executeRuntimeV3Tool({
     toolName: "prepare_instagram_package",
     rawInput: { request: request(input) },
     context: input.context,
@@ -33,10 +33,28 @@ export async function runPublishWorkflow(input: WorkflowHandlerInput): Promise<W
     stream: input.stream,
   });
 
+  if (packageObservation.status !== "completed") {
+    return {
+      observations: [packageObservation],
+      finalResponse: `Publish preparation failed: ${packageObservation.message}`,
+    };
+  }
+
+  const publishObservation = await executeRuntimeV3Tool({
+    toolName: "publish_to_instagram",
+    rawInput: { request: request(input) },
+    context: input.context,
+    snapshot: input.snapshot,
+    stream: input.stream,
+  });
+
   return {
-    observations: [observation],
-    finalResponse: observation.status === "completed"
-      ? "Instagram package prepared. Actual publishing is not wired in the agent harness yet, so nothing was published."
-      : `Publish preparation failed: ${observation.message}`,
+    observations: [packageObservation, publishObservation],
+    finalResponse:
+      publishObservation.status === "awaiting_approval"
+        ? `Instagram package prepared, but approval is required before publishing: ${publishObservation.message}`
+        : publishObservation.status === "completed"
+          ? "Instagram package prepared and publish execution completed."
+          : `Instagram package prepared, but publishing is blocked: ${publishObservation.message}. Nothing was published.`,
   };
 }

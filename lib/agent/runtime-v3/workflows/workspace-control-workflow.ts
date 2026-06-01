@@ -30,6 +30,41 @@ function parseShootTasks(request: string) {
   return tasks.length > 0 ? tasks : null;
 }
 
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function parseMoveFolderName(request: string) {
+  return request.match(/\b(?:to|into)\s+([^.!?]+)[.!?]?\s*$/i)?.[1]?.replace(/\s+folder$/i, "").trim() ?? null;
+}
+
+function resolveAssetMove(input: WorkflowHandlerInput, request: string) {
+  if (!/\bmove\b.*\b(asset|thumbnail|image|video|audio)\b.*\b(to|into)\b/i.test(request)) {
+    return null;
+  }
+
+  const folderName = parseMoveFolderName(request);
+  const folder = folderName
+    ? input.snapshot.assets.folders.find((candidate) => candidate.name.toLowerCase() === folderName.toLowerCase())
+    : null;
+  const normalizedRequest = normalizeSearchText(request);
+  const matchingAssets = input.snapshot.assets.recent.filter((asset) => {
+    const tokens = normalizeSearchText(asset.title)
+      .split(" ")
+      .filter((token) => token.length > 2);
+    return tokens.length > 0 && tokens.every((token) => normalizedRequest.includes(token));
+  });
+
+  if (matchingAssets.length === 1 && folder) {
+    return {
+      assetId: matchingAssets[0].id,
+      folderId: folder.id,
+    };
+  }
+
+  return null;
+}
+
 function isAmbiguousSave(request: string) {
   return /^\s*save (this|it)\.?\s*$/i.test(request);
 }
@@ -61,6 +96,17 @@ export async function runWorkspaceControlWorkflow(input: WorkflowHandlerInput): 
       assetId: object.assetId,
       folderId: object.folderId,
     });
+    return {
+      observations: [observation],
+      finalResponse: observation.status === "completed"
+        ? "Asset moved and verified in the target folder."
+      : `I could not move the asset: ${observation.message}`,
+    };
+  }
+
+  const resolvedMove = resolveAssetMove(input, request);
+  if (resolvedMove) {
+    const observation = await runTool(input, "move_asset_to_folder", resolvedMove);
     return {
       observations: [observation],
       finalResponse: observation.status === "completed"
