@@ -17,15 +17,30 @@ vi.mock("@/lib/fetcher", () => ({
 }));
 
 vi.mock("@/components/agent/agent-composer", () => ({
-  AgentComposer: ({ value, onChange, onSubmit }: { value: string; onChange: (value: string) => void; onSubmit: () => void }) =>
+  AgentComposer: ({
+    value,
+    onChange,
+    onSubmit,
+    onQuickCommand,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    onSubmit: () => void;
+    onQuickCommand: (command: string) => void;
+  }) =>
     React.createElement(
       "div",
-      null,
+      { "data-testid": "chat-composer" },
       React.createElement("input", {
         "aria-label": "composer",
         value,
         onChange: (event: { target: { value: string } }) => onChange(event.target.value),
       }),
+      React.createElement(
+        "button",
+        { type: "button", onClick: () => onQuickCommand("/script") },
+        "Mock quick script",
+      ),
       React.createElement(
         "button",
         { type: "button", onClick: onSubmit },
@@ -237,6 +252,62 @@ describe("agent UI components", () => {
 
     expect(await screen.findByText("Empty")).toBeInTheDocument();
     expect(screen.queryByText("hello")).not.toBeInTheDocument();
+  });
+
+  test("composer remains mounted in the bottom chat surface", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    expect(await screen.findByText("Empty")).toBeInTheDocument();
+    const composer = screen.getByTestId("chat-composer");
+    expect(composer.parentElement?.parentElement).toHaveClass("absolute", "bottom-0");
+  });
+
+  test("tool-card quick commands populate the composer draft", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return {
+        threadId: "thread-1",
+        messages: [],
+        toolCalls: [
+          {
+            id: "tool-1",
+            tool_name: "Prompt Builder",
+            command: "form-json-prompt",
+            status: "completed",
+            requires_approval: false,
+            output: {
+              kind: "prompt_json",
+              modality: "image",
+              prompt: "A precise product demo still",
+            },
+            created_at: "2026-05-27T10:00:00.000Z",
+          },
+        ],
+      };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Prompt Builder");
+    fireEvent.click(screen.getByRole("button", { name: /show details/i }));
+    fireEvent.click(screen.getByRole("button", { name: /generate image/i }));
+
+    expect((screen.getByLabelText("composer") as HTMLInputElement).value).toMatch(/^\/generate-image /);
   });
 
   test("activity strip transitions through command, awaiting input, and done states", async () => {

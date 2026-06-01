@@ -700,7 +700,10 @@ describe("agent tools", () => {
       id: "tool-call-1",
       project_id: "project-1",
       thread_id: "thread-1",
-      command: "script",
+      tool_name: "Script Builder",
+      command: null,
+      status: "awaiting_approval",
+      input: { prompt: "write a SceneBook launch script" },
       output: {
         kind: "script_package",
         hook: "Stop app hopping.",
@@ -747,7 +750,10 @@ describe("agent tools", () => {
       id: "tool-call-2",
       project_id: "project-1",
       thread_id: "thread-1",
-      command: "form-json-prompt",
+      tool_name: "Form JSON Prompt",
+      command: null,
+      status: "awaiting_approval",
+      input: { prompt: "SceneBook product hero frame" },
       output: {
         kind: "prompt_json",
         modality: "image",
@@ -803,6 +809,46 @@ describe("agent tools", () => {
       "/import-to-editor",
       "/export",
     ]);
+  });
+
+  test("unavailable editor integration is blocked without executing the tool", async () => {
+    createAuthSupabase();
+    createOrLoadThread.mockResolvedValue({ id: "thread-1" });
+    createAgentRun.mockResolvedValue({ id: "run-1" });
+    createAgentToolCall.mockResolvedValue({ id: "tool-call-1" });
+    appendAgentMessage.mockResolvedValue({ id: "message-1" });
+    completeAgentRun.mockResolvedValue({});
+    completeAgentToolCall.mockResolvedValue({});
+    getProjectWorkspace.mockResolvedValue(baseProject);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: "11111111-1111-4111-8111-111111111111",
+          message: "/import-to-editor arrange a rough cut",
+        }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({
+      tool: {
+        id: "tool-call-1",
+        status: "failed",
+        toolName: "Editor Handoff",
+        result: {
+          output: {
+            kind: "tool_blocked",
+            availability: "requires_integration",
+          },
+        },
+      },
+    });
+    expect(generateText).not.toHaveBeenCalled();
   });
 
   test("media generation failures return failed tool payloads instead of 400", async () => {

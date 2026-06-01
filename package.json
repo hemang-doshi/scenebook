@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:agent-v3": "node -e \"process.env.AGENT_HARNESS_RUNTIME_ENABLED='true'; require('child_process').spawn(process.platform==='win32'?'npm.cmd':'npm',['run','dev'],{stdio:'inherit',env:process.env})\"",
+    "install:work-laptop": "npm ci --cache .npm-cache --registry=https://registry.npmmirror.com --replace-registry-host=always --prefer-online",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

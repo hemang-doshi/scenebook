@@ -12,7 +12,10 @@ SNAPSHOT.md
 DIFF_CHANGES.md
 .gitignore.codex-landing-revamp-backup
 .tmp-*.png
+.tmp-*.log
+.tmp-*.err
 node_modules/
+.npm-cache/
 .next/
 coverage/
 playwright-report/

@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Bot, Sparkles, Copy, Check, User } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import type { AgentUiMessage } from "@/components/agent/agent-chat-island";
 import type { Attachment } from "@/components/agent/agent-composer";
 
@@ -191,7 +190,6 @@ export function ChatMessage({
   index: number;
 }) {
   const isUser = message.role === "user";
-  const isAssistant = message.role === "assistant";
 
   if (isUser) {
     return (

@@ -269,22 +269,39 @@ export async function createAgentToolCall(input: {
   command?: string | null;
   requiresApproval: boolean;
   payload: Record<string, JsonValue>;
+  risk?: string | null;
+  approvalReason?: string | null;
+  stateSnapshotId?: string | null;
+  verification?: Record<string, JsonValue> | null;
+  availability?: string | null;
+  sideEffect?: string | null;
+  approvalPolicy?: string | null;
 }) {
   const { supabase, user } = await requireUser();
+  const payload: Record<string, JsonValue> = {
+    owner_id: user.id,
+    run_id: input.runId,
+    thread_id: input.threadId,
+    project_id: input.projectId,
+    tool_name: input.toolName,
+    command: input.command ?? null,
+    status: "running",
+    input: input.payload,
+    output: {},
+    requires_approval: input.requiresApproval,
+  };
+
+  if ("risk" in input) payload.risk = input.risk ?? null;
+  if ("approvalReason" in input) payload.approval_reason = input.approvalReason ?? null;
+  if ("stateSnapshotId" in input) payload.state_snapshot_id = input.stateSnapshotId ?? null;
+  if ("verification" in input) payload.verification = input.verification ?? null;
+  if ("availability" in input) payload.availability = input.availability ?? null;
+  if ("sideEffect" in input) payload.side_effect = input.sideEffect ?? null;
+  if ("approvalPolicy" in input) payload.approval_policy = input.approvalPolicy ?? null;
+
   const { data, error } = await supabase
     .from("agent_tool_calls")
-    .insert({
-      owner_id: user.id,
-      run_id: input.runId,
-      thread_id: input.threadId,
-      project_id: input.projectId,
-      tool_name: input.toolName,
-      command: input.command ?? null,
-      status: "running",
-      input: input.payload,
-      output: {},
-      requires_approval: input.requiresApproval,
-    })
+    .insert(payload)
     .select("*")
     .single();
 
@@ -319,12 +336,31 @@ export async function completeAgentToolCall(
   toolCallId: string,
   output: Record<string, JsonValue>,
   status: string,
+  metadata?: {
+    verification?: Record<string, JsonValue> | null;
+    risk?: string | null;
+    approvalReason?: string | null;
+    stateSnapshotId?: string | null;
+    availability?: string | null;
+    sideEffect?: string | null;
+    approvalPolicy?: string | null;
+  },
 ) {
   const { supabase } = await requireUser();
   const payload: Record<string, JsonValue> = {
     output,
     status,
   };
+
+  if (metadata) {
+    if ("verification" in metadata) payload.verification = metadata.verification ?? null;
+    if ("risk" in metadata) payload.risk = metadata.risk ?? null;
+    if ("approvalReason" in metadata) payload.approval_reason = metadata.approvalReason ?? null;
+    if ("stateSnapshotId" in metadata) payload.state_snapshot_id = metadata.stateSnapshotId ?? null;
+    if ("availability" in metadata) payload.availability = metadata.availability ?? null;
+    if ("sideEffect" in metadata) payload.side_effect = metadata.sideEffect ?? null;
+    if ("approvalPolicy" in metadata) payload.approval_policy = metadata.approvalPolicy ?? null;
+  }
 
   if (status === "completed" || status === "failed" || status === "rejected") {
     payload.completed_at = new Date().toISOString();
@@ -341,13 +377,20 @@ export async function completeAgentToolCall(
   }
 }
 
-export async function failAgentToolCall(toolCallId: string, errorMessage: string) {
+export async function failAgentToolCall(
+  toolCallId: string,
+  errorMessage: string,
+  metadata?: {
+    verification?: Record<string, JsonValue> | null;
+  },
+) {
   const { supabase } = await requireUser();
   const { error } = await supabase
     .from("agent_tool_calls")
     .update({
       status: "failed",
       error_message: errorMessage,
+      ...(metadata && "verification" in metadata ? { verification: metadata.verification ?? null } : {}),
       completed_at: new Date().toISOString(),
     })
     .eq("id", toolCallId);

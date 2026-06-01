@@ -32,17 +32,18 @@ export function ModelAccordion({
       <Button
         type="button"
         variant="secondary"
-        className="h-8 rounded-full border border-[var(--hairline)] bg-[var(--canvas)] px-3 text-[10px] text-[var(--ink)]/80 hover:border-[var(--ink)] uppercase tracking-wider font-mono transition-all duration-200"
+        className="h-9 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] px-2.5 text-[10px] text-[var(--ink)]/80 hover:border-[var(--ink)] uppercase tracking-[0] font-mono transition-all duration-200 sm:px-3"
+        aria-label="Model routing"
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((current) => !current)}
       >
-        <SlidersHorizontal className="mr-1.5 h-3 w-3 text-[var(--ink)]/70" />
-        Routing
-        <ChevronDown className="ml-1.5 h-3 w-3 text-[var(--ink)]/70" />
+        <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--ink)]/70 sm:mr-1.5" />
+        <span className="hidden sm:inline">Routing</span>
+        <ChevronDown className="ml-1 h-3 w-3 text-[var(--ink)]/70 sm:ml-1.5" />
       </Button>
       {open ? (
-        <Card className="absolute bottom-[calc(100%+0.75rem)] right-0 z-20 w-[19rem] border border-[var(--hairline)] bg-[var(--canvas)] shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-[var(--rounded-lg)]">
+        <Card className="absolute bottom-[calc(100%+0.75rem)] right-0 z-30 w-[min(19rem,calc(100vw-2rem))] rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
           <CardHeader className="pb-3 pt-4 px-4">
             <CardTitle className="text-sm font-bold text-[var(--ink)]">Model routing</CardTitle>
             <p className="text-xs text-[var(--muted)]">Choose defaults per modality.</p>

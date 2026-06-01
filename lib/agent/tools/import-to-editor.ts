@@ -9,10 +9,12 @@ const inputSchema = z.object({
 export const importToEditorTool: AgentTool<z.infer<typeof inputSchema>> = {
   name: "Editor Handoff",
   command: "import-to-editor",
-  description: "Prepares the current project for editor handoff.",
+  description: "Prepares the current project for editor handoff. Timeline editing is not wired yet.",
   inputSchema,
   requiresApproval: true,
-  sideEffect: "none",
+  approvalPolicy: "always",
+  sideEffect: "editor_write",
+  availability: "requires_integration",
   handler(ctx, input) {
     const title = ctx.project?.title ?? "this project";
     const brief = input.prompt || "Prepare the current project for editing.";

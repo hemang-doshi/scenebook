@@ -11,6 +11,21 @@ export type AgentToolSideEffect =
   | "publish"
   | "editor_write";
 
+export type AgentToolAvailability =
+  | "available"
+  | "disabled"
+  | "stubbed"
+  | "requires_integration"
+  | "requires_configuration";
+
+export type AgentToolApprovalPolicy = "auto" | "ask_if_overwrite" | "always";
+
+export type AgentToolVerificationResult = {
+  verified: boolean;
+  evidence?: Record<string, JsonValue>;
+  message?: string;
+};
+
 export type AgentToolContext = {
   projectId: string;
   threadId: string;
@@ -34,7 +49,11 @@ export type AgentTool<TInput = unknown> = {
   command: string;
   description: string;
   inputSchema: ZodType<TInput>;
+  outputSchema?: ZodType<Record<string, JsonValue>>;
   requiresApproval: boolean;
+  approvalPolicy?: AgentToolApprovalPolicy;
   sideEffect: AgentToolSideEffect;
+  availability?: AgentToolAvailability;
   handler: (ctx: AgentToolContext, input: TInput) => Promise<AgentToolResult> | AgentToolResult;
+  verify?: (ctx: AgentToolContext, result: AgentToolResult) => Promise<AgentToolVerificationResult> | AgentToolVerificationResult;
 };
