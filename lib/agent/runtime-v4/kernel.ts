@@ -17,6 +17,7 @@ import type {
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
 import type { AgentDecision, GoalCheck } from "@/lib/agent/runtime-v4/decision/schemas";
+import { runSceneBookGraph } from "@/lib/agent/runtime-v4/graph/scenebook-graph";
 import { buildProjectContext } from "@/lib/agent/runtime-v4/context/context-builder";
 import {
   buildRunSummaryFromObservations,
@@ -50,8 +51,65 @@ function asRuntimeV3WorkflowDecision(decision: Extract<AgentDecision, { type: "w
   return decision as Extract<RuntimeV3AgentDecision, { type: "workflow_call" }>;
 }
 
+export type AgentOrchestrator = "custom" | "langgraph";
+
+export function resolveAgentOrchestrator(value = process.env.AGENT_ORCHESTRATOR): AgentOrchestrator {
+  return value === "langgraph" ? "langgraph" : "custom";
+}
+
+function runLangGraphSpike(request: AgentRunRequest) {
+  return createAgentSseResponse(async (stream) => {
+    const graphState = await runSceneBookGraph({
+      projectId: request.projectId,
+      threadId: request.threadId,
+      userId: request.userId,
+      goal: request.message,
+      messages: [{ role: "user", content: request.message }],
+    });
+    const runId = "langgraph-spike";
+
+    stream.emit("run_started", {
+      threadId: request.threadId ?? null,
+      runId,
+    });
+    stream.emitLegacyMeta({
+      threadId: request.threadId ?? null,
+      runId,
+    });
+    stream.emit("snapshot_loaded", {
+      snapshot: graphState.compactProjectMind ?? null,
+    });
+
+    if (graphState.plan) {
+      stream.emit("decision", {
+        decision: {
+          type: "propose_plan",
+          plan: graphState.plan,
+          reason: "LangGraph spike path produced a no-write plan.",
+        },
+      });
+      stream.emit("plan", {
+        plan: graphState.plan,
+      });
+    }
+
+    stream.emit("message_delta", {
+      text: graphState.finalResponse ?? "",
+    });
+    stream.emit("run_completed", {
+      threadId: request.threadId ?? null,
+      runId,
+      waitingForUser: false,
+    });
+  });
+}
+
 export class AgentKernel {
   static run(request: AgentRunRequest) {
+    if (resolveAgentOrchestrator() === "langgraph") {
+      return runLangGraphSpike(request);
+    }
+
     return createAgentSseResponse(async (stream) => {
       let runId: string | null = null;
 

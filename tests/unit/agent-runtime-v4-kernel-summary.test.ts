@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const appendAgentMessage = vi.fn();
 const completeAgentRun = vi.fn();
@@ -13,6 +13,15 @@ const summarizeRuntimeV3Tools = vi.fn();
 const runWorkflow = vi.fn();
 const createRuntimeV4ModelGateway = vi.fn();
 const saveRunSummary = vi.fn();
+const originalAgentOrchestrator = process.env.AGENT_ORCHESTRATOR;
+
+function restoreAgentOrchestrator() {
+  if (originalAgentOrchestrator === undefined) {
+    delete process.env.AGENT_ORCHESTRATOR;
+  } else {
+    process.env.AGENT_ORCHESTRATOR = originalAgentOrchestrator;
+  }
+}
 
 vi.mock("@/lib/agent/runtime", () => ({
   appendAgentMessage,
@@ -147,6 +156,7 @@ function snapshot() {
 describe("runtime-v4 run summaries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    restoreAgentOrchestrator();
     createOrLoadThread.mockResolvedValue({ id: "thread-1" });
     createAgentRun.mockResolvedValue({ id: "run-1" });
     appendAgentMessage.mockResolvedValue({});
@@ -198,7 +208,12 @@ describe("runtime-v4 run summaries", () => {
     });
   });
 
-  test("run summary is saved after a meaningful v4 run", async () => {
+  afterEach(() => {
+    restoreAgentOrchestrator();
+  });
+
+  test("custom runtime still works when AGENT_ORCHESTRATOR=custom", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
     const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
     const response = AgentKernel.run({
       projectId: "project-1",
@@ -210,6 +225,8 @@ describe("runtime-v4 run summaries", () => {
 
     await response.text();
 
+    expect(buildProjectContext).toHaveBeenCalled();
+    expect(decideNextStep).toHaveBeenCalled();
     expect(saveRunSummary).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
       threadId: "thread-1",
