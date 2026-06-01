@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Library, FolderKanban, Bot, Sparkles } from "lucide-react";
+import { Bot, Library } from "lucide-react";
 
 import { AgentComposer, type Attachment } from "@/components/agent/agent-composer";
 import { ApprovalCard } from "@/components/agent/approval-card";
@@ -12,7 +12,7 @@ import { EmptyAgentState } from "@/components/agent/empty-agent-state";
 import { ToolCallCard } from "@/components/agent/tool-call-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ModelAccordion, type AgentModelSelection } from "@/components/agent/model-accordion";
+import type { AgentModelSelection } from "@/components/agent/model-accordion";
 import { ProjectMindPanel } from "@/components/agent/project-mind-panel";
 import { getDefaultChatModel, getDefaultMediaModel } from "@/lib/ai/model-registry";
 import type { ProjectWorkspace } from "@/lib/data/repository";
@@ -526,10 +526,10 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const totalAssets = (library?.folders.reduce((acc, f) => acc + f.assets.length, 0) || 0) + (library?.looseAssets.length || 0);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem-36px)] w-full bg-[var(--canvas)] overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem-36px)] w-full overflow-hidden bg-[var(--canvas)]">
       
-      {/* Left Sidebar for History & Model Accodion */}
-      <div className="w-64 border-r border-[var(--hairline)] bg-[var(--surface-soft)]/60 flex flex-col p-4 shrink-0 h-full justify-between">
+      {/* Left Sidebar for History */}
+      <div className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--hairline)] bg-[var(--surface-soft)]/60 p-4 md:flex">
         <div className="flex flex-col flex-1 min-h-0">
           <Button
             variant="secondary"
@@ -569,28 +569,27 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
             )}
           </div>
         </div>
-
-        {/* Model Selection in Sidebar Bottom */}
-        <div className="border-t border-[var(--hairline)] pt-4 mt-auto space-y-2 shrink-0">
-          <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2">Model Configuration</span>
-          <ModelAccordion models={models} onChange={setModels} />
-        </div>
       </div>
 
       {/* Right Main Conversational Workspace */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         
         {/* Navigation Bar */}
-        <header className="h-14 border-b border-[var(--hairline)] px-6 flex items-center justify-between bg-[var(--canvas)] shrink-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+        <header className="h-14 border-b border-[var(--hairline)] px-3 sm:px-6 flex items-center justify-between bg-[var(--canvas)] shrink-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
           <div className="flex items-center gap-3 min-w-0">
             <Bot className="h-4 w-full max-w-4 text-[var(--primary)] shrink-0" />
             <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[var(--ink)] truncate">
               {project.title} &bull; Strategic Agent
             </h2>
           </div>
-          <div className="flex items-center gap-3">
-            <Link href={`/projects/${project.id}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href={editorHref}>
               <Button variant="secondary" className="h-8 px-3 text-[10px] font-mono">
+                Editor
+              </Button>
+            </Link>
+            <Link href={`/projects/${project.id}`}>
+              <Button variant="secondary" className="hidden h-8 px-3 text-[10px] font-mono sm:inline-flex">
                 Project Hub
               </Button>
             </Link>
@@ -611,7 +610,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </header>
 
         {/* Conversation Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-thin flex flex-col">
+        <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin flex flex-col sm:px-6 sm:py-6">
           <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-between">
             <div className="w-full flex-1">
               
@@ -664,7 +663,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </div>
 
         {/* Composer bottom sticky aligned */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[var(--canvas)] via-[var(--canvas)]/95 to-transparent pointer-events-none z-20">
+        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-[var(--canvas)] via-[var(--canvas)]/95 to-transparent pointer-events-none z-20 sm:p-6">
           <div className="max-w-3xl mx-auto w-full pointer-events-auto">
             <AgentComposer
               value={draft}
@@ -674,7 +673,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               models={models}
               onModelsChange={setModels}
               onQuickCommand={(command) => setDraft(`${command} `)}
-              editorHref={editorHref}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
             />

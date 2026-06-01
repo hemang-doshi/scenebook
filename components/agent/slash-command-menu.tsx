@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-const commandCatalog = [
+export const commandCatalog = [
   { command: "/script", label: "Script", description: "Turn a rough idea into hook, script, caption, and CTA." },
   { command: "/form-json-prompt", label: "Prompt JSON", description: "Build a detailed generation-ready prompt package." },
   { command: "/generate", label: "Generate", description: "Create image, video, or audio from text or JSON." },
@@ -44,14 +44,14 @@ export function SlashCommandMenu({
   }
 
   return (
-    <Card className="absolute bottom-[calc(100%+0.5rem)] left-0 z-20 w-full max-w-[26rem] border border-[var(--hairline)] bg-[var(--canvas)] p-2 shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-[var(--rounded-lg)]">
+    <Card className="absolute bottom-[calc(100%+0.5rem)] left-0 z-30 w-full max-w-[24rem] rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] p-2 shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
       <div className="grid gap-1">
         {commands.map((item) => (
           <Button
             key={item.command}
             type="button"
             variant="ghost"
-            className="h-auto w-full rounded-[var(--rounded-md)] px-2.5 py-2.5 text-left normal-case tracking-normal hover:bg-[var(--surface-soft)]"
+            className="h-auto w-full rounded-[var(--rounded-md)] px-2.5 py-2 text-left normal-case tracking-[0] hover:bg-[var(--surface-soft)]"
             onClick={() => onSelect(item.command)}
           >
             <span className="flex min-w-0 items-start gap-3">
