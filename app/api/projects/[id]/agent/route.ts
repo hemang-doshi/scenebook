@@ -20,6 +20,7 @@ import {
 } from "@/lib/agent/runtime";
 import { createProjectArtifact } from "@/lib/agent/artifacts";
 import { createMemorySnapshot } from "@/lib/agent/memory";
+import { loadRuntimeV4TimelineEntries } from "@/lib/agent/runtime-v4/ui/timeline";
 import {
   getAgentTool,
   getAgentToolAvailability,
@@ -86,7 +87,10 @@ function isAgentPersistenceUnavailable(error: unknown) {
     message.includes("agent_messages") ||
     message.includes("agent_runs") ||
     message.includes("agent_tool_calls") ||
+    message.includes("agent_project_patches") ||
+    message.includes("agent_project_patch_operations") ||
     message.includes("project_artifacts") ||
+    message.includes("agent_run_summaries") ||
     message.includes("relation") ||
     message.includes("schema cache")
   );
@@ -315,11 +319,22 @@ export async function GET(
     }
 
     const history = await getAgentHistory(projectId, selectedThreadId);
+    const entries = history.thread
+      ? await loadRuntimeV4TimelineEntries({
+          supabase: supabase as any,
+          ownerId: user.id,
+          projectId,
+          threadId: history.thread.id,
+          messages: history.messages,
+          toolCalls: history.toolCalls,
+        })
+      : [];
 
     return NextResponse.json({
       threadId: history.thread?.id ?? null,
       messages: history.messages,
       toolCalls: history.toolCalls,
+      entries,
     });
   } catch (caught) {
     if (isAgentPersistenceUnavailable(caught)) {
