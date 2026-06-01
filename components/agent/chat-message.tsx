@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Bot, Sparkles, Copy, Check, User } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import type { AgentUiMessage } from "@/components/agent/agent-chat-island";
 import type { Attachment } from "@/components/agent/agent-composer";
 
@@ -108,6 +107,27 @@ function parseMarkdown(text: string): React.ReactNode[] {
     }
 
     // Headers
+    if (/^\s*---+\s*$/.test(line)) {
+      flushLists(`hr-${i}`);
+      renderedElements.push(
+        <hr key={`hr-${i}`} className="my-3 border-[var(--hairline)]" />
+      );
+      continue;
+    }
+
+    if (line.trim().startsWith(">")) {
+      flushLists(`quote-${i}`);
+      renderedElements.push(
+        <blockquote
+          key={`quote-${i}`}
+          className="my-2 border-l-2 border-[var(--primary)]/40 pl-3 text-xs leading-relaxed text-[var(--ink)]/80"
+        >
+          {parseInline(line.trim().replace(/^>\s?/, ""))}
+        </blockquote>
+      );
+      continue;
+    }
+
     if (line.startsWith("### ")) {
       flushLists(`h3-${i}`);
       renderedElements.push(
@@ -191,7 +211,6 @@ export function ChatMessage({
   index: number;
 }) {
   const isUser = message.role === "user";
-  const isAssistant = message.role === "assistant";
 
   if (isUser) {
     return (
@@ -206,7 +225,9 @@ export function ChatMessage({
             <span>You</span>
             <User className="h-3 w-3" />
           </div>
-          <div className="leading-relaxed whitespace-pre-wrap">{message.content}</div>
+          <div className="space-y-1 text-xs leading-relaxed text-[var(--ink)]/95">
+            {parseMarkdown(message.content)}
+          </div>
           {!!(message.metadata?.attachments && Array.isArray(message.metadata.attachments)) && (
             <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[var(--hairline)] pt-2">
               {(message.metadata.attachments as Attachment[]).map((file, i) => (

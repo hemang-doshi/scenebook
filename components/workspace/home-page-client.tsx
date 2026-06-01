@@ -43,9 +43,7 @@ export function HomePageClient({
   const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setIsCreateOpen(initialCreateOpen);
-    });
+    setIsCreateOpen(initialCreateOpen);
   }, [initialCreateOpen]);
   const [title, setTitle] = useState("");
   const [format, setFormat] = useState<ContentFormat>("short");

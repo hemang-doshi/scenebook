@@ -17,15 +17,30 @@ vi.mock("@/lib/fetcher", () => ({
 }));
 
 vi.mock("@/components/agent/agent-composer", () => ({
-  AgentComposer: ({ value, onChange, onSubmit }: { value: string; onChange: (value: string) => void; onSubmit: () => void }) =>
+  AgentComposer: ({
+    value,
+    onChange,
+    onSubmit,
+    onQuickCommand,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    onSubmit: () => void;
+    onQuickCommand: (command: string) => void;
+  }) =>
     React.createElement(
       "div",
-      null,
+      { "data-testid": "chat-composer" },
       React.createElement("input", {
         "aria-label": "composer",
         value,
         onChange: (event: { target: { value: string } }) => onChange(event.target.value),
       }),
+      React.createElement(
+        "button",
+        { type: "button", onClick: () => onQuickCommand("/script") },
+        "Mock quick script",
+      ),
       React.createElement(
         "button",
         { type: "button", onClick: onSubmit },
@@ -192,34 +207,6 @@ describe("agent UI components", () => {
     expect(screen.getByText(/SceneBook keeps the reel plan connected/i)).toBeInTheDocument();
   });
 
-  test("tool call cards show failed state and changed workspace fields", () => {
-    render(
-      React.createElement(ToolCallCard, {
-        toolCall: {
-          id: "tool-call-failed",
-          kind: "tool",
-          toolName: "Update Script Lab",
-          command: "script",
-          status: "failed",
-          requiresApproval: false,
-          purpose: "Applies script package fields to the project's Script Lab.",
-          changedFields: ["hook", "script"],
-          output: {
-            kind: "tool_error",
-            summary: "Could not update Script Lab.",
-          },
-          errorMessage: "database update failed",
-          createdAt: new Date().toISOString(),
-        },
-      }),
-    );
-
-    expect(screen.getByText("failed")).toBeInTheDocument();
-    expect(screen.getByText("database update failed")).toBeInTheDocument();
-    expect(screen.getByText("hook")).toBeInTheDocument();
-    expect(screen.getByText("script")).toBeInTheDocument();
-  });
-
   test("history selector renders prior project threads plus muted new conversation", async () => {
     fetchJson.mockImplementation(async (url: string) => {
       if (url.includes("listThreads=true")) {
@@ -250,39 +237,6 @@ describe("agent UI components", () => {
     expect(screen.getByText("Studio Product")).toBeInTheDocument();
   });
 
-  test("active goal card renders compact project goal state", async () => {
-    fetchJson.mockImplementation(async (url: string) => {
-      if (url.includes("listThreads=true")) {
-        return { threads: [] };
-      }
-      if (url.includes("/assets")) {
-        return { folders: [], looseAssets: [] };
-      }
-      return {
-        threadId: "thread-1",
-        messages: [{ id: "m1", role: "assistant", content: "hello" }],
-        toolCalls: [],
-        activeGoal: {
-          id: "goal-1",
-          title: "Launch the desk lighting reel",
-          status: "active",
-          stage: "asset_planning",
-          nextActions: ["Plan the shot list and required assets."],
-          nextSuggestedAction: "Plan the shot list and required assets.",
-          completedStepCount: 2,
-        },
-      };
-    });
-
-    render(React.createElement(AgentChatIsland, { project }));
-
-    expect(await screen.findByText("Active Goal")).toBeInTheDocument();
-    expect(screen.getByText("Launch the desk lighting reel")).toBeInTheDocument();
-    expect(screen.getByText("asset planning")).toBeInTheDocument();
-    expect(screen.getByText("2 done")).toBeInTheDocument();
-    expect(screen.getByText("Plan the shot list and required assets.")).toBeInTheDocument();
-  });
-
   test("new conversation stays empty when no persisted thread exists", async () => {
     fetchJson.mockImplementation(async (url: string) => {
       if (url.includes("listThreads=true")) {
@@ -298,6 +252,62 @@ describe("agent UI components", () => {
 
     expect(await screen.findByText("Empty")).toBeInTheDocument();
     expect(screen.queryByText("hello")).not.toBeInTheDocument();
+  });
+
+  test("composer remains mounted in the bottom chat surface", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    expect(await screen.findByText("Empty")).toBeInTheDocument();
+    const composer = screen.getByTestId("chat-composer");
+    expect(composer.parentElement?.parentElement).toHaveClass("absolute", "bottom-0");
+  });
+
+  test("tool-card quick commands populate the composer draft", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return {
+        threadId: "thread-1",
+        messages: [],
+        toolCalls: [
+          {
+            id: "tool-1",
+            tool_name: "Prompt Builder",
+            command: "form-json-prompt",
+            status: "completed",
+            requires_approval: false,
+            output: {
+              kind: "prompt_json",
+              modality: "image",
+              prompt: "A precise product demo still",
+            },
+            created_at: "2026-05-27T10:00:00.000Z",
+          },
+        ],
+      };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Prompt Builder");
+    fireEvent.click(screen.getByRole("button", { name: /show details/i }));
+    fireEvent.click(screen.getByRole("button", { name: /generate image/i }));
+
+    expect((screen.getByLabelText("composer") as HTMLInputElement).value).toMatch(/^\/generate-image /);
   });
 
   test("activity strip transitions through command, awaiting input, and done states", async () => {

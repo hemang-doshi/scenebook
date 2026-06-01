@@ -23,13 +23,6 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
   const output = (toolCall.output ?? {}) as Record<string, unknown>;
   const kind = typeof output.kind === "string" ? output.kind : null;
   const modality = typeof output.modality === "string" ? output.modality : "image";
-  const changedFields = toolCall.changedFields?.length
-    ? toolCall.changedFields
-    : Array.isArray(output.changedFields)
-      ? output.changedFields.filter((field): field is string => typeof field === "string")
-      : Array.isArray(output.updatedFields)
-        ? output.updatedFields.filter((field): field is string => typeof field === "string")
-        : [];
 
   async function copyOutput(value: unknown) {
     await navigator.clipboard.writeText(JSON.stringify(value, null, 2));
@@ -43,36 +36,16 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
         <div>
           <CardTitle className="text-sm font-bold text-[var(--ink)]">{toolCall.toolName}</CardTitle>
           <p className="mt-1 text-xs text-[var(--muted)] font-mono">
-            {toolCall.command ? `/${toolCall.command}` : "tool"} • {statusLabel(toolCall.status)}
+            {toolCall.command ? `/${toolCall.command}` : "tool"} • {toolCall.status}
           </p>
-          {toolCall.purpose ? (
-            <p className="mt-2 text-sm text-[var(--ink)] font-sans">{toolCall.purpose}</p>
-          ) : null}
+          <p className="mt-2 text-sm text-[var(--ink)] font-sans">{summarizeToolCall(toolCall, output)}</p>
         </div>
         <Badge className={badgeClass(toolCall.status)}>
-          {statusLabel(toolCall.status)}
+          {toolCall.status === "approved" ? "applied" : kind ?? "tool"}
         </Badge>
       </CardHeader>
 
       <CardContent className="grid gap-3 text-sm text-[var(--ink)]">
-        <p className="text-sm text-[var(--ink)] font-sans">{summarizeToolCall(toolCall, output)}</p>
-
-        {changedFields.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--muted)]">Changed</span>
-            {changedFields.map((field) => (
-              <Badge
-                key={field}
-                className="border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]/80 text-[10px] rounded-[var(--rounded-sm)]"
-              >
-                {field}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-
-        {typeof output.url === "string" ? renderMediaPreview(modality, output) : null}
-
         {toolCall.errorMessage ? (
           <p className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] px-3 py-2 text-xs text-[var(--danger)] font-mono">
             {toolCall.errorMessage}
@@ -91,7 +64,7 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
 
         {expanded ? (
           <div className="grid gap-3 pt-2 border-t border-[var(--hairline)]">
-            {renderAssetWorkflowDetails(kind, output)}
+            {kind === "media_asset" && typeof output.url === "string" ? renderMediaPreview(modality, output) : null}
 
             {kind === "prompt_questions" ? renderQuestions(toolCall.id, output) : null}
 
@@ -127,14 +100,11 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
 }
 
 function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unknown>) {
-  if (toolCall.status === "planned") {
-    return typeof output.activity === "string" ? `planned: ${output.activity}` : "planned";
-  }
   if (toolCall.status === "running") {
     return typeof output.activity === "string" ? output.activity : "working";
   }
   if (toolCall.status === "awaiting_approval") {
-    return typeof output.reason === "string" ? output.reason : "draft ready";
+    return "draft ready";
   }
   if (toolCall.status === "approved") {
     return "Applied to project";
@@ -149,28 +119,10 @@ function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unk
   if (typeof output.summary === "string" && output.summary.trim()) {
     return output.summary;
   }
-  if (kindIs(output, "prompt_json") && typeof output.prompt === "string") {
-    return `prompt generated: ${output.prompt}`;
-  }
-  if (kindIs(output, "media_asset")) {
-    const model = typeof output.model === "string" ? output.model : "selected model";
-    const folder = typeof output.folderName === "string" ? output.folderName : "project library";
-    return `${model} - saved to ${folder}`;
-  }
-  if (kindIs(output, "asset_folder")) {
-    return typeof output.path === "string" ? `folder ready: ${output.path}` : "folder ready";
-  }
-  if (kindIs(output, "project_asset_attachment")) {
-    return "visible in Project Hub asset library";
-  }
   if (typeof output.hook === "string" && output.hook.trim()) {
     return output.hook;
   }
   return "tool output";
-}
-
-function statusLabel(status: string) {
-  return status.replaceAll("_", " ");
 }
 
 function badgeClass(status: string) {
@@ -181,68 +133,6 @@ function badgeClass(status: string) {
     return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-amber-800 text-[10px] rounded-[var(--rounded-sm)]";
   }
   return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]/80 text-[10px] rounded-[var(--rounded-sm)]";
-}
-
-function kindIs(output: Record<string, unknown>, kind: string) {
-  return output.kind === kind;
-}
-
-function renderAssetWorkflowDetails(kind: string | null, output: Record<string, unknown>) {
-  const rows: Array<{ label: string; value: string }> = [];
-
-  if (kind === "prompt_json") {
-    rows.push(
-      { label: "Prompt generated", value: String(output.prompt ?? "") },
-      { label: "Aspect ratio", value: String(output.aspect_ratio ?? output.output ?? "auto") },
-    );
-    if (typeof output.negative_prompt === "string" && output.negative_prompt.trim()) {
-      rows.push({ label: "Negative prompt", value: output.negative_prompt });
-    }
-  }
-
-  if (kind === "media_asset") {
-    rows.push(
-      { label: "Model used", value: String(output.model ?? "default") },
-      { label: "Provider", value: String(output.provider ?? "auto") },
-      { label: "Folder saved to", value: String(output.folderName ?? "Project library") },
-    );
-    if (typeof output.storagePath === "string") {
-      rows.push({ label: "Storage path", value: output.storagePath });
-    }
-    if (typeof output.prompt === "string") {
-      rows.push({ label: "Prompt generated", value: output.prompt });
-    }
-  }
-
-  if (kind === "asset_folder") {
-    rows.push(
-      { label: "Folder saved to", value: String(output.path ?? output.folderName ?? "Project library") },
-      { label: "Folder status", value: output.alreadyExisted === true ? "reused existing folder" : "created folder" },
-    );
-  }
-
-  if (kind === "project_asset_attachment") {
-    rows.push(
-      { label: "Project Hub", value: "asset visible in library" },
-      { label: "Asset ID", value: String(output.assetId ?? "") },
-    );
-  }
-
-  const visibleRows = rows.filter((row) => row.value.trim().length > 0 && row.value !== "[object Object]");
-  if (visibleRows.length === 0) {
-    return null;
-  }
-
-  return (
-    <dl className="grid gap-2 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/40 p-3 text-xs">
-      {visibleRows.map((row) => (
-        <div key={row.label} className="grid gap-1">
-          <dt className="font-mono text-[9px] uppercase tracking-wider text-[var(--muted)]">{row.label}</dt>
-          <dd className="leading-relaxed text-[var(--ink)] break-words">{row.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 function renderQuestions(toolCallId: string, output: Record<string, unknown>) {

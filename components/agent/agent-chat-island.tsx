@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Library, Bot, Target } from "lucide-react";
+import { Bot, Library } from "lucide-react";
 
 import { AgentComposer, type Attachment } from "@/components/agent/agent-composer";
 import { ApprovalCard } from "@/components/agent/approval-card";
@@ -12,7 +12,8 @@ import { EmptyAgentState } from "@/components/agent/empty-agent-state";
 import { ToolCallCard } from "@/components/agent/tool-call-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ModelAccordion, type AgentModelSelection } from "@/components/agent/model-accordion";
+import type { AgentModelSelection } from "@/components/agent/model-accordion";
+import { ProjectMindPanel } from "@/components/agent/project-mind-panel";
 import { getDefaultChatModel, getDefaultMediaModel } from "@/lib/ai/model-registry";
 import type { ProjectWorkspace } from "@/lib/data/repository";
 import { fetchJson } from "@/lib/fetcher";
@@ -35,26 +36,12 @@ export type AgentUiToolCall = {
   command?: string | null;
   status: string;
   requiresApproval: boolean;
-  approvalPolicy?: string | null;
-  sideEffect?: string | null;
-  purpose?: string | null;
-  changedFields?: string[];
   output: unknown;
   errorMessage?: string | null;
   createdAt: string;
 };
 
 type AgentUiEntry = AgentUiMessage | AgentUiToolCall;
-
-type AgentActiveGoal = {
-  id: string;
-  title: string;
-  status: string;
-  stage: string;
-  nextActions: string[];
-  nextSuggestedAction: string | null;
-  completedStepCount: number;
-};
 
 type AgentHistoryResponse = {
   threadId: string | null;
@@ -75,7 +62,6 @@ type AgentHistoryResponse = {
     error_message?: string | null;
     created_at?: string;
   }>;
-  activeGoal?: AgentActiveGoal | null;
 };
 
 type AgentPostResponse = {
@@ -87,16 +73,11 @@ type AgentPostResponse = {
     status: string;
     toolName: string;
     requiresApproval: boolean;
-    approvalPolicy?: string | null;
-    sideEffect?: string | null;
-    purpose?: string | null;
-    changedFields?: string[];
     errorMessage?: string | null;
-    result?: {
+    result: {
       output: unknown;
-    } | null;
+    };
   };
-  activeGoal?: AgentActiveGoal | null;
 };
 
 type ActivityState = {
@@ -131,33 +112,12 @@ function toAgentEntries(history: AgentHistoryResponse): AgentUiEntry[] {
     command: toolCall.command,
     status: toolCall.status,
     requiresApproval: toolCall.requires_approval,
-    approvalPolicy: null,
-    sideEffect: null,
-    purpose: null,
-    changedFields: getChangedFields(toolCall.output ?? {}),
     output: toolCall.output ?? {},
     errorMessage: toolCall.error_message,
     createdAt: toolCall.created_at ?? new Date().toISOString(),
   }));
 
   return sortEntries([...messages, ...toolCalls]);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getChangedFields(value: unknown) {
-  const output = isRecord(value) ? value : {};
-  const fields = output.changedFields ?? output.updatedFields;
-  return Array.isArray(fields) ? fields.filter((field): field is string => typeof field === "string") : [];
-}
-
-function isToolStreamEvent(data: unknown): data is { type: string; tool: NonNullable<AgentPostResponse["tool"]> } {
-  if (!isRecord(data) || !isRecord(data.tool) || typeof data.type !== "string") {
-    return false;
-  }
-  return data.type === "tool" || data.type.startsWith("tool_");
 }
 
 type ThreadInfo = { id: string; title: string | null; updated_at: string };
@@ -172,7 +132,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityState>({ label: "done" });
-  const [activeGoal, setActiveGoal] = useState<AgentActiveGoal | null>(null);
 
   const [library, setLibrary] = useState<ProjectAssetLibrary | null>(null);
   const [isAssetDrawerOpen, setIsAssetDrawerOpen] = useState(false);
@@ -251,7 +210,15 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
 
       const contentType = response.headers.get("Content-Type") || "";
       if (contentType.includes("text/event-stream")) {
-        let placeholderId: string | null = null;
+        const placeholderId = `stream-assistant-${Date.now()}`;
+        const placeholderMessage: AgentUiMessage = {
+          id: placeholderId,
+          kind: "message",
+          role: "assistant",
+          content: "",
+          createdAt: new Date().toISOString(),
+        };
+        setEntries((current) => sortEntries([...current, placeholderMessage]));
 
         const reader = response.body?.getReader();
         if (!reader) {
@@ -278,27 +245,21 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
             const rawData = trimmed.slice(6);
             try {
               const data = JSON.parse(rawData);
-              if (data.type === "meta" || data.type === "plan" || data.type === "mode") {
+              if (data.type === "meta") {
                 if (data.threadId) {
                   setThreadId(data.threadId);
                   lastFetchedThreadId.current = data.threadId;
                   void loadThreadsList();
                 }
-              }
-
-              if (data.type === "chunk" && data.text) {
-                setActivity({ label: "thinking" });
-                if (!placeholderId) {
-                  placeholderId = `stream-assistant-${Date.now()}`;
-                  const placeholderMessage: AgentUiMessage = {
-                    id: placeholderId,
-                    kind: "message",
-                    role: "assistant",
-                    content: "",
-                    createdAt: new Date().toISOString(),
-                  };
-                  setEntries((current) => sortEntries([...current, placeholderMessage]));
+              } else if (data.type === "run_started") {
+                if (data.threadId) {
+                  setThreadId(data.threadId);
+                  lastFetchedThreadId.current = data.threadId;
+                  void loadThreadsList();
                 }
+                setActivity({ label: "thinking" });
+              } else if (data.type === "chunk" && data.text) {
+                setActivity({ label: "thinking" });
                 setEntries((current) =>
                   current.map((entry) =>
                     entry.id === placeholderId && entry.kind === "message"
@@ -306,13 +267,20 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                       : entry
                   )
                 );
-              } else if (isToolStreamEvent(data)) {
+              } else if (data.type === "message_delta" && data.text) {
+                setActivity({ label: "thinking" });
+                setEntries((current) =>
+                  current.map((entry) =>
+                    entry.id === placeholderId && entry.kind === "message"
+                      ? { ...entry, content: entry.content + data.text }
+                      : entry
+                  )
+                );
+              } else if (data.type === "tool" && data.tool) {
                 const tool = data.tool as AgentPostResponse["tool"];
                 sawToolEvent = true;
                 if (tool) {
-                  if (tool.status === "planned") {
-                    setActivity({ label: "planned" });
-                  } else if (tool.status === "awaiting_input") {
+                  if (tool.status === "awaiting_input") {
                     setActivity({ label: "awaiting input", tone: "warning" });
                   } else if (tool.status === "awaiting_approval") {
                     setActivity({ label: "draft ready", tone: "warning" });
@@ -327,47 +295,90 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                     (tool.result.output as Record<string, unknown>).kind === "media_error"
                   ) {
                     setActivity({ label: "generation failed", tone: "error" });
-                  } else if (
-                    tool.status === "completed" &&
-                    tool.result?.output &&
-                    (tool.result.output as Record<string, unknown>).kind === "media_asset"
-                  ) {
-                    setActivity({ label: "saving asset" });
-                    void loadAssets().finally(() => setActivity({ label: "done" }));
                   } else {
                     setActivity({ label: "done" });
                   }
 
-                  setEntries((current) => {
-                    const existing = current.find((entry) => entry.kind === "tool" && entry.id === tool.id) as
-                      | AgentUiToolCall
-                      | undefined;
-
-                    return sortEntries([
+                  setEntries((current) =>
+                    sortEntries([
                       ...current.filter((entry) => entry.kind !== "tool" || entry.id !== tool.id),
                       {
-                        ...existing,
                         id: tool.id,
                         kind: "tool",
                         toolName: tool.toolName,
                         command: tool.command,
                         status: tool.status,
                         requiresApproval: tool.requiresApproval,
-                        approvalPolicy: tool.approvalPolicy ?? existing?.approvalPolicy ?? null,
-                        sideEffect: tool.sideEffect ?? existing?.sideEffect ?? null,
-                        purpose: tool.purpose ?? existing?.purpose ?? null,
-                        changedFields: tool.changedFields ?? getChangedFields(tool.result?.output ?? tool.result ?? {}),
                         output: tool.result?.output ?? tool.result ?? {},
                         errorMessage: "errorMessage" in tool ? (tool as { errorMessage?: string | null }).errorMessage : null,
-                        createdAt: existing?.createdAt ?? new Date().toISOString(),
+                        createdAt: new Date().toISOString(),
                       },
-                    ]);
-                  });
+                    ])
+                  );
                 }
-              } else if (data.type === "goal") {
-                setActiveGoal(data.activeGoal ?? null);
-              } else if (data.type === "tool_failed") {
-                setActivity({ label: "tool failed", tone: "error" });
+              } else if (
+                data.type === "tool_planned" ||
+                data.type === "tool_running" ||
+                data.type === "tool_completed" ||
+                data.type === "tool_failed" ||
+                data.type === "approval_required"
+              ) {
+                const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : `runtime-v3-tool-${Date.now()}`;
+                const status =
+                  data.type === "tool_completed"
+                    ? "completed"
+                    : data.type === "tool_failed"
+                      ? "failed"
+                      : data.type === "approval_required"
+                        ? "awaiting_approval"
+                        : "running";
+                const output =
+                  data.type === "approval_required"
+                    ? {
+                        kind: "approval_request",
+                        risk: data.risk,
+                        reason: data.reason,
+                        preview: data.preview,
+                      }
+                    : data.type === "tool_failed"
+                      ? { kind: "tool_error", message: data.error }
+                      : typeof data.output === "object" && data.output !== null
+                        ? data.output
+                        : { kind: "tool_progress", activity: status };
+
+                sawToolEvent = true;
+                setActivity(
+                  status === "failed"
+                    ? { label: "tool failed", tone: "error" }
+                    : status === "awaiting_approval"
+                      ? { label: "approval needed", tone: "warning" }
+                      : status === "completed"
+                        ? { label: "done" }
+                        : { label: "working" },
+                );
+                setEntries((current) =>
+                  sortEntries([
+                    ...current.filter((entry) => entry.kind !== "tool" || entry.id !== toolCallId),
+                    {
+                      id: toolCallId,
+                      kind: "tool",
+                      toolName: typeof data.displayName === "string" ? data.displayName : String(data.toolName ?? "Agent Tool"),
+                      command: null,
+                      status,
+                      requiresApproval: status === "awaiting_approval",
+                      output,
+                      errorMessage: typeof data.error === "string" ? data.error : null,
+                      createdAt: new Date().toISOString(),
+                    },
+                  ])
+                );
+              } else if (data.type === "run_completed") {
+                setActivity({ label: "done" });
+              } else if (data.type === "run_failed") {
+                setActivity({ label: "error", tone: "error" });
+                if (typeof data.error === "string") {
+                  setError(data.error);
+                }
               }
             } catch (err) {
               console.warn("Failed to parse stream packet:", rawData, err);
@@ -380,7 +391,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
       } else {
         const data = (await response.json()) as AgentPostResponse;
         setThreadId(data.threadId);
-        setActiveGoal((current) => data.activeGoal ?? current);
         lastFetchedThreadId.current = data.threadId;
         void loadThreadsList();
         if (data.tool?.status === "awaiting_input") {
@@ -425,10 +435,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               command: data.tool.command,
               status: data.tool.status,
               requiresApproval: data.tool.requiresApproval,
-              approvalPolicy: data.tool.approvalPolicy ?? null,
-              sideEffect: data.tool.sideEffect ?? null,
-              purpose: data.tool.purpose ?? null,
-              changedFields: data.tool.changedFields ?? getChangedFields(data.tool.result?.output ?? data.tool.result ?? {}),
               output: data.tool.result?.output ?? data.tool.result ?? {},
               errorMessage: "errorMessage" in data.tool ? (data.tool as { errorMessage?: string | null }).errorMessage : null,
               createdAt: new Date().toISOString(),
@@ -493,7 +499,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         }
 
         setEntries(history.messages.length > 0 || history.toolCalls.length > 0 ? toAgentEntries(history) : []);
-        setActiveGoal(history.activeGoal ?? null);
         const pendingTool = [...history.toolCalls].reverse().find((toolCall) => toolCall.status === "awaiting_input");
         setActivity(pendingTool ? { label: "awaiting input", tone: "warning" } : { label: "done" });
       } catch (caught) {
@@ -521,10 +526,10 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const totalAssets = (library?.folders.reduce((acc, f) => acc + f.assets.length, 0) || 0) + (library?.looseAssets.length || 0);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem-36px)] w-full bg-[var(--canvas)] overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem-36px)] w-full overflow-hidden bg-[var(--canvas)]">
       
-      {/* Left Sidebar for History & Model Accodion */}
-      <div className="w-64 border-r border-[var(--hairline)] bg-[var(--surface-soft)]/60 flex flex-col p-4 shrink-0 h-full justify-between">
+      {/* Left Sidebar for History */}
+      <div className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--hairline)] bg-[var(--surface-soft)]/60 p-4 md:flex">
         <div className="flex flex-col flex-1 min-h-0">
           <Button
             variant="secondary"
@@ -539,8 +544,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
           >
             + New Conversation
           </Button>
-
-          <ActiveGoalCard goal={activeGoal} />
 
           <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2 shrink-0">Recent Conversations</span>
           <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
@@ -566,28 +569,27 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
             )}
           </div>
         </div>
-
-        {/* Model Selection in Sidebar Bottom */}
-        <div className="border-t border-[var(--hairline)] pt-4 mt-auto space-y-2 shrink-0">
-          <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2">Model Configuration</span>
-          <ModelAccordion models={models} onChange={setModels} />
-        </div>
       </div>
 
       {/* Right Main Conversational Workspace */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         
         {/* Navigation Bar */}
-        <header className="h-14 border-b border-[var(--hairline)] px-6 flex items-center justify-between bg-[var(--canvas)] shrink-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+        <header className="h-14 border-b border-[var(--hairline)] px-3 sm:px-6 flex items-center justify-between bg-[var(--canvas)] shrink-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
           <div className="flex items-center gap-3 min-w-0">
             <Bot className="h-4 w-full max-w-4 text-[var(--primary)] shrink-0" />
             <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[var(--ink)] truncate">
               {project.title} &bull; Strategic Agent
             </h2>
           </div>
-          <div className="flex items-center gap-3">
-            <Link href={`/projects/${project.id}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href={editorHref}>
               <Button variant="secondary" className="h-8 px-3 text-[10px] font-mono">
+                Editor
+              </Button>
+            </Link>
+            <Link href={`/projects/${project.id}`}>
+              <Button variant="secondary" className="hidden h-8 px-3 text-[10px] font-mono sm:inline-flex">
                 Project Hub
               </Button>
             </Link>
@@ -608,7 +610,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </header>
 
         {/* Conversation Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-thin flex flex-col">
+        <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin flex flex-col sm:px-6 sm:py-6">
           <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-between">
             <div className="w-full flex-1">
               
@@ -661,7 +663,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </div>
 
         {/* Composer bottom sticky aligned */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[var(--canvas)] via-[var(--canvas)]/95 to-transparent pointer-events-none z-20">
+        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-[var(--canvas)] via-[var(--canvas)]/95 to-transparent pointer-events-none z-20 sm:p-6">
           <div className="max-w-3xl mx-auto w-full pointer-events-auto">
             <AgentComposer
               value={draft}
@@ -671,47 +673,14 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               models={models}
               onModelsChange={setModels}
               onQuickCommand={(command) => setDraft(`${command} `)}
-              editorHref={editorHref}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
             />
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-function ActiveGoalCard({ goal }: { goal: AgentActiveGoal | null }) {
-  if (!goal) {
-    return null;
-  }
-
-  const stageLabel = goal.stage.replaceAll("_", " ");
-  const nextAction = goal.nextSuggestedAction ?? goal.nextActions[0] ?? "Choose the next production step.";
-
-  return (
-    <div className="mb-4 rounded-md border border-[var(--hairline)] bg-[var(--canvas)] p-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="mb-2 flex items-center gap-2">
-        <Target className="h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
-        <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--muted)]">
-          Active Goal
-        </span>
-      </div>
-      <p className="line-clamp-2 text-xs font-semibold leading-snug text-[var(--ink)]">
-        {goal.title}
-      </p>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="truncate rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--surface-soft)] px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider text-[var(--ink)]">
-          {stageLabel}
-        </span>
-        <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-[var(--muted)]">
-          {goal.completedStepCount} done
-        </span>
-      </div>
-      <p className="mt-2 line-clamp-2 text-[10px] leading-snug text-[var(--ink)]/70">
-        {nextAction}
-      </p>
+      <ProjectMindPanel project={project} />
     </div>
   );
 }

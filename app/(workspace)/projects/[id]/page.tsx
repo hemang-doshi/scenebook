@@ -140,12 +140,10 @@ export default function ProjectHubPage() {
 
   useEffect(() => {
     if (project) {
-      queueMicrotask(() => {
-        setHookVal(project.scriptLab.hook || "");
-        setScriptVal(project.scriptLab.script || "");
-        setCaptionVal(project.scriptLab.caption || "");
-        setCtaVal(project.scriptLab.cta || "");
-      });
+      setHookVal(project.scriptLab.hook || "");
+      setScriptVal(project.scriptLab.script || "");
+      setCaptionVal(project.scriptLab.caption || "");
+      setCtaVal(project.scriptLab.cta || "");
     }
   }, [project]);
 
