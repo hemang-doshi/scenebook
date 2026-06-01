@@ -7,6 +7,12 @@ export type RuntimeV4EventType =
   | "run_started"
   | "agent_thinking"
   | "decision_made"
+  | "workflow_started"
+  | "workflow_completed"
+  | "workflow_failed"
+  | "workflow_needs_input"
+  | "workflow_patch_planned"
+  | "workflow_artifact_created"
   | "tool_planned"
   | "tool_running"
   | "tool_completed"
@@ -37,6 +43,7 @@ export type RuntimeV4Event = {
   plan?: AgentPlan;
   toolName?: string;
   toolCallId?: string;
+  workflowName?: string;
   observation?: ToolObservation;
   patch?: ProjectPatch;
   patchStatus?: string;
@@ -90,6 +97,64 @@ export function mapRuntimeV4EventToLegacy(event: RuntimeV4Event): LegacyAgentEve
       }
       return events;
     }
+    case "workflow_started":
+      return [{
+        type: "tool_running",
+        payload: {
+          toolName: event.workflowName ?? event.toolName ?? null,
+          workflowName: event.workflowName ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "workflow_completed":
+      return [{
+        type: "tool_completed",
+        payload: {
+          toolName: event.workflowName ?? event.toolName ?? null,
+          workflowName: event.workflowName ?? null,
+          observation: event.observation ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "workflow_failed":
+      return [{
+        type: "tool_failed",
+        payload: {
+          toolName: event.workflowName ?? event.toolName ?? null,
+          workflowName: event.workflowName ?? null,
+          observation: event.observation ?? null,
+          error: event.error ?? event.message ?? null,
+        },
+      }];
+    case "workflow_needs_input":
+      return [{
+        type: "approval_required",
+        payload: {
+          toolName: event.workflowName ?? event.toolName ?? null,
+          workflowName: event.workflowName ?? null,
+          observation: event.observation ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "workflow_patch_planned":
+      return [{
+        type: "tool_planned",
+        payload: {
+          toolName: event.workflowName ?? event.toolName ?? "project_patch",
+          workflowName: event.workflowName ?? null,
+          patch: event.patch ?? null,
+          message: event.message ?? null,
+        },
+      }];
+    case "workflow_artifact_created":
+      return [{
+        type: "tool_completed",
+        payload: {
+          toolName: event.workflowName ?? event.toolName ?? null,
+          workflowName: event.workflowName ?? null,
+          message: event.message ?? null,
+        },
+      }];
     case "tool_planned":
     case "tool_running":
     case "tool_completed":

@@ -336,6 +336,50 @@ describe("runtime-v4 LangGraph runtime", () => {
     expect(state.events.map((event) => event.type)).toContain("tool_failed");
   });
 
+  test("executes workflow_call decisions through the v4 WorkflowExecutor", async () => {
+    const gateway = queuedStructuredGateway(
+      {
+        type: "workflow_call",
+        workflowName: "plan_reel",
+        input: { prompt: "Help me make a reel about building SceneBook" },
+        reason: "A creative planning workflow fits the request.",
+      },
+      {
+        status: "satisfied",
+        response: "Workflow produced a production plan.",
+        reason: "The reel plan was generated.",
+      },
+    );
+
+    const state = await runSceneBookGraph({
+      projectId: "project-1",
+      userId: "user-1",
+      runId: "run-1",
+      goal: "Help me make a reel about building SceneBook",
+      stores: projectMindStores(),
+      modelGateway: gateway,
+      maxSteps: 1,
+    });
+
+    expect(state.toolResults).toEqual([
+      expect.objectContaining({
+        toolName: "plan_reel",
+        status: "completed",
+        output: expect.objectContaining({
+          kind: "creative_workflow",
+          workflowName: "plan_reel",
+          patchPlanned: true,
+        }),
+      }),
+    ]);
+    expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      "workflow_started",
+      "workflow_patch_planned",
+      "workflow_completed",
+    ]));
+    expect(state.toolResults[0]?.message).not.toMatch(/executor is wired/i);
+  });
+
   test("LangGraph runtime works end-to-end with the fake model provider", async () => {
     const gateway = createFakeModelGateway({
       structuredResponses: {

@@ -29,7 +29,8 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
       "Allowed decision types: ask_question, propose_plan, tool_call, project_patch, workflow_call, final_response, stop_with_error.",
       "Prefer model reasoning over hard-coded intent rules.",
       "Use ask_question when the request is too vague to produce a useful result.",
-      "Use workflow_call for multi-step SceneBook workflows such as script_workflow, workspace_control_workflow, asset_workflow, goal_workflow, editor_handoff_workflow, and publish_workflow.",
+      "Use workflow_call for v4 creative workflows: plan_reel, create_script_package, create_shoot_pack, create_asset_prompt_pack, review_content, and prepare_publish_package.",
+      "Prefer plan_reel for vague early creative requests, create_script_package for writing scripts, create_shoot_pack for shot lists, create_asset_prompt_pack for asset prompts, review_content for critique, and prepare_publish_package for captions/hashtags.",
       "Use tool_call for one focused runtime tool when a workflow is unnecessary.",
       "Use project_patch for grouped durable workspace updates that should apply as one reviewed ProjectPatch.",
       "Use final_response only when no workspace action is needed or when the goal is already satisfied.",
@@ -78,7 +79,7 @@ export function createDeterministicSafetyDecision(input: DecisionEngineInput): A
   if (/^\s*(write|make|create|draft|rewrite)\b.*\bscript\b/i.test(message)) {
     return {
       type: "workflow_call",
-      workflowName: "script_workflow",
+      workflowName: "create_script_package",
       input: { prompt: message },
       reason: "Safety fallback detected a direct script request after model decisioning failed.",
     };

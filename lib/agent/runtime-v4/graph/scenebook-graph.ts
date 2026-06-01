@@ -9,6 +9,7 @@ import {
   type RuntimeV4GraphPatchExecutor,
   type RuntimeV4GraphStepExecutor,
 } from "@/lib/agent/runtime-v4/graph/nodes/execute-step";
+import type { RuntimeV4GraphWorkflowExecutor } from "@/lib/agent/runtime-v4/graph/nodes/execute-workflow";
 import { createLoadProjectMindNode } from "@/lib/agent/runtime-v4/graph/nodes/load-project-mind";
 import { observeResultNode } from "@/lib/agent/runtime-v4/graph/nodes/observe-result";
 import { createUnderstandIntentNode } from "@/lib/agent/runtime-v4/graph/nodes/understand-intent";
@@ -18,7 +19,8 @@ import {
   type SceneBookGraphState,
 } from "@/lib/agent/runtime-v4/graph/state";
 import type { ProjectMindStores } from "@/lib/agent/runtime-v4/memory/memory-types";
-import type { ToolExecutorLike } from "@/lib/agent/runtime-v4/patch/patch-executor";
+import { PatchExecutor, type ToolExecutorLike } from "@/lib/agent/runtime-v4/patch/patch-executor";
+import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 
 export type CreateSceneBookGraphOptions = {
   stores?: ProjectMindStores;
@@ -28,6 +30,7 @@ export type CreateSceneBookGraphOptions = {
   executeStep?: RuntimeV4GraphStepExecutor;
   toolExecutor?: ToolExecutorLike;
   patchExecutor?: RuntimeV4GraphPatchExecutor;
+  workflowExecutor?: RuntimeV4GraphWorkflowExecutor;
 };
 
 function routeAfterGoalCheck(state: SceneBookGraphState) {
@@ -35,6 +38,15 @@ function routeAfterGoalCheck(state: SceneBookGraphState) {
 }
 
 export function createSceneBookGraph(options: CreateSceneBookGraphOptions = {}) {
+  const patchExecutor = options.patchExecutor
+    ?? (options.toolExecutor ? new PatchExecutor({ toolExecutor: options.toolExecutor }) : undefined);
+  const workflowExecutor = options.workflowExecutor
+    ?? new WorkflowExecutor({
+      modelGateway: options.modelGateway,
+      patchExecutor,
+      applyPatch: Boolean(patchExecutor),
+    });
+
   return new StateGraph(SceneBookGraphAnnotation)
     .addNode("load_project_mind", createLoadProjectMindNode({ stores: options.stores }))
     .addNode("understand_intent", createUnderstandIntentNode({
@@ -49,7 +61,8 @@ export function createSceneBookGraph(options: CreateSceneBookGraphOptions = {}) 
     .addNode("execute_step", createExecuteStepNode({
       executeStep: options.executeStep,
       toolExecutor: options.toolExecutor,
-      patchExecutor: options.patchExecutor,
+      patchExecutor,
+      workflowExecutor,
     }))
     .addNode("observe_result", observeResultNode)
     .addNode("check_goal", createCheckGoalNode({
@@ -85,6 +98,7 @@ export async function runSceneBookGraph(
     executeStep: input.executeStep,
     toolExecutor: input.toolExecutor,
     patchExecutor: input.patchExecutor,
+    workflowExecutor: input.workflowExecutor,
   });
   const messages = input.messages?.length
     ? input.messages

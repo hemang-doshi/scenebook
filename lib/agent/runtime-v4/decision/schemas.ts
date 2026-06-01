@@ -2,6 +2,12 @@ import { z } from "zod";
 
 import { agentWorkflowNames } from "@/lib/agent/runtime-v3/types";
 import { projectPatchSchema } from "@/lib/agent/runtime-v4/patch/project-patch";
+import { runtimeV4WorkflowNames } from "@/lib/agent/runtime-v4/workflows/types";
+
+const supportedWorkflowNames = [
+  ...runtimeV4WorkflowNames,
+  ...agentWorkflowNames,
+] as const;
 
 export const agentPlanSchema = z.object({
   title: z.string(),
@@ -40,7 +46,7 @@ export const agentDecisionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("workflow_call"),
-    workflowName: z.enum(agentWorkflowNames),
+    workflowName: z.enum(supportedWorkflowNames),
     input: z.unknown(),
     reason: z.string(),
   }),

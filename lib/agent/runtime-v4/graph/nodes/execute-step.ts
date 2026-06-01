@@ -14,6 +14,10 @@ import { projectPatchExecutionResultToObservation } from "@/lib/agent/runtime-v4
 import { toolVerificationEvent } from "@/lib/agent/runtime-v4/patch/patch-verifier";
 import type { RuntimeV4Event } from "@/lib/agent/runtime-v4/events";
 import type { JsonValue } from "@/lib/types";
+import {
+  createExecuteWorkflowNode,
+  type RuntimeV4GraphWorkflowExecutor,
+} from "@/lib/agent/runtime-v4/graph/nodes/execute-workflow";
 
 type ExecutableDecision = Extract<AgentDecision, {
   type: "tool_call" | "workflow_call" | "project_patch";
@@ -39,6 +43,7 @@ export type ExecuteStepNodeOptions = {
   executeStep?: RuntimeV4GraphStepExecutor;
   toolExecutor?: ToolExecutorLike;
   patchExecutor?: RuntimeV4GraphPatchExecutor;
+  workflowExecutor?: RuntimeV4GraphWorkflowExecutor;
 };
 
 function questionResponse(decision: Extract<AgentDecision, { type: "ask_question" }>) {
@@ -270,6 +275,18 @@ export function createExecuteStepNode(options: ExecuteStepNodeOptions = {}) {
         toolResults = [stubbedObservation(decision)];
         events = eventsFromObservations(state, toolResults);
       }
+    } else if (decision.type === "workflow_call") {
+      const workflowExecutor = options.workflowExecutor;
+      if (workflowExecutor) {
+        const update = await createExecuteWorkflowNode({ workflowExecutor })({
+          ...state,
+          currentDecision: decision,
+        });
+        return update;
+      }
+
+      toolResults = [stubbedObservation(decision)];
+      events = eventsFromObservations(state, toolResults);
     } else {
       toolResults = [stubbedObservation(decision)];
       events = eventsFromObservations(state, toolResults);
