@@ -73,7 +73,14 @@ The runtime should receive a normalized identity object rather than raw auth pro
 
 ### 3.4 Agent Runtime v4 Kernel
 
-The kernel coordinates the agent loop:
+The kernel is the public runtime entrypoint. API routes call `AgentKernel`, and the kernel selects the orchestration path:
+
+- `AGENT_ORCHESTRATOR=custom` uses the custom runtime loop.
+- `AGENT_ORCHESTRATOR=langgraph` delegates orchestration to `SceneBookGraph`.
+
+The kernel is responsible for run lifecycle, stream compatibility, assistant-message persistence, summary persistence, and graph trace metadata. The selected orchestrator owns the internal loop.
+
+The LangGraph orchestrator coordinates:
 
 1. Create or resume run.
 2. Load project state and ProjectMind.
@@ -88,6 +95,8 @@ The kernel coordinates the agent loop:
 11. Continue or respond.
 
 The kernel is independent from HTTP and should be testable with fixture inputs.
+
+LangGraph owns graph mechanics only: node execution, state transitions, loop routing, and stop-condition checkpoints. SceneBook-owned modules still provide ProjectMind, model gateway calls, decision schemas, policy decisions, typed tool execution, event vocabulary, and traces.
 
 ### 3.5 ProjectMind Memory
 

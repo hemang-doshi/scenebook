@@ -1,24 +1,25 @@
-# SceneBook Runtime v4 LangGraph Spike
+# SceneBook Runtime v4 LangGraph Orchestrator
 
-This directory is an isolated orchestration spike. It evaluates LangGraph as a graph runner for SceneBook Agent Runtime v4 without replacing SceneBook's domain-specific runtime concepts.
+This directory contains the Agent Runtime v4 LangGraph orchestration path. LangGraph owns node execution, graph state transitions, loop routing, and deterministic stop checks. SceneBook still owns product logic: ProjectMind, model gateway calls, decision schemas, policy boundaries, event vocabulary, tracing metadata, and tool execution contracts.
 
-## What Runs
+## Runtime Path
 
-The graph currently has one deterministic path:
+The graph currently runs this loop:
 
-1. Load ProjectMind through the existing `buildProjectMind` abstraction.
-2. Understand the user intent from the goal and ProjectMind context.
-3. Propose a no-write content plan.
-4. Produce a final response from the proposed plan.
+1. `load_project_mind`
+2. `understand_intent`
+3. `decide_next_step`
+4. `execute_step`
+5. `observe_result`
+6. `check_goal`
+7. continue to `decide_next_step` or stop at `compose_response`
 
 ## Boundaries
 
 - ProjectMind remains the canonical project memory and context source.
-- The graph does not write directly to the database.
-- The graph does not call external integrations.
-- The graph does not execute runtime tools.
-- The production custom runtime remains the default unless `AGENT_ORCHESTRATOR=langgraph` is explicitly set.
+- Graph nodes do not directly mutate the database.
+- Tool and workflow decisions are routed through an injectable executor; when none is wired, `execute_step` returns a typed blocked observation.
+- Stop rules are deterministic: final response, clarifying question, approval required, unrecoverable error, max steps, or goal satisfied.
+- Runtime v4 events map back to the existing chat stream contract for UI compatibility.
 
-## Why This Shape
-
-LangGraph is being tested for orchestration mechanics: typed state, named nodes, explicit edges, and testable graph execution. SceneBook still owns memory semantics, tool contracts, policy, ProjectPatch, persistence, and product-specific decisions.
+`AGENT_ORCHESTRATOR=langgraph` selects this path. `AGENT_ORCHESTRATOR=custom` keeps the custom runtime loop.

@@ -154,7 +154,51 @@ Make risky actions explicit, reviewable, and exact.
 - Approved actions execute exact approved inputs.
 - Rejected actions never execute.
 
-## 8. Phase 06 - Conversational-First Agent UI
+## 8. Phase 05.5 - LangGraph Orchestration Spike
+
+### Goal
+
+Evaluate LangGraph as an orchestration shell without replacing SceneBook-owned abstractions.
+
+### Deliverables
+
+- `SceneBookGraph` spike behind `AGENT_ORCHESTRATOR=langgraph`.
+- ProjectMind load node.
+- Intent understanding node.
+- No-write planning node.
+- Final response node.
+- Tests proving the graph can load mocked ProjectMind and produce a useful no-write plan.
+
+### Exit Criteria
+
+- The custom runtime remains the default.
+- The graph performs no database mutations.
+- The branch proves LangGraph can run SceneBook-owned state and nodes.
+
+## 9. Phase 06 - LangGraph Runtime Orchestrator
+
+### Goal
+
+Promote the Phase 05.5 spike into the Agent Runtime v4 orchestration path.
+
+### Deliverables
+
+- `AgentKernel` delegates to `SceneBookGraph` when `AGENT_ORCHESTRATOR=langgraph`.
+- `AgentKernel` keeps the custom runtime fallback when `AGENT_ORCHESTRATOR=custom`.
+- Graph nodes: `load_project_mind`, `understand_intent`, `decide_next_step`, `execute_step`, `observe_result`, `check_goal`, `compose_response`.
+- Graph state includes run IDs, messages, ProjectMind, current intent, current goal, current decision, observations, tool results, approval request, final response, errors, and step count.
+- Deterministic stop rules for final response, questions, approvals, unrecoverable errors, max steps, and goal satisfaction.
+- Runtime v4 graph events mapped to the existing chat stream event contract.
+- Route-level runtime selection defaults the harness to runtime v4 while preserving `AGENT_HARNESS_RUNTIME_VERSION=v3` as an explicit fallback.
+
+### Exit Criteria
+
+- A request like "Help me make a reel about building SceneBook" loads ProjectMind, plans safely, avoids random tool calls, and produces a normal final response.
+- Graph steps and stop reasons are persisted in run metadata.
+- Graph nodes do not directly mutate the database.
+- Existing runtime-v4 tests still pass.
+
+## 10. Phase 07 - Conversational-First Agent UI
 
 ### Goal
 
@@ -178,7 +222,7 @@ Make the agent feel like an operational creative workspace, not a generic chatbo
 - Approval prompts clearly describe exact changes and side effects.
 - The final response distinguishes completed, failed, blocked, and pending actions.
 
-## 9. Phase 07 - Nango Integration Bridge
+## 11. Phase 08 - Nango Integration Bridge
 
 ### Goal
 
@@ -200,7 +244,7 @@ Expose external account capabilities safely through typed tools.
 - Integration tools never expose raw tokens to prompts or traces.
 - External side effects require approval.
 
-## 10. Phase 08 - Evals And Trajectory Tests
+## 12. Phase 09 - Evals And Trajectory Tests
 
 ### Goal
 
@@ -224,7 +268,7 @@ Make agent behavior testable before production rollout.
 - Approval-bypass regressions are covered.
 - Provider evals are separate from deterministic runtime tests.
 
-## 11. Phase 09 - Production Hardening
+## 13. Phase 10 - Production Hardening
 
 ### Goal
 
@@ -248,7 +292,7 @@ Prepare Agent v4 for private beta.
 - Latency and cost are within configured targets.
 - Runtime can recover from partial failures.
 
-## 12. Phase 10 - Private Beta
+## 14. Phase 11 - Private Beta
 
 ### Goal
 
@@ -282,7 +326,7 @@ Launch Agent v4 to a small set of real creator workflows.
 - Evals catch known regressions.
 - Product team has enough trace and feedback data for broader launch.
 
-## 13. Phase Dependencies
+## 15. Phase Dependencies
 
 | Phase | Depends On |
 |---|---|
@@ -291,13 +335,15 @@ Launch Agent v4 to a small set of real creator workflows.
 | 03 ProjectMind | 01 Runtime Foundations |
 | 04 ProjectPatch And Tools | 01, 03 |
 | 05 Policy And Approvals | 04 |
-| 06 UI | 01, 04, 05 |
-| 07 Nango Integrations | 01, 04, 05 |
-| 08 Evals | 01, 02, 03, 04, 05 |
-| 09 Hardening | 01-08 |
-| 10 Beta | 09 |
+| 05.5 LangGraph Spike | 01, 02, 03 |
+| 06 LangGraph Runtime Orchestrator | 05.5 |
+| 07 UI | 01, 04, 05, 06 |
+| 08 Nango Integrations | 01, 04, 05 |
+| 09 Evals | 01, 02, 03, 04, 05, 06 |
+| 10 Hardening | 01-09 |
+| 11 Beta | 10 |
 
-## 14. Implementation Principles
+## 16. Implementation Principles
 
 - Keep the runtime boring and inspectable.
 - Prefer explicit typed operations over model-generated freeform mutations.

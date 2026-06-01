@@ -21,6 +21,19 @@ export function createLoadProjectMindNode(options: LoadProjectMindNodeOptions = 
     return {
       projectMind,
       compactProjectMind,
+      currentGoal: {
+        originalRequest: state.goal,
+        status: "active",
+      },
+      events: [
+        {
+          type: "agent_thinking",
+          runId: state.runId,
+          threadId: state.threadId ?? null,
+          message: `Loaded ProjectMind for ${projectMind.project.title}.`,
+          snapshot: compactProjectMind,
+        },
+      ],
       observations: [
         {
           type: "project_mind_loaded",

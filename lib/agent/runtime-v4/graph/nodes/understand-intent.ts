@@ -36,14 +36,25 @@ export function understandIntentNode(state: SceneBookGraphState): SceneBookGraph
     "without applying workspace changes.",
   ].join(" ");
 
+  const intent = {
+    summary,
+    requestedFormat: format,
+    topic,
+    confidence: goal.length > 0 ? 0.82 : 0.2,
+    needsWorkspaceMutation: false,
+  };
+
   return {
-    intent: {
-      summary,
-      requestedFormat: format,
-      topic,
-      confidence: goal.length > 0 ? 0.82 : 0.2,
-      needsWorkspaceMutation: false,
-    },
+    currentIntent: intent,
+    intent,
+    events: [
+      {
+        type: "agent_thinking",
+        runId: state.runId,
+        threadId: state.threadId ?? null,
+        message: summary,
+      },
+    ],
     observations: [
       {
         type: "intent_understood",

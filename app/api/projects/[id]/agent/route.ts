@@ -62,6 +62,10 @@ function isRuntimeV3Enabled() {
   return process.env.AGENT_HARNESS_RUNTIME_ENABLED === "true";
 }
 
+function agentHarnessRuntimeVersion() {
+  return process.env.AGENT_HARNESS_RUNTIME_VERSION === "v3" ? "v3" : "v4";
+}
+
 function encodeSse(type: string, payload: Record<string, unknown>) {
   return `data: ${JSON.stringify({ type, ...payload })}\n\n`;
 }
@@ -351,7 +355,9 @@ export async function POST(
     const parsed = parseSlashCommand(body.message);
 
     if (isRuntimeV3Enabled()) {
-      const { AgentKernel } = await import("@/lib/agent/runtime-v3/kernel");
+      const { AgentKernel } = agentHarnessRuntimeVersion() === "v3"
+        ? await import("@/lib/agent/runtime-v3/kernel")
+        : await import("@/lib/agent/runtime-v4/kernel");
       return AgentKernel.run({
         projectId,
         threadId: body.threadId,

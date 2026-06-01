@@ -17,6 +17,7 @@ import type {
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
 import type { AgentDecision, GoalCheck } from "@/lib/agent/runtime-v4/decision/schemas";
+import { mapRuntimeV4EventToLegacy } from "@/lib/agent/runtime-v4/events";
 import { runSceneBookGraph } from "@/lib/agent/runtime-v4/graph/scenebook-graph";
 import { buildProjectContext } from "@/lib/agent/runtime-v4/context/context-builder";
 import {
@@ -57,57 +58,116 @@ export function resolveAgentOrchestrator(value = process.env.AGENT_ORCHESTRATOR)
   return value === "langgraph" ? "langgraph" : "custom";
 }
 
-function runLangGraphSpike(request: AgentRunRequest) {
+function jsonSafe(value: unknown) {
+  return JSON.parse(JSON.stringify(value ?? null)) as JsonValue;
+}
+
+function runLangGraphRuntime(request: AgentRunRequest) {
   return createAgentSseResponse(async (stream) => {
-    const graphState = await runSceneBookGraph({
-      projectId: request.projectId,
-      threadId: request.threadId,
-      userId: request.userId,
-      goal: request.message,
-      messages: [{ role: "user", content: request.message }],
-    });
-    const runId = "langgraph-spike";
+    let runId: string | null = null;
 
-    stream.emit("run_started", {
-      threadId: request.threadId ?? null,
-      runId,
-    });
-    stream.emitLegacyMeta({
-      threadId: request.threadId ?? null,
-      runId,
-    });
-    stream.emit("snapshot_loaded", {
-      snapshot: graphState.compactProjectMind ?? null,
-    });
+    try {
+      const thread = await createOrLoadThread(request.projectId, request.threadId);
+      await appendAgentMessage({
+        projectId: request.projectId,
+        threadId: thread.id,
+        role: "user",
+        content: request.message,
+        model: request.selectedModels?.chat ?? null,
+        metadata: request.attachments ? { attachments: request.attachments } : {},
+      });
 
-    if (graphState.plan) {
-      stream.emit("decision", {
-        decision: {
-          type: "propose_plan",
-          plan: graphState.plan,
-          reason: "LangGraph spike path produced a no-write plan.",
+      const run = await createAgentRun({
+        projectId: request.projectId,
+        threadId: thread.id,
+        input: request.message,
+        selectedModels: request.selectedModels,
+        metadata: {
+          runtime: "v4",
+          orchestrator: "langgraph",
         },
       });
-      stream.emit("plan", {
-        plan: graphState.plan,
+      runId = run.id;
+
+      stream.emitLegacyMeta({
+        threadId: thread.id,
+        runId: run.id,
+      });
+
+      const graphState = await runSceneBookGraph({
+        projectId: request.projectId,
+        threadId: thread.id,
+        userId: request.userId,
+        runId: run.id,
+        goal: request.message,
+        messages: [{ role: "user", content: request.message }],
+        model: request.selectedModels?.chat,
+        toolSummaries: summarizeRuntimeV3Tools(),
+      });
+
+      for (const event of graphState.events) {
+        for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
+          stream.emit(legacyEvent.type, legacyEvent.payload);
+        }
+      }
+
+      const finalResponse = graphState.finalResponse
+        ?? "I loaded the project context, but the LangGraph runtime did not produce a final response.";
+      const runSummaryInput = buildRunSummaryFromObservations({
+        projectId: request.projectId,
+        threadId: thread.id,
+        runId: run.id,
+        userGoal: request.message,
+        observations: graphState.toolResults ?? [],
+        finalResponse,
+      });
+      const runSummary = runSummaryInput
+        ? await saveRunSummary(runSummaryInput).catch(() => null)
+        : null;
+
+      await appendAgentMessage({
+        projectId: request.projectId,
+        threadId: thread.id,
+        role: "assistant",
+        content: finalResponse,
+        model: request.selectedModels?.chat ?? null,
+        provider: "agent-runtime-v4",
+        metadata: {
+          orchestrator: "langgraph",
+          stopReason: graphState.stopReason ?? null,
+          graphStepCount: graphState.stepCount ?? 0,
+        },
+      });
+      await completeAgentRun(run.id, {
+        runtime: "v4",
+        orchestrator: "langgraph",
+        graphStopReason: graphState.stopReason ?? null,
+        graphStepCount: graphState.stepCount ?? 0,
+        graphTrace: jsonSafe({
+          observations: graphState.observations ?? [],
+          events: graphState.events ?? [],
+          errors: graphState.errors ?? [],
+        }),
+        waitingForUser: graphState.stopReason === "ask_question" || graphState.stopReason === "approval_required",
+        runSummaryId: runSummary?.id ?? null,
+        runSummarySaved: Boolean(runSummary),
+      });
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Agent run failed.";
+      if (runId) {
+        await failAgentRun(runId, message, { runtime: "v4", orchestrator: "langgraph" }).catch(() => null);
+      }
+      stream.emit("run_failed", {
+        error: message,
       });
     }
-
-    stream.emit("message_delta", {
-      text: graphState.finalResponse ?? "",
-    });
-    stream.emit("run_completed", {
-      threadId: request.threadId ?? null,
-      runId,
-      waitingForUser: false,
-    });
   });
 }
 
 export class AgentKernel {
   static run(request: AgentRunRequest) {
     if (resolveAgentOrchestrator() === "langgraph") {
-      return runLangGraphSpike(request);
+      return runLangGraphRuntime(request);
     }
 
     return createAgentSseResponse(async (stream) => {

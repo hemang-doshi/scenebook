@@ -1,79 +1,87 @@
-# Framework Decision - LangGraph Orchestration Spike
+# Framework Decision - LangGraph Runtime Orchestration
 
 ## Decision
 
-SceneBook should evaluate LangGraph as the orchestration layer for Agent Runtime v4, but only as a graph runner around SceneBook-owned abstractions. The spike is intentionally isolated behind `AGENT_ORCHESTRATOR=custom | langgraph`, with `custom` as the default.
+SceneBook uses LangGraph as an Agent Runtime v4 orchestration option behind `AGENT_ORCHESTRATOR=custom | langgraph`. The custom loop remains available, while the LangGraph path is now a real runtime path instead of a sidecar spike.
 
-This is not a production migration. It is a proof point for whether explicit graph state and node edges make the runtime easier to test, replay, and evolve.
+LangGraph owns orchestration mechanics. SceneBook owns product logic and safety boundaries.
 
-## What LangGraph Will Own
+## What LangGraph Owns
 
-LangGraph can own the orchestration mechanics:
+LangGraph owns:
 
 - named node execution,
 - typed graph state transitions,
-- explicit edges between runtime phases,
-- resumable or inspectable control flow in future phases,
-- graph-level test harnesses,
-- branching and retry structure when the runtime grows beyond a linear loop.
+- explicit loop routing,
+- deterministic stop-condition checkpoints,
+- testable graph-level state snapshots,
+- future resumability and replay structure.
 
-In the spike, LangGraph owns only this path:
+The current runtime graph runs:
 
-1. Load ProjectMind.
-2. Understand intent.
-3. Propose a plan.
-4. Produce a final response.
+1. `load_project_mind`
+2. `understand_intent`
+3. `decide_next_step`
+4. `execute_step`
+5. `observe_result`
+6. `check_goal`
+7. `compose_response`
 
-## What SceneBook Will Continue To Own
+`check_goal` routes back to `decide_next_step` until a stop condition is reached.
 
-SceneBook must keep ownership of the domain model and operational safety boundaries:
+## What SceneBook Owns
+
+SceneBook continues to own:
 
 - ProjectMind memory semantics,
 - ProjectPatch and workspace mutation representation,
 - typed tool contracts and tool execution,
 - approval and policy decisions,
 - database persistence,
-- model gateway/provider routing,
+- model gateway and provider routing,
 - integration capability checks,
-- trace and eval vocabulary,
-- user-facing response rules.
+- runtime event vocabulary,
+- run tracing metadata,
+- eval expectations and user-facing response rules.
 
-LangGraph should call these abstractions. It should not replace them with generic agent concepts.
+Graph nodes call these abstractions. They do not directly mutate the database, and tool/workflow decisions return a typed blocked observation unless an executor is explicitly injected.
 
-## Why Plain LangChain `create_agent` Is Not Enough
+## Event Contract
 
-Plain `create_agent` is useful for model-plus-tools loops, but SceneBook needs more than a generic ReAct agent:
+Runtime v4 graph events use these stable names:
 
-- ProjectMind is canonical context, not chat history alone.
-- Workspace changes must flow through ProjectPatch, policy, approval, and verification.
-- Tools need SceneBook-specific availability, risk, and side-effect metadata.
-- The runtime needs deterministic checkpoints before database writes or external actions.
-- Evals need named phases and state snapshots, not just final model messages.
+- `run_started`
+- `agent_thinking`
+- `decision_made`
+- `tool_planned`
+- `tool_running`
+- `tool_completed`
+- `tool_failed`
+- `approval_required`
+- `memory_updated`
+- `final_response`
+- `run_completed`
 
-LangGraph is a better fit for evaluating orchestration because it lets SceneBook keep explicit nodes and state while still benefiting from a graph runtime.
+The kernel maps these events to the current chat stream events so the existing UI can continue to consume `run_started`, `snapshot_loaded`, `decision`, `plan`, tool events, `message_delta`, and `run_completed`.
 
-## Why ProjectMind Remains Canonical
+## Stop Rules
 
-ProjectMind combines durable project memory, current production state, recent run summaries, selected and rejected outputs, readiness, and compact model context. It is the source of truth the runtime should inspect before planning.
+The graph stops when:
 
-The LangGraph spike uses `buildProjectMind` directly and then compacts the snapshot with `compactProjectMindForModel`. The graph does not create an alternate memory store, does not infer persistent facts on its own, and does not write memories directly.
+- `finalResponse` exists,
+- a clarifying question exists,
+- approval is required,
+- an unrecoverable error exists,
+- the max step count is reached,
+- the goal checker marks the goal satisfied.
 
-## Risks
-
-- LangGraph could add complexity before SceneBook needs graph-level branching.
-- Generic graph state could drift away from SceneBook domain types if not constrained.
-- Developers could accidentally bypass ProjectPatch or policy by adding write-capable nodes.
-- Runtime observability could split between LangGraph traces and SceneBook traces.
-- Dependency churn in LangGraph/LangChain could affect the agent runtime surface.
+This keeps LangGraph from becoming an unbounded model loop.
 
 ## Rollback Plan
 
-Rollback is straightforward because the spike is sidecar-only:
+Rollback remains straightforward:
 
-1. Keep `AGENT_ORCHESTRATOR=custom`, which is the default.
-2. Remove `lib/agent/runtime-v4/graph/` if the spike is rejected.
-3. Remove the `runLangGraphSpike` feature-flag branch from `runtime-v4/kernel.ts`.
-4. Remove `@langchain/langgraph` and `@langchain/core` from dependencies.
-5. Keep ProjectMind, the custom kernel, typed tools, and ProjectPatch plans unchanged.
-
-No production traffic depends on LangGraph unless `AGENT_ORCHESTRATOR=langgraph` is explicitly enabled.
+1. Set `AGENT_ORCHESTRATOR=custom`.
+2. Keep the runtime-v4 custom loop as the public fallback.
+3. Remove the LangGraph branch from `runtime-v4/kernel.ts` only after replacing it with an equivalent tested path.
+4. Remove `lib/agent/runtime-v4/graph/` and LangGraph dependencies if the approach is rejected.

@@ -13,6 +13,7 @@ const summarizeRuntimeV3Tools = vi.fn();
 const runWorkflow = vi.fn();
 const createRuntimeV4ModelGateway = vi.fn();
 const saveRunSummary = vi.fn();
+const runSceneBookGraph = vi.fn();
 const originalAgentOrchestrator = process.env.AGENT_ORCHESTRATOR;
 
 function restoreAgentOrchestrator() {
@@ -57,6 +58,10 @@ vi.mock("@/lib/agent/runtime-v3/workflows", () => ({
 
 vi.mock("@/lib/agent/runtime-v4/model", () => ({
   createRuntimeV4ModelGateway,
+}));
+
+vi.mock("@/lib/agent/runtime-v4/graph/scenebook-graph", () => ({
+  runSceneBookGraph,
 }));
 
 vi.mock("@/lib/agent/runtime-v4/memory/run-summary-store", async (importOriginal) => {
@@ -206,6 +211,48 @@ describe("runtime-v4 run summaries", () => {
       openNextSteps: [],
       metadata: {},
     });
+    runSceneBookGraph.mockResolvedValue({
+      projectId: "project-1",
+      userId: "user-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      goal: "Help me make a reel about building SceneBook.",
+      messages: [
+        { role: "user", content: "Help me make a reel about building SceneBook." },
+        { role: "assistant", content: "Plan a reel about building SceneBook" },
+      ],
+      observations: [],
+      toolResults: [],
+      events: [
+        {
+          type: "decision_made",
+          runId: "run-1",
+          decision: {
+            type: "propose_plan",
+            plan: {
+              title: "Plan a reel about building SceneBook",
+              steps: [],
+            },
+            reason: "Creative planning request.",
+          },
+        },
+        {
+          type: "final_response",
+          runId: "run-1",
+          response: "Plan a reel about building SceneBook",
+        },
+        {
+          type: "run_completed",
+          runId: "run-1",
+          threadId: "thread-1",
+          waitingForUser: false,
+        },
+      ],
+      finalResponse: "Plan a reel about building SceneBook",
+      stopReason: "goal_satisfied",
+      errors: [],
+      stepCount: 1,
+    });
   });
 
   afterEach(() => {
@@ -227,6 +274,7 @@ describe("runtime-v4 run summaries", () => {
 
     expect(buildProjectContext).toHaveBeenCalled();
     expect(decideNextStep).toHaveBeenCalled();
+    expect(runSceneBookGraph).not.toHaveBeenCalled();
     expect(saveRunSummary).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
       threadId: "thread-1",
@@ -245,5 +293,51 @@ describe("runtime-v4 run summaries", () => {
       runSummaryId: "summary-1",
       runSummarySaved: true,
     }));
+  });
+
+  test("langgraph runtime persists a run and delegates orchestration to SceneBookGraph", async () => {
+    process.env.AGENT_ORCHESTRATOR = "langgraph";
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "Help me make a reel about building SceneBook.",
+      selectedModels: {},
+    });
+
+    const text = await response.text();
+
+    expect(createOrLoadThread).toHaveBeenCalledWith("project-1", "thread-1");
+    expect(createAgentRun).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      threadId: "thread-1",
+      input: "Help me make a reel about building SceneBook.",
+      metadata: expect.objectContaining({
+        runtime: "v4",
+        orchestrator: "langgraph",
+      }),
+    }));
+    expect(runSceneBookGraph).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      runId: "run-1",
+      goal: "Help me make a reel about building SceneBook.",
+    }));
+    expect(appendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "Plan a reel about building SceneBook",
+      provider: "agent-runtime-v4",
+    }));
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      runtime: "v4",
+      orchestrator: "langgraph",
+      graphStopReason: "goal_satisfied",
+      graphStepCount: 1,
+    }));
+    expect(text).toContain("Plan a reel about building SceneBook");
   });
 });

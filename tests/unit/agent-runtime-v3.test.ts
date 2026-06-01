@@ -30,6 +30,7 @@ const generateTextStream = vi.fn();
 const generateToolHandler = vi.fn();
 const generateProjectMedia = vi.fn();
 const agentKernelRun = vi.fn();
+const agentV4KernelRun = vi.fn();
 
 vi.mock("@/lib/agent/runtime", () => ({
   appendAgentMessage,
@@ -120,7 +121,14 @@ vi.mock("@/lib/agent/runtime-v3/kernel", () => ({
   },
 }));
 
+vi.mock("@/lib/agent/runtime-v4/kernel", () => ({
+  AgentKernel: {
+    run: agentV4KernelRun,
+  },
+}));
+
 const originalRuntimeFlag = process.env.AGENT_HARNESS_RUNTIME_ENABLED;
+const originalRuntimeVersion = process.env.AGENT_HARNESS_RUNTIME_VERSION;
 
 type ProjectOverrides = Partial<Omit<ProjectWorkspace, "scriptLab" | "shootPack" | "analyticsJournal">> & {
   scriptLab?: Partial<ProjectWorkspace["scriptLab"]>;
@@ -389,7 +397,17 @@ function resetMocks() {
   generateToolHandler.mockReset();
   generateProjectMedia.mockReset();
   agentKernelRun.mockReset();
-  process.env.AGENT_HARNESS_RUNTIME_ENABLED = originalRuntimeFlag;
+  agentV4KernelRun.mockReset();
+  if (originalRuntimeFlag === undefined) {
+    delete process.env.AGENT_HARNESS_RUNTIME_ENABLED;
+  } else {
+    process.env.AGENT_HARNESS_RUNTIME_ENABLED = originalRuntimeFlag;
+  }
+  if (originalRuntimeVersion === undefined) {
+    delete process.env.AGENT_HARNESS_RUNTIME_VERSION;
+  } else {
+    process.env.AGENT_HARNESS_RUNTIME_VERSION = originalRuntimeVersion;
+  }
 }
 
 describe("runtime-v3 foundation", () => {
@@ -736,8 +754,37 @@ describe("runtime-v3 foundation", () => {
     );
   });
 
-  test("agent route delegates POST to runtime-v3 when the feature flag is enabled", async () => {
+  test("agent route delegates POST to runtime-v4 when the feature flag is enabled", async () => {
     process.env.AGENT_HARNESS_RUNTIME_ENABLED = "true";
+    mockAuthSupabase();
+    agentV4KernelRun.mockResolvedValue(new Response("runtime-v4", { status: 202 }));
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/agent", {
+        method: "POST",
+        body: JSON.stringify({ message: "hello runtime" }),
+      }),
+      { params: Promise.resolve({ id: "project-1" }) },
+    );
+
+    expect(response.status).toBe(202);
+    expect(await response.text()).toBe("runtime-v4");
+    expect(agentV4KernelRun).toHaveBeenCalledWith({
+      projectId: "project-1",
+      threadId: undefined,
+      userId: "user-1",
+      message: "hello runtime",
+      selectedModels: undefined,
+      attachments: undefined,
+    });
+    expect(agentKernelRun).not.toHaveBeenCalled();
+    expect(createOrLoadThread).not.toHaveBeenCalled();
+  });
+
+  test("agent route can still delegate POST to runtime-v3 when explicitly requested", async () => {
+    process.env.AGENT_HARNESS_RUNTIME_ENABLED = "true";
+    process.env.AGENT_HARNESS_RUNTIME_VERSION = "v3";
     mockAuthSupabase();
     agentKernelRun.mockResolvedValue(new Response("runtime-v3", { status: 202 }));
 
@@ -760,6 +807,7 @@ describe("runtime-v3 foundation", () => {
       selectedModels: undefined,
       attachments: undefined,
     });
+    expect(agentV4KernelRun).not.toHaveBeenCalled();
     expect(createOrLoadThread).not.toHaveBeenCalled();
   });
 });
