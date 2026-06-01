@@ -7,6 +7,7 @@ import type { JsonValue } from "@/lib/types";
 
 type JsonObject = Record<string, JsonValue>;
 type PersistedRow = Record<string, unknown>;
+const runtimeV4PlannedPatchMarker = "runtime-v4-workflow";
 
 type TimelineQueryResult<T extends PersistedRow> = {
   data: T[] | null;
@@ -325,14 +326,21 @@ function operationCount(input: {
   successfulOperations: number;
   failedOperations: number;
 }) {
+  const metadataOperationCount = numberValue(input.metadata.operationCount);
+  if (metadataOperationCount !== null) {
+    return metadataOperationCount;
+  }
+
+  const embeddedOperationCount = patchOperationArray(input.patch).length;
+  if (embeddedOperationCount > 0) {
+    return embeddedOperationCount;
+  }
+
   if (input.operations.length > 0) {
     return input.operations.length;
   }
 
-  return requiredNumber(
-    input.metadata.operationCount,
-    patchOperationArray(input.patch).length || input.successfulOperations + input.failedOperations,
-  );
+  return input.successfulOperations + input.failedOperations;
 }
 
 function mapPatchOperation(row: PersistedRow): AgentProjectPatchOperationEntry {
@@ -404,6 +412,8 @@ function mapPatch(row: PersistedRow, operationsByPatchId: Map<string, AgentProje
   const metadata = jsonObject(row.metadata);
   const status = requiredString(row.status, "planned");
   const persistedOperations = operationsByPatchId.get(patchId) ?? [];
+  const autoApplySkippedReason = stringValue(metadata.autoApplySkippedReason)
+    ?? stringValue(metadata.autoApplyReason);
   const operations = (persistedOperations.length > 0
     ? persistedOperations
     : patchOperationArray(patch)
@@ -443,13 +453,13 @@ function mapPatch(row: PersistedRow, operationsByPatchId: Map<string, AgentProje
       failedOperations,
     }),
     operations,
-    canApply: status === "planned" || status === "awaiting_approval",
+    canApply: status === "planned" && stringValue(metadata.plannedBy) === runtimeV4PlannedPatchMarker,
     patch,
     metadata,
     workflowName: stringValue(metadata.workflowName),
     autoApplySkipped: boolValue(metadata.autoApplySkipped),
     autoApplyReason: stringValue(metadata.autoApplyReason),
-    autoApplySkippedReason: stringValue(metadata.autoApplyReason),
+    autoApplySkippedReason,
     completedAt: dateValue(row.completed_at),
     updatedAt: dateValue(row.updated_at),
   };

@@ -134,6 +134,7 @@ describe("runtime-v4 UI timeline hydration", () => {
             ],
           },
           metadata: {
+            plannedBy: "runtime-v4-workflow",
             workflowName: "create_full_production_package",
             autoApplySkipped: true,
             autoApplyReason: "Patch has more operations than the auto-apply limit.",
@@ -244,6 +245,221 @@ describe("runtime-v4 UI timeline hydration", () => {
         sourceType: "patch",
         sourceId: "patch-workflow-1",
         summary: "Shoot pack workflow is waiting for approval.",
+      }),
+    ]));
+  });
+
+  test("persisted partial operation rows preserve total operationCount from metadata", async () => {
+    const supabase = createTimelineSupabase({
+      agent_project_patches: [
+        {
+          id: "patch-partial-1",
+          owner_id: ownerId,
+          project_id: projectId,
+          thread_id: threadId,
+          run_id: runId,
+          title: "Save full package",
+          summary: "A larger patch with one persisted failed operation.",
+          risk_level: "low",
+          status: "failed",
+          requires_approval: false,
+          successful_operations: 0,
+          failed_operations: 1,
+          retryable: true,
+          patch: {
+            operations: Array.from({ length: 9 }, (_, index) => ({
+              type: index === 0 ? "update_creative_brief" : "record_project_memory",
+              input: { index },
+            })),
+          },
+          metadata: {
+            operationCount: 9,
+            plannedBy: "runtime-v4-workflow",
+          },
+          created_at: "2026-06-02T08:05:00.000Z",
+        },
+      ],
+      agent_project_patch_operations: [
+        {
+          id: "patch-partial-op-1",
+          patch_id: "patch-partial-1",
+          owner_id: ownerId,
+          project_id: projectId,
+          thread_id: threadId,
+          run_id: runId,
+          operation_index: 0,
+          operation_type: "update_creative_brief",
+          tool_name: "update_creative_brief",
+          status: "failed",
+          input: { index: 0 },
+          output: {},
+          error: { message: "Brief update failed." },
+          verification: {},
+          retryable: true,
+          created_at: "2026-06-02T08:05:01.000Z",
+        },
+      ],
+      project_artifacts: [],
+      agent_run_summaries: [],
+    });
+
+    const { loadRuntimeV4TimelineEntries } = await import("@/lib/agent/runtime-v4/ui/timeline");
+    const entries = await loadRuntimeV4TimelineEntries({
+      supabase: supabase.client,
+      ownerId,
+      projectId,
+      threadId,
+      messages: [],
+      toolCalls: [],
+    });
+    const patchEntry = entries.find((entry) => entry.type === "patch" && entry.patchId === "patch-partial-1");
+
+    expect(patchEntry).toMatchObject({
+      operationCount: 9,
+      operations: [
+        expect.objectContaining({
+          operationIndex: 0,
+          status: "failed",
+          error: { message: "Brief update failed." },
+        }),
+      ],
+    });
+    expect(patchEntry && "operations" in patchEntry ? patchEntry.operations : []).toHaveLength(1);
+  });
+
+  test("canApply only marks planned runtime-v4 workflow patches as applicable", async () => {
+    const supabase = createTimelineSupabase({
+      agent_project_patches: [
+        {
+          id: "patch-applicable",
+          owner_id: ownerId,
+          project_id: projectId,
+          thread_id: threadId,
+          run_id: runId,
+          title: "Applicable patch",
+          summary: "This patch was planned by runtime v4.",
+          risk_level: "low",
+          status: "planned",
+          requires_approval: false,
+          successful_operations: 0,
+          failed_operations: 0,
+          retryable: false,
+          patch: { operations: [{ type: "record_project_memory", input: { summary: "Keep this." } }] },
+          metadata: { plannedBy: "runtime-v4-workflow" },
+          created_at: "2026-06-02T08:06:00.000Z",
+        },
+        {
+          id: "patch-no-marker",
+          owner_id: ownerId,
+          project_id: projectId,
+          thread_id: threadId,
+          run_id: runId,
+          title: "Unmarked patch",
+          summary: "This patch lacks the runtime marker.",
+          risk_level: "low",
+          status: "planned",
+          requires_approval: false,
+          successful_operations: 0,
+          failed_operations: 0,
+          retryable: false,
+          patch: { operations: [{ type: "record_project_memory", input: { summary: "Do not apply." } }] },
+          metadata: {},
+          created_at: "2026-06-02T08:06:01.000Z",
+        },
+        {
+          id: "patch-awaiting",
+          owner_id: ownerId,
+          project_id: projectId,
+          thread_id: threadId,
+          run_id: runId,
+          title: "Awaiting approval patch",
+          summary: "This patch is not directly applicable from refresh UI.",
+          risk_level: "blocked",
+          status: "awaiting_approval",
+          requires_approval: true,
+          successful_operations: 0,
+          failed_operations: 0,
+          retryable: false,
+          patch: { operations: [{ type: "record_project_memory", input: { summary: "Wait." } }] },
+          metadata: { plannedBy: "runtime-v4-workflow" },
+          created_at: "2026-06-02T08:06:02.000Z",
+        },
+      ],
+      agent_project_patch_operations: [],
+      project_artifacts: [],
+      agent_run_summaries: [],
+    });
+
+    const { loadRuntimeV4TimelineEntries } = await import("@/lib/agent/runtime-v4/ui/timeline");
+    const entries = await loadRuntimeV4TimelineEntries({
+      supabase: supabase.client,
+      ownerId,
+      projectId,
+      threadId,
+      messages: [],
+      toolCalls: [],
+    });
+    const canApplyByPatchId = Object.fromEntries(
+      entries
+        .filter((entry) => entry.type === "patch")
+        .map((entry) => [entry.patchId, entry.canApply]),
+    );
+
+    expect(canApplyByPatchId).toEqual({
+      "patch-applicable": true,
+      "patch-no-marker": false,
+      "patch-awaiting": false,
+    });
+  });
+
+  test("autoApplySkippedReason prefers explicit skipped reason metadata", async () => {
+    const supabase = createTimelineSupabase({
+      agent_project_patches: [
+        {
+          id: "patch-reason-1",
+          owner_id: ownerId,
+          project_id: projectId,
+          thread_id: threadId,
+          run_id: runId,
+          title: "Reason patch",
+          summary: "Reason precedence patch.",
+          risk_level: "low",
+          status: "planned",
+          requires_approval: false,
+          successful_operations: 0,
+          failed_operations: 0,
+          retryable: false,
+          patch: { operations: [{ type: "record_project_memory", input: { summary: "Reason." } }] },
+          metadata: {
+            plannedBy: "runtime-v4-workflow",
+            autoApplySkipped: true,
+            autoApplySkippedReason: "Explicit skipped reason.",
+            autoApplyReason: "Legacy auto apply reason.",
+          },
+          created_at: "2026-06-02T08:07:00.000Z",
+        },
+      ],
+      agent_project_patch_operations: [],
+      project_artifacts: [],
+      agent_run_summaries: [],
+    });
+
+    const { loadRuntimeV4TimelineEntries } = await import("@/lib/agent/runtime-v4/ui/timeline");
+    const entries = await loadRuntimeV4TimelineEntries({
+      supabase: supabase.client,
+      ownerId,
+      projectId,
+      threadId,
+      messages: [],
+      toolCalls: [],
+    });
+
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "patch",
+        patchId: "patch-reason-1",
+        autoApplySkippedReason: "Explicit skipped reason.",
+        autoApplyReason: "Legacy auto apply reason.",
       }),
     ]));
   });
