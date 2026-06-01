@@ -74,6 +74,8 @@ type SupabaseMockOptions = {
   userId?: string | null;
   projectRow?: Record<string, unknown> | null;
   patchRow?: Record<string, unknown> | null;
+  upsertErrors?: Record<string, Error>;
+  updateErrors?: Record<string, Error>;
 };
 
 function createSupabaseMock(options: SupabaseMockOptions = {}) {
@@ -141,7 +143,7 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
         }),
         upsert: vi.fn(async (payload: Record<string, unknown>, upsertOptions?: unknown) => {
           calls.upserts.push({ table, payload, options: upsertOptions });
-          return { data: null, error: null };
+          return { data: null, error: options.upsertErrors?.[table] ?? null };
         }),
         update: vi.fn((payload: Record<string, unknown>) => {
           const filters: Record<string, unknown> = {};
@@ -149,7 +151,7 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
             eq: vi.fn(async (column: string, value: unknown) => {
               filters[column] = value;
               calls.updates.push({ table, payload, filters: { ...filters } });
-              return { data: null, error: null };
+              return { data: null, error: options.updateErrors?.[table] ?? null };
             }),
           };
           return chain;
@@ -347,6 +349,49 @@ describe("runtime-v4 planned workflow patches", () => {
     expect(result.observation.output?.patchId).toBeUndefined();
   });
 
+  test("planned patch upsert errors fail closed without reporting a patch id", async () => {
+    const supabase = createSupabaseMock({
+      upsertErrors: {
+        agent_project_patches: new Error("planned patch insert failed"),
+      },
+    });
+    createSupabaseServerClient.mockResolvedValue(supabase.client);
+
+    const patchExecutor = {
+      apply: vi.fn(),
+    };
+    const executor = new WorkflowExecutor({
+      patchExecutor,
+      plannedPatchStore: new SupabasePatchAuditStore(),
+      modelGateway: failingGateway(),
+    });
+
+    const result = await executor.execute({
+      workflowName: "create_full_production_package",
+      input: { prompt: "Make the complete production package" },
+      projectMind: projectMind(),
+      context,
+    });
+
+    expect(patchExecutor.apply).not.toHaveBeenCalled();
+    expect(result.workflowResult.status).toBe("failed");
+    expect(result.observation).toMatchObject({
+      status: "blocked",
+      output: {
+        kind: "creative_workflow_failed",
+        error: {
+          code: "WORKFLOW_PATCH_PERSISTENCE_FAILED",
+          message: "planned patch insert failed",
+        },
+      },
+    });
+    expect(result.observation.output?.patchId).toBeUndefined();
+    expect(result.observation.output).not.toMatchObject({
+      patchAutoApplySkipped: true,
+      patchPlanned: true,
+    });
+  });
+
   test("apply endpoint ignores client-supplied patch JSON and executes the stored patch", async () => {
     const supabase = createSupabaseMock();
     createSupabaseServerClient.mockResolvedValue(supabase.client);
@@ -412,6 +457,31 @@ describe("runtime-v4 planned workflow patches", () => {
         }),
       }),
     ]));
+  });
+
+  test("apply endpoint returns failure when operation audit recording fails", async () => {
+    const supabase = createSupabaseMock({
+      upsertErrors: {
+        agent_project_patch_operations: new Error("operation audit insert failed"),
+      },
+    });
+    createSupabaseServerClient.mockResolvedValue(supabase.client);
+
+    const { POST } = await import("@/app/api/projects/[id]/agent/patches/[patchId]/apply/route");
+    const response = await POST(
+      new Request(`http://localhost/api/projects/${context.projectId}/agent/patches/${storedPatchId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: context.projectId, patchId: storedPatchId }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(toolExecute).toHaveBeenCalledTimes(1);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      error: "operation audit insert failed",
+    });
   });
 
   test("non-owner cannot apply a planned patch", async () => {

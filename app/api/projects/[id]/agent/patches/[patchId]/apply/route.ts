@@ -160,6 +160,7 @@ export async function POST(
     const patchExecutor = new PatchExecutor({
       toolExecutor,
       auditStore: new SupabasePatchAuditStore(),
+      requireAudit: true,
     });
     const result = await patchExecutor.apply({
       patch,

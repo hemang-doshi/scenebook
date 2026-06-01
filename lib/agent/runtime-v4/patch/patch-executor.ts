@@ -63,13 +63,18 @@ export type PatchAuditStore = {
 export type PatchExecutorOptions = {
   toolExecutor: ToolExecutorLike;
   auditStore?: PatchAuditStore;
+  requireAudit?: boolean;
+};
+
+type SupabaseMutationResult = {
+  error?: unknown;
 };
 
 type SupabasePatchAuditClient = {
   from(table: string): {
-    upsert(payload: Record<string, unknown>, options?: { onConflict?: string }): PromiseLike<unknown>;
+    upsert(payload: Record<string, unknown>, options?: { onConflict?: string }): PromiseLike<SupabaseMutationResult>;
     update(payload: Record<string, unknown>): {
-      eq(column: string, value: string): PromiseLike<unknown>;
+      eq(column: string, value: string): PromiseLike<SupabaseMutationResult>;
     };
   };
 };
@@ -88,6 +93,28 @@ function jsonObject(value: unknown): Record<string, JsonValue> {
 
 function nullable(value: string | undefined) {
   return value ?? null;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function assertMutationSucceeded(result: SupabaseMutationResult, fallback: string) {
+  if (!result.error) {
+    return;
+  }
+
+  throw result.error instanceof Error
+    ? result.error
+    : new Error(errorMessage(result.error, fallback));
 }
 
 function plannedPatchStatus(patch: ProjectPatch): PlannedPatchRecordStatus {
@@ -133,7 +160,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
     const status = plannedPatchStatus(input.patch);
     const storedPatch = this.storedPatch(input.patch, input.context);
 
-    await supabase
+    const result = await supabase
       .from("agent_project_patches")
       .upsert({
         id: patchId,
@@ -158,6 +185,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
         updated_at: nowIso(),
         completed_at: null,
       }, { onConflict: "id" });
+    assertMutationSucceeded(result, "Unable to record planned patch.");
 
     return { patchId, status };
   }
@@ -170,7 +198,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
     const patchId = this.patchId(input.patch);
     const storedPatch = this.storedPatch(input.patch, input.context);
 
-    await supabase
+    const result = await supabase
       .from("agent_project_patches")
       .upsert({
         id: patchId,
@@ -191,6 +219,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
         metadata: jsonObject(storedPatch.metadata),
         updated_at: nowIso(),
       }, { onConflict: "id" });
+    assertMutationSucceeded(result, "Unable to mark patch as applying.");
   }
 
   async recordPatchCompleted(input: {
@@ -199,7 +228,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
     result: ProjectPatchExecutionResult;
   }) {
     const supabase = await this.client();
-    await supabase
+    const result = await supabase
       .from("agent_project_patches")
       .update({
         status: input.result.status,
@@ -215,6 +244,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
         completed_at: input.result.status === "awaiting_approval" ? null : nowIso(),
       })
       .eq("id", this.patchId(input.patch));
+    assertMutationSucceeded(result, "Unable to record patch completion.");
   }
 
   async recordOperation(input: {
@@ -223,7 +253,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
     operation: ProjectPatchOperationResult;
   }) {
     const supabase = await this.client();
-    await supabase
+    const result = await supabase
       .from("agent_project_patch_operations")
       .upsert({
         patch_id: this.patchId(input.patch),
@@ -243,6 +273,7 @@ export class SupabasePatchAuditStore implements PatchAuditStore {
         started_at: input.operation.startedAt ?? null,
         completed_at: input.operation.completedAt ?? null,
       }, { onConflict: "patch_id,operation_index" });
+    assertMutationSucceeded(result, "Unable to record patch operation.");
   }
 }
 
@@ -341,14 +372,21 @@ function patchSummary(input: {
 export class PatchExecutor {
   private readonly toolExecutor: ToolExecutorLike;
   private readonly auditStore?: PatchAuditStore;
+  private readonly requireAudit: boolean;
 
   constructor(options: PatchExecutorOptions) {
     this.toolExecutor = options.toolExecutor;
     this.auditStore = options.auditStore;
+    this.requireAudit = options.requireAudit ?? false;
   }
 
   private async audit(callback: (() => Promise<void> | void) | undefined) {
     if (!callback) {
+      return;
+    }
+
+    if (this.requireAudit) {
+      await Promise.resolve(callback());
       return;
     }
 
