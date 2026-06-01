@@ -106,6 +106,10 @@ Create the durable project memory layer that gives the agent production context.
 - Compact context includes stage, brief, active goal, script state, asset state, and open questions.
 - Memory writes are typed and traceable.
 
+### Implementation Note
+
+The current ProjectMind implementation uses the existing Supabase-authenticated `owner_id` model and RLS policies. External integration memory is exposed as a placeholder in context until the integration phase; no Nango or Google auth implementation is included in this phase.
+
 ## 6. Phase 04 - ProjectPatch And Typed Tool Runtime
 
 ### Goal

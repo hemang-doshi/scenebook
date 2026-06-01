@@ -5,7 +5,6 @@ import {
   createOrLoadThread,
   failAgentRun,
 } from "@/lib/agent/runtime";
-import { buildProjectSnapshot, compactSnapshotForModel } from "@/lib/agent/runtime-v3/context/project-snapshot";
 import { createAgentSseResponse } from "@/lib/agent/runtime-v3/stream";
 import { executeRuntimeV3Tool } from "@/lib/agent/runtime-v3/tools/executor";
 import { summarizeRuntimeV3Tools } from "@/lib/agent/runtime-v3/tools/registry";
@@ -18,6 +17,11 @@ import type {
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
 import type { AgentDecision, GoalCheck } from "@/lib/agent/runtime-v4/decision/schemas";
+import { buildProjectContext } from "@/lib/agent/runtime-v4/context/context-builder";
+import {
+  buildRunSummaryFromObservations,
+  saveRunSummary,
+} from "@/lib/agent/runtime-v4/memory/run-summary-store";
 import { createRuntimeV4ModelGateway } from "@/lib/agent/runtime-v4/model";
 import type { JsonValue } from "@/lib/types";
 
@@ -89,6 +93,18 @@ export class AgentKernel {
         const toolSummaries = summarizeRuntimeV3Tools();
 
         const finish = async (response: string, metadata: Record<string, JsonValue>, waitingForUser = false) => {
+          const runSummaryInput = buildRunSummaryFromObservations({
+            projectId: request.projectId,
+            threadId: thread.id,
+            runId: run.id,
+            userGoal: request.message,
+            observations: previousObservations,
+            finalResponse: response,
+          });
+          const runSummary = runSummaryInput
+            ? await saveRunSummary(runSummaryInput).catch(() => null)
+            : null;
+
           await appendAgentMessage({
             projectId: request.projectId,
             threadId: thread.id,
@@ -102,6 +118,8 @@ export class AgentKernel {
             runtime: "v4",
             ...metadata,
             waitingForUser,
+            runSummaryId: runSummary?.id ?? null,
+            runSummarySaved: Boolean(runSummary),
           });
           stream.emit("message_delta", { text: response });
           stream.emit("run_completed", {
@@ -112,11 +130,12 @@ export class AgentKernel {
         };
 
         for (let step = 0; step < 8; step += 1) {
-          const snapshot = await buildProjectSnapshot({
+          const projectContext = await buildProjectContext({
             projectId: request.projectId,
             threadId: thread.id,
           });
-          const compactSnapshot = compactSnapshotForModel(snapshot);
+          const snapshot = projectContext.snapshot;
+          const compactSnapshot = projectContext.compactContext;
 
           stream.emit("snapshot_loaded", {
             snapshot: compactSnapshot,
