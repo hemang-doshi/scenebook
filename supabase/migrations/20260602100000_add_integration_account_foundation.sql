@@ -67,6 +67,9 @@ create policy "Users can delete own integration events"
 create index if not exists idx_integration_connections_owner_provider
   on public.integration_connections(owner_id, provider);
 
+create unique index if not exists idx_integration_connections_owner_provider_unique
+  on public.integration_connections(owner_id, provider);
+
 create index if not exists idx_integration_connections_project
   on public.integration_connections(project_id, created_at desc);
 

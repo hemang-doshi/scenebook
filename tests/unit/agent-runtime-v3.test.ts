@@ -350,6 +350,17 @@ function mockAuthSupabase() {
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
     },
+    from: vi.fn((table: string) => ({
+      select: vi.fn(() => ({
+        eq() {
+          return this;
+        },
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: table === "content_cards" ? { id: "project-1", owner_id: "user-1" } : null,
+          error: null,
+        }),
+      })),
+    })),
   });
 }
 
@@ -770,14 +781,21 @@ describe("runtime-v3 foundation", () => {
 
     expect(response.status).toBe(202);
     expect(await response.text()).toBe("runtime-v4");
-    expect(agentV4KernelRun).toHaveBeenCalledWith({
+    expect(agentV4KernelRun).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
       threadId: undefined,
       userId: "user-1",
+      account: expect.objectContaining({
+        userId: "user-1",
+        projectId: "project-1",
+      }),
+      permissions: expect.objectContaining({
+        canWriteProject: true,
+      }),
       message: "hello runtime",
       selectedModels: undefined,
       attachments: undefined,
-    });
+    }));
     expect(agentKernelRun).not.toHaveBeenCalled();
     expect(createOrLoadThread).not.toHaveBeenCalled();
   });
@@ -799,14 +817,14 @@ describe("runtime-v3 foundation", () => {
 
     expect(response.status).toBe(202);
     expect(await response.text()).toBe("runtime-v3");
-    expect(agentKernelRun).toHaveBeenCalledWith({
+    expect(agentKernelRun).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
       threadId: undefined,
       userId: "user-1",
       message: "hello runtime",
       selectedModels: undefined,
       attachments: undefined,
-    });
+    }));
     expect(agentV4KernelRun).not.toHaveBeenCalled();
     expect(createOrLoadThread).not.toHaveBeenCalled();
   });

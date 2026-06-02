@@ -90,6 +90,8 @@ function executionContext(state: SceneBookGraphState): PatchExecutionContext {
     threadId: state.threadId,
     runId: state.runId,
     source: "agent",
+    account: state.account,
+    permissions: state.permissions,
   };
 }
 

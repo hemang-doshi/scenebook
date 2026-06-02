@@ -7,6 +7,7 @@ import type {
   CompactProjectMind,
   ProjectMindSnapshot,
 } from "@/lib/agent/runtime-v4/memory/memory-types";
+import type { AccountContext, PermissionSummary } from "@/lib/auth/account-context";
 import type { JsonValue } from "@/lib/types";
 
 export type SceneBookGraphMessage = {
@@ -82,6 +83,12 @@ function replaceNumber(left = 0, right = 0) {
 export const SceneBookGraphAnnotation = Annotation.Root({
   projectId: Annotation<string>(),
   userId: Annotation<string>(),
+  account: Annotation<AccountContext | undefined>({
+    reducer: replaceValue,
+  }),
+  permissions: Annotation<PermissionSummary | undefined>({
+    reducer: replaceValue,
+  }),
   threadId: Annotation<string | undefined>(),
   runId: Annotation<string | undefined>(),
   goal: Annotation<string>(),
@@ -157,6 +164,8 @@ export type SceneBookGraphUpdate = typeof SceneBookGraphAnnotation.Update;
 export type SceneBookGraphInput = {
   projectId: string;
   userId: string;
+  account?: AccountContext;
+  permissions?: PermissionSummary;
   threadId?: string;
   runId?: string;
   goal: string;

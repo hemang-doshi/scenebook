@@ -127,6 +127,15 @@ const baseProject: ProjectWorkspace = {
 };
 
 function createAuthSupabase() {
+  const contentCardsChain = {
+    eq() {
+      return this;
+    },
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: { id: "project-1", owner_id: "user-1" },
+      error: null,
+    }),
+  };
   createSupabaseServerClient.mockResolvedValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -135,13 +144,19 @@ function createAuthSupabase() {
         },
       }),
     },
-    from: vi.fn().mockReturnValue({
+    from: vi.fn((table: string) => ({
+      select: vi.fn(() => (table === "content_cards" ? contentCardsChain : {
+        eq() {
+          return this;
+        },
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ error: null }),
         }),
       }),
-    }),
+    })),
   });
 }
 

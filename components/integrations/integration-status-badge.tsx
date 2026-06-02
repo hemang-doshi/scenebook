@@ -1,12 +1,22 @@
 import { Badge } from "@/components/ui/badge";
+import type { IntegrationConnectionStatus } from "@/lib/integrations/connections/types";
 import { cn } from "@/lib/utils";
+
+const labels: Record<IntegrationConnectionStatus | "placeholder", string> = {
+  not_connected: "coming soon",
+  pending: "pending",
+  connected: "connected",
+  failed: "failed",
+  revoked: "revoked",
+  placeholder: "coming soon",
+};
 
 export function IntegrationStatusBadge({
   className,
-  status = "placeholder",
+  status = "not_connected",
 }: {
   className?: string;
-  status?: "placeholder";
+  status?: IntegrationConnectionStatus | "placeholder";
 }) {
   return (
     <Badge
@@ -15,7 +25,7 @@ export function IntegrationStatusBadge({
         className,
       )}
     >
-      {status === "placeholder" ? "coming soon" : status}
+      {labels[status]}
     </Badge>
   );
 }

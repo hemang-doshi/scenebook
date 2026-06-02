@@ -2,7 +2,10 @@ import { AtSign, CalendarDays, Cloud, FileText, PlaySquare } from "lucide-react"
 
 import { Button } from "@/components/ui/button";
 import { IntegrationStatusBadge } from "@/components/integrations/integration-status-badge";
-import type { IntegrationProviderDefinition } from "@/lib/integrations/connections/types";
+import type {
+  IntegrationConnectionStatus,
+  IntegrationProviderDefinition,
+} from "@/lib/integrations/connections/types";
 
 const icons = {
   google_drive: Cloud,
@@ -12,7 +15,13 @@ const icons = {
   notion: FileText,
 };
 
-export function IntegrationCard({ provider }: { provider: IntegrationProviderDefinition }) {
+export function IntegrationCard({
+  provider,
+  status = "not_connected",
+}: {
+  provider: IntegrationProviderDefinition;
+  status?: IntegrationConnectionStatus;
+}) {
   const Icon = icons[provider.provider];
 
   return (
@@ -27,7 +36,7 @@ export function IntegrationCard({ provider }: { provider: IntegrationProviderDef
             <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{provider.description}</p>
           </div>
         </div>
-        <IntegrationStatusBadge />
+        <IntegrationStatusBadge status={status} />
       </div>
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-[var(--hairline)] pt-4">

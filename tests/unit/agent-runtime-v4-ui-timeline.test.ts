@@ -58,6 +58,15 @@ type TableRows = Record<string, Array<Record<string, unknown>>>;
 
 function createTimelineSupabase(rows: TableRows) {
   const tableCalls: Array<{ table: string; filters: Record<string, unknown> }> = [];
+  const tableRows: TableRows = {
+    ...rows,
+    content_cards: rows.content_cards ?? [
+      {
+        id: projectId,
+        owner_id: ownerId,
+      },
+    ],
+  };
 
   const matches = (row: Record<string, unknown>, filters: Record<string, unknown>) =>
     Object.entries(filters).every(([key, value]) => row[key] === value);
@@ -83,7 +92,7 @@ function createTimelineSupabase(rows: TableRows) {
           order: vi.fn(async (column: string, options?: { ascending?: boolean }) => {
             tableCalls.push({ table, filters: { ...filters } });
             const ascending = options?.ascending !== false;
-            const data = [...(rows[table] ?? [])]
+            const data = [...(tableRows[table] ?? [])]
               .filter((row) => matches(row, filters))
               .sort((a, b) => {
                 const left = typeof a[column] === "string" ? Date.parse(a[column] as string) : 0;
@@ -92,6 +101,13 @@ function createTimelineSupabase(rows: TableRows) {
               });
 
             return { data, error: null };
+          }),
+          maybeSingle: vi.fn(async () => {
+            tableCalls.push({ table, filters: { ...filters } });
+            return {
+              data: (tableRows[table] ?? []).find((row) => matches(row, filters)) ?? null,
+              error: null,
+            };
           }),
         };
 

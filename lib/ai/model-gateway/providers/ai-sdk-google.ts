@@ -2,9 +2,10 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 
 import { ModelConfigurationError } from "@/lib/ai/model-gateway/errors";
+import { getGeminiApiKey } from "@/lib/ai/secrets";
 
 export function createGoogleModel(modelId: string): LanguageModel {
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
 
   if (!apiKey?.trim()) {
     throw new ModelConfigurationError({

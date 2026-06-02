@@ -1,8 +1,20 @@
 import { IntegrationCard } from "@/components/integrations/integration-card";
+import { requireServerUser } from "@/lib/auth/server-user";
 import { listIntegrationProviders } from "@/lib/integrations/connections/registry";
+import {
+  listIntegrationConnections,
+  type IntegrationConnectionStoreClient,
+} from "@/lib/integrations/connections/store";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default function SettingsIntegrationsPage() {
+export default async function SettingsIntegrationsPage() {
+  const supabase = await createSupabaseServerClient();
+  const user = await requireServerUser({ supabase: supabase as never });
   const providers = listIntegrationProviders();
+  const connections = await listIntegrationConnections({
+    supabase: supabase as unknown as IntegrationConnectionStoreClient,
+    ownerId: user.id,
+  });
 
   return (
     <main className="min-h-screen bg-[var(--canvas)] px-4 py-8 md:px-8">
@@ -20,9 +32,17 @@ export default function SettingsIntegrationsPage() {
         </header>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Integration providers">
-          {providers.map((provider) => (
-            <IntegrationCard key={provider.provider} provider={provider} />
-          ))}
+          {providers.map((provider) => {
+            const connection = connections.find((item) => item.provider === provider.provider);
+
+            return (
+              <IntegrationCard
+                key={provider.provider}
+                provider={provider}
+                status={connection?.status ?? "not_connected"}
+              />
+            );
+          })}
         </section>
       </div>
     </main>

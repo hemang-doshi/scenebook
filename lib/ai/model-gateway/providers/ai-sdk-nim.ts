@@ -3,9 +3,10 @@ import type { LanguageModel } from "ai";
 
 import { ModelConfigurationError } from "@/lib/ai/model-gateway/errors";
 import { defaultNimBaseUrl } from "@/lib/ai/model-gateway/model-profiles";
+import { getNimApiKey } from "@/lib/ai/secrets";
 
 export function createNimModel(modelId: string): LanguageModel {
-  const apiKey = process.env.NIM_API_KEY;
+  const apiKey = getNimApiKey();
 
   if (!apiKey?.trim()) {
     throw new ModelConfigurationError({

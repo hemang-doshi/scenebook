@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 
 import type { AgentModelsSelection, AgentToolCallRecord } from "@/lib/agent/types";
+import type { AccountContext, PermissionSummary } from "@/lib/auth/account-context";
 import type { CardAsset, ContentFormat, ContentPlatform, ContentStatus, JsonValue, ScriptLab, ShootPack } from "@/lib/types";
 
 export type ToolAvailability =
@@ -34,6 +35,8 @@ export type AgentRunRequest = {
   message: string;
   attachments?: AgentAttachment[];
   selectedModels?: AgentModelsSelection;
+  account?: AccountContext;
+  permissions?: PermissionSummary;
 };
 
 export const agentWorkflowNames = [

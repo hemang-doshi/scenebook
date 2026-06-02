@@ -137,6 +137,8 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         projectId: request.projectId,
         threadId: thread.id,
         userId: request.userId,
+        account: request.account,
+        permissions: request.permissions,
         runId: run.id,
         goal: request.message,
         messages: [{ role: "user", content: request.message }],
@@ -354,6 +356,8 @@ export class AgentKernel {
                 source: "agent",
                 rawInput: request.message,
                 selectedModels: request.selectedModels,
+                account: request.account,
+                permissions: request.permissions,
               },
             });
             const observation = toolExecutionResultToObservation(toolResult);
@@ -395,6 +399,8 @@ export class AgentKernel {
                 source: "agent",
                 rawInput: request.message,
                 selectedModels: request.selectedModels,
+                account: request.account,
+                permissions: request.permissions,
               },
             });
             for (const event of patchResult.events) {
@@ -416,6 +422,8 @@ export class AgentKernel {
                 source: "agent",
                 rawInput: request.message,
                 selectedModels: request.selectedModels,
+                account: request.account,
+                permissions: request.permissions,
               },
             });
             for (const event of result.events) {

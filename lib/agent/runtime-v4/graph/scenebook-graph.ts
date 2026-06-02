@@ -118,6 +118,8 @@ export async function runSceneBookGraph(
   const state = await graph.invoke({
     projectId: input.projectId,
     userId: input.userId,
+    account: input.account,
+    permissions: input.permissions,
     threadId: input.threadId,
     runId: input.runId,
     goal: input.goal,

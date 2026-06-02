@@ -21,6 +21,7 @@ import {
 import { createProjectArtifact } from "@/lib/agent/artifacts";
 import { createMemorySnapshot } from "@/lib/agent/memory";
 import { loadRuntimeV4TimelineEntries } from "@/lib/agent/runtime-v4/ui/timeline";
+import { loadAccountContext, type AccountContextSupabaseClient } from "@/lib/auth/account-context";
 import {
   getAgentTool,
   getAgentToolAvailability,
@@ -310,6 +311,11 @@ export async function GET(
     const user = await requireServerUser({ supabase: supabase as any });
 
     const { id: projectId } = await params;
+    const account = await loadAccountContext({
+      supabase: supabase as unknown as AccountContextSupabaseClient,
+      projectId,
+      userId: user.id,
+    });
     const url = new URL(request.url);
     const listThreads = url.searchParams.get("listThreads") === "true";
     const threadIdParam = url.searchParams.get("threadId");
@@ -326,7 +332,7 @@ export async function GET(
     const entries = history.thread
       ? await loadRuntimeV4TimelineEntries({
           supabase: supabase as any,
-          ownerId: user.id,
+          ownerId: account.userId,
           projectId,
           threadId: history.thread.id,
           messages: history.messages,
@@ -368,13 +374,23 @@ export async function POST(
     const parsed = parseSlashCommand(body.message);
 
     if (isRuntimeV3Enabled()) {
-      const { AgentKernel } = agentHarnessRuntimeVersion() === "v3"
+      const runtimeVersion = agentHarnessRuntimeVersion();
+      const account = runtimeVersion === "v4"
+        ? await loadAccountContext({
+            supabase: supabase as unknown as AccountContextSupabaseClient,
+            projectId,
+            userId: user.id,
+          })
+        : undefined;
+      const { AgentKernel } = runtimeVersion === "v3"
         ? await import("@/lib/agent/runtime-v3/kernel")
         : await import("@/lib/agent/runtime-v4/kernel");
       return AgentKernel.run({
         projectId,
         threadId: body.threadId,
         userId: user.id,
+        account,
+        permissions: account?.permissions,
         message: body.message,
         selectedModels: body.models,
         attachments: body.attachments,
