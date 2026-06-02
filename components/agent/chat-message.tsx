@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Bot, Sparkles, Copy, Check, User } from "lucide-react";
 
-import type { AgentUiMessage } from "@/components/agent/agent-chat-island";
+import type { AgentUiMessage } from "@/components/agent/types";
 import type { Attachment } from "@/components/agent/agent-composer";
 
 function parseInline(text: string): React.ReactNode[] {

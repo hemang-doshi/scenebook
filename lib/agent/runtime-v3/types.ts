@@ -185,6 +185,7 @@ export type AgentEventType =
   | "goal_updated"
   | "message_delta"
   | "run_completed"
+  | "v4_event"
   | "run_failed";
 
 export type AgentStreamEvent = {

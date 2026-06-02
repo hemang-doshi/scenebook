@@ -5,7 +5,7 @@ import {
   createOrLoadThread,
   failAgentRun,
 } from "@/lib/agent/runtime";
-import { createAgentSseResponse } from "@/lib/agent/runtime-v3/stream";
+import { createAgentSseResponse, type AgentStream } from "@/lib/agent/runtime-v3/stream";
 import type {
   AgentRunRequest,
   ToolObservation,
@@ -66,6 +66,15 @@ export function resolveAgentOrchestrator(value = process.env.AGENT_ORCHESTRATOR)
 
 function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? null)) as JsonValue;
+}
+
+function emitRuntimeV4Event(stream: AgentStream, event: RuntimeV4Event) {
+  stream.emit("v4_event", {
+    event: jsonSafe(event),
+  });
+  for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
+    stream.emit(legacyEvent.type, legacyEvent.payload);
+  }
 }
 
 function createRuntimeV4Execution(options: { modelGateway?: ModelGateway } = {}) {
@@ -139,9 +148,7 @@ function runLangGraphRuntime(request: AgentRunRequest) {
       });
 
       for (const event of graphState.events) {
-        for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
-          stream.emit(legacyEvent.type, legacyEvent.payload);
-        }
+        emitRuntimeV4Event(stream, event);
       }
 
       const finalResponse = graphState.finalResponse
@@ -372,9 +379,7 @@ export class AgentKernel {
               },
             ];
             for (const event of toolEvents) {
-              for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
-                stream.emit(legacyEvent.type, legacyEvent.payload);
-              }
+              emitRuntimeV4Event(stream, event);
             }
             newObservations = [observation];
           }
@@ -393,9 +398,7 @@ export class AgentKernel {
               },
             });
             for (const event of patchResult.events) {
-              for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
-                stream.emit(legacyEvent.type, legacyEvent.payload);
-              }
+              emitRuntimeV4Event(stream, event);
             }
             newObservations = [projectPatchExecutionResultToObservation(patchResult)];
           }
@@ -416,9 +419,7 @@ export class AgentKernel {
               },
             });
             for (const event of result.events) {
-              for (const legacyEvent of mapRuntimeV4EventToLegacy(event)) {
-                stream.emit(legacyEvent.type, legacyEvent.payload);
-              }
+              emitRuntimeV4Event(stream, event);
             }
             newObservations = [result.observation];
             workflowFinalResponse = result.workflowResult.status === "completed"

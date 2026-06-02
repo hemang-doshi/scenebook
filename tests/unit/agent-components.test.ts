@@ -125,6 +125,7 @@ describe("agent UI components", () => {
   beforeEach(() => {
     fetchJson.mockReset();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   test("slash command menu discovers supported commands from slash input", () => {
@@ -186,8 +187,8 @@ describe("agent UI components", () => {
           kind: "tool",
           toolName: "Script Builder",
           command: "script",
-          status: "awaiting_approval",
-          requiresApproval: true,
+          status: "completed",
+          requiresApproval: false,
           output: {
             kind: "script_package",
             hook: "Stop app hopping.",
@@ -199,12 +200,77 @@ describe("agent UI components", () => {
     );
 
     expect(screen.getByText("Script Builder")).toBeInTheDocument();
-    expect(screen.getByText(/draft ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/Stop app hopping/i)).toBeInTheDocument();
     expect(screen.queryByText(/SceneBook keeps the reel plan connected/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /show details/i }));
 
     expect(screen.getByText(/SceneBook keeps the reel plan connected/i)).toBeInTheDocument();
+  });
+
+  test("failed tool call cards auto-expand to show error details", () => {
+    render(
+      React.createElement(ToolCallCard, {
+        toolCall: {
+          id: "tool-call-failed",
+          kind: "tool",
+          toolName: "Publisher",
+          command: "publish",
+          status: "failed",
+          requiresApproval: false,
+          output: {
+            kind: "tool_error",
+            message: "External publish action failed.",
+          },
+          errorMessage: "External publish action failed.",
+          createdAt: new Date().toISOString(),
+        },
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: /hide details/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/External publish action failed/i).length).toBeGreaterThan(0);
+  });
+
+  test("tool call cards auto-expand when a running card rerenders as failed", () => {
+    const runningTool = {
+      id: "tool-call-rerender",
+      kind: "tool" as const,
+      toolName: "Script Builder",
+      command: "script",
+      status: "running",
+      requiresApproval: false,
+      output: {
+        kind: "tool_progress",
+        activity: "Writing",
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    const { rerender } = render(
+      React.createElement(ToolCallCard, {
+        toolCall: runningTool,
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: /show details/i })).toBeInTheDocument();
+
+    rerender(
+      React.createElement(ToolCallCard, {
+        toolCall: {
+          ...runningTool,
+          status: "failed",
+          output: {
+            kind: "tool_error",
+            message: "Script generation failed.",
+          },
+          errorMessage: "Script generation failed.",
+        },
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: /hide details/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Script generation failed/i).length).toBeGreaterThan(0);
   });
 
   test("history selector renders prior project threads plus muted new conversation", async () => {
@@ -308,6 +374,48 @@ describe("agent UI components", () => {
     fireEvent.click(screen.getByRole("button", { name: /generate image/i }));
 
     expect((screen.getByLabelText("composer") as HTMLInputElement).value).toMatch(/^\/generate-image /);
+  });
+
+  test("agent history renders persisted workflow-aware timeline entries", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return {
+        threadId: "thread-1",
+        messages: [],
+        toolCalls: [],
+        entries: [
+          {
+            id: "patch-entry-1",
+            kind: "patch",
+            patchId: "patch-1",
+            title: "Full package patch",
+            summary: "Save the generated production package.",
+            status: "planned",
+            canApply: true,
+            operations: [
+              {
+                operationIndex: 0,
+                type: "create_project_artifact",
+                status: "planned",
+                reason: "Store the full production package.",
+              },
+            ],
+            createdAt: "2026-06-02T10:00:00.000Z",
+          },
+        ],
+      };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    expect(await screen.findByText("Full package patch")).toBeInTheDocument();
+    expect(screen.getByText("Create project artifact")).toBeInTheDocument();
+    expect(screen.getByText("Store the full production package.")).toBeInTheDocument();
   });
 
   test("activity strip transitions through command, awaiting input, and done states", async () => {
@@ -433,5 +541,218 @@ describe("agent UI components", () => {
       expect(screen.getByText(/Script Builder/i)).toBeInTheDocument();
     });
     expect(fetchJson).toHaveBeenCalledTimes(4);
+  });
+
+  test("streaming v4 workflow events render workflow and artifact cards", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            `data: ${JSON.stringify({ type: "meta", threadId: "thread-1", runId: "run-1" })}`,
+            `data: ${JSON.stringify({
+              type: "v4_event",
+              event: {
+                type: "workflow_completed",
+                threadId: "thread-1",
+                runId: "run-1",
+                workflowName: "create_full_production_package",
+                message: "Complete package ready.",
+                observation: {
+                  output: {
+                    workflowName: "create_full_production_package",
+                    artifacts: [
+                      {
+                        type: "full_production_package",
+                        title: "Full production package",
+                        summary: "Complete package ready.",
+                        payload: {
+                          plan: { hook: "Open with the beach reveal." },
+                          scriptPackage: { script: "Show the route, then the sunset payoff." },
+                          shootPack: { scenes: ["Beach walk", "Sunset close"] },
+                          assetPromptPack: { imagePrompts: ["Goa beach sunset reel still"] },
+                          publishPrep: { caption: "A slow evening in Goa." },
+                        },
+                      },
+                    ],
+                    patchId: "patch-1",
+                    patchTitle: "Save full production package",
+                    patchSummary: "Save all generated sections.",
+                    patchAutoApplyReason: "Patch has 9 operations; auto-apply limit is 8.",
+                  },
+                },
+              },
+            })}`,
+            "",
+          ].join("\n\n"),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+      ),
+    );
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Empty");
+    fireEvent.change(screen.getByLabelText("composer"), {
+      target: { value: "Make me the full production package" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Create full production package")).toBeInTheDocument();
+    expect(screen.getAllByText("Complete package ready.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Full production package").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Plan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Script").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Shoot Pack").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Asset Prompts").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Publish Prep").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Save full production package").length).toBeGreaterThan(0);
+  });
+
+  test("legacy workflow-shaped stream packets render rich workflow cards", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            `data: ${JSON.stringify({ type: "meta", threadId: "thread-1", runId: "run-1" })}`,
+            `data: ${JSON.stringify({
+              type: "tool_completed",
+              threadId: "thread-1",
+              runId: "run-1",
+              toolName: "create_full_production_package",
+              workflowName: "create_full_production_package",
+              message: "Legacy package ready.",
+              observation: {
+                output: {
+                  artifacts: [
+                    {
+                      type: "full_production_package",
+                      title: "Legacy full package",
+                      payload: {
+                        plan: { hook: "Start with the creator problem." },
+                        scriptPackage: { script: "Show the before and after." },
+                        shootPack: { scenes: ["Desk setup", "Timeline close"] },
+                        assetPromptPack: { imagePrompts: ["Creator desk product still"] },
+                        publishPrep: { caption: "Build once, ship everywhere." },
+                      },
+                    },
+                  ],
+                  patchId: "patch-legacy",
+                  patchTitle: "Save legacy package",
+                  patchSummary: "Save generated package.",
+                },
+              },
+            })}`,
+            "",
+          ].join("\n\n"),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+      ),
+    );
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Empty");
+    fireEvent.change(screen.getByLabelText("composer"), {
+      target: { value: "Make the package" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Create full production package")).toBeInTheDocument();
+    expect(screen.getByText("Legacy package ready.")).toBeInTheDocument();
+    expect(screen.getAllByText("Legacy full package").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Save legacy package").length).toBeGreaterThan(0);
+  });
+
+  test("streamed patch operation updates do not regress earlier operation statuses", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    const patch = {
+      id: "patch-status",
+      title: "Patch status regression",
+      summary: "Apply a two-step project update.",
+      operations: [
+        { type: "update_creative_brief", reason: "Save the creative brief." },
+        { type: "create_script_version", reason: "Save the script version." },
+      ],
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            `data: ${JSON.stringify({ type: "meta", threadId: "thread-1", runId: "run-1" })}`,
+            `data: ${JSON.stringify({
+              type: "v4_event",
+              event: {
+                type: "patch_operation_completed",
+                threadId: "thread-1",
+                runId: "run-1",
+                patch,
+                operationIndex: 0,
+                message: "Creative brief saved.",
+              },
+            })}`,
+            `data: ${JSON.stringify({
+              type: "v4_event",
+              event: {
+                type: "patch_operation_running",
+                threadId: "thread-1",
+                runId: "run-1",
+                patch,
+                operationIndex: 1,
+                message: "Script version saving.",
+              },
+            })}`,
+            "",
+          ].join("\n\n"),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+      ),
+    );
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Empty");
+    fireEvent.change(screen.getByLabelText("composer"), {
+      target: { value: "Apply the patch" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Patch status regression")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+      expect(screen.getByText("Running")).toBeInTheDocument();
+    });
   });
 });

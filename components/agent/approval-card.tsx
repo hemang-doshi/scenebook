@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ToolCallCard } from "@/components/agent/tool-call-card";
-import type { AgentUiToolCall } from "@/components/agent/agent-chat-island";
+import type { AgentUiToolCall } from "@/components/agent/types";
 
 interface ApprovalCardProps {
   toolCall: AgentUiToolCall;

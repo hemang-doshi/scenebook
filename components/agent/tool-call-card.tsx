@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-import type { AgentUiToolCall } from "@/components/agent/agent-chat-island";
+import type { AgentUiToolCall } from "@/components/agent/types";
 
 function prettyPrint(value: unknown) {
   return JSON.stringify(value, null, 2);
@@ -18,11 +18,14 @@ type ToolCallCardProps = {
 };
 
 export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
   const output = (toolCall.output ?? {}) as Record<string, unknown>;
+  const autoExpanded = shouldAutoExpand(toolCall, output);
+  const [manualExpanded, setManualExpanded] = useState(false);
+  const [autoCollapsed, setAutoCollapsed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const kind = typeof output.kind === "string" ? output.kind : null;
   const modality = typeof output.modality === "string" ? output.modality : "image";
+  const expanded = autoExpanded ? !autoCollapsed : manualExpanded;
 
   async function copyOutput(value: unknown) {
     await navigator.clipboard.writeText(JSON.stringify(value, null, 2));
@@ -56,7 +59,13 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
           type="button"
           variant="secondary"
           aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}
+          onClick={() => {
+            if (autoExpanded) {
+              setAutoCollapsed((current) => !current);
+            } else {
+              setManualExpanded((current) => !current);
+            }
+          }}
           className="h-8 w-fit px-4 text-[10px] border-[var(--hairline)]"
         >
           {expanded ? "Hide details" : "Show details"}
@@ -97,6 +106,25 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
       </CardContent>
     </Card>
   );
+}
+
+function shouldAutoExpand(toolCall: AgentUiToolCall, output: Record<string, unknown>) {
+  if (toolCall.status === "failed" || toolCall.status === "awaiting_approval") {
+    return true;
+  }
+
+  const kind = typeof output.kind === "string" ? output.kind.toLowerCase() : "";
+  if (kind === "approval_request") {
+    return true;
+  }
+
+  const searchable = JSON.stringify({
+    toolName: toolCall.toolName,
+    command: toolCall.command,
+    output,
+  }).toLowerCase();
+
+  return /\b(external|publish|destructive|delete|remove|nango)\b/.test(searchable);
 }
 
 function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unknown>) {

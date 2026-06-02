@@ -41,6 +41,13 @@ function restoreAgentOrchestrator() {
   }
 }
 
+function parseSsePackets(text: string) {
+  return text
+    .split("\n\n")
+    .filter((chunk) => chunk.startsWith("data: "))
+    .map((chunk) => JSON.parse(chunk.slice("data: ".length)));
+}
+
 vi.mock("@/lib/agent/runtime", () => ({
   appendAgentMessage,
   completeAgentRun,
@@ -466,6 +473,48 @@ describe("runtime-v4 run summaries", () => {
     expect(text).toContain("Plan a reel about building SceneBook");
   });
 
+  test("langgraph runtime streams legacy packets and raw runtime-v4 events", async () => {
+    process.env.AGENT_ORCHESTRATOR = "langgraph";
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "Help me make a reel about building SceneBook.",
+      selectedModels: {},
+    });
+
+    const packets = parseSsePackets(await response.text());
+
+    expect(packets).toContainEqual(expect.objectContaining({
+      type: "decision",
+      decision: expect.objectContaining({
+        type: "propose_plan",
+      }),
+    }));
+    expect(packets).toContainEqual(expect.objectContaining({
+      type: "v4_event",
+      event: expect.objectContaining({
+        type: "decision_made",
+        runId: "run-1",
+        decision: expect.objectContaining({
+          type: "propose_plan",
+        }),
+      }),
+    }));
+    expect(packets).toContainEqual(expect.objectContaining({
+      type: "message_delta",
+      text: "Plan a reel about building SceneBook",
+    }));
+    expect(packets).toContainEqual(expect.objectContaining({
+      type: "v4_event",
+      event: expect.objectContaining({
+        type: "final_response",
+        response: "Plan a reel about building SceneBook",
+      }),
+    }));
+  });
+
   test("custom runtime executes project_patch decisions through PatchExecutor", async () => {
     process.env.AGENT_ORCHESTRATOR = "custom";
     decideNextStep.mockResolvedValue({
@@ -577,6 +626,43 @@ describe("runtime-v4 run summaries", () => {
         }),
       ],
       workflowFinalResponse: "Package planned.",
+    }));
+  });
+
+  test("custom runtime streams legacy packets and raw runtime-v4 workflow events", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    decideNextStep.mockResolvedValue({
+      type: "workflow_call",
+      workflowName: "create_full_production_package",
+      input: { prompt: "Make the complete production package" },
+      reason: "The request needs the full production workflow.",
+    });
+
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "Make the complete production package.",
+      selectedModels: {},
+    });
+
+    const packets = parseSsePackets(await response.text());
+
+    expect(packets).toContainEqual(expect.objectContaining({
+      type: "tool_completed",
+      workflowName: "create_full_production_package",
+      message: "Package planned.",
+    }));
+    expect(packets).toContainEqual(expect.objectContaining({
+      type: "v4_event",
+      event: expect.objectContaining({
+        type: "workflow_completed",
+        runId: "run-1",
+        threadId: "thread-1",
+        workflowName: "create_full_production_package",
+        message: "Package planned.",
+      }),
     }));
   });
 
