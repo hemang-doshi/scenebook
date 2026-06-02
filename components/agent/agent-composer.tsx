@@ -138,12 +138,12 @@ export function AgentComposer({
   const isSubmitDisabled = isSending || (!value.trim() && attachments.length === 0);
 
   return (
-    <div className="relative rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+    <div className="relative rounded-[var(--radius-lg)] border border-[var(--line-strong)] bg-[rgba(255,255,255,.07)] px-2 py-2 shadow-[var(--shadow-soft)] backdrop-blur-[18px]">
       <div className="grid gap-2">
         {(activeCommand || attachments.length > 0) && (
           <div className="flex flex-wrap gap-1.5 px-1">
             {activeCommand && (
-              <div className="flex max-w-full items-center gap-1.5 rounded-[var(--rounded-md)] bg-[var(--primary)] px-2.5 py-1 text-[11px] font-mono text-[var(--on-primary)] shadow-sm">
+              <div className="flex max-w-full items-center gap-1.5 rounded-[var(--radius-pill)] bg-[var(--coral)] px-2.5 py-1 text-[11px] font-mono text-[#120a07] shadow-sm">
                 <span className="truncate">/{activeCommand}</span>
                 <button
                   type="button"
@@ -159,7 +159,7 @@ export function AgentComposer({
             {attachments.map((file, i) => (
               <div
                 key={`${file.name}-${file.url}-${i}`}
-                className="flex max-w-full items-center gap-1.5 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] px-2.5 py-1 text-[11px] font-mono text-[var(--ink)]/80"
+                className="flex max-w-full items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-2.5 py-1 text-[11px] font-mono text-[var(--ink)]/80"
               >
                 <Paperclip className="h-3 w-3 shrink-0 text-[var(--ink)]/50" />
                 <span className="max-w-[11rem] truncate" title={file.name}>
@@ -188,7 +188,7 @@ export function AgentComposer({
               aria-haspopup="menu"
               title="Actions"
               onClick={() => setActionMenuOpen((current) => !current)}
-              className="h-9 w-9 rounded-[var(--rounded-md)] border-[var(--hairline)] px-0"
+              className="h-9 min-h-9 w-9 rounded-[var(--radius-md)] border-[var(--line)] px-0 py-0"
             >
               <Plus className="h-4 w-4 text-[var(--ink)]/75" />
             </Button>
@@ -197,7 +197,7 @@ export function AgentComposer({
               <div
                 role="menu"
                 aria-label="Agent actions"
-                className="absolute bottom-[calc(100%+0.5rem)] left-0 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] p-2 shadow-[0_8px_28px_rgba(0,0,0,0.08)]"
+                className="absolute bottom-[calc(100%+0.5rem)] left-0 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel)] p-2 shadow-[var(--shadow-soft)]"
               >
                 <div className="grid gap-1">
                   {commandCatalog.map((item) => (
@@ -206,7 +206,7 @@ export function AgentComposer({
                       type="button"
                       variant="ghost"
                       onClick={() => handleQuickCommand(item.command)}
-                      className="h-auto w-full rounded-[var(--rounded-md)] px-2.5 py-2 text-left normal-case tracking-[0] hover:bg-[var(--surface-soft)]"
+                      className="h-auto min-h-0 w-full rounded-[var(--radius-md)] px-2.5 py-2 text-left normal-case tracking-[0] hover:bg-[rgba(255,255,255,.055)]"
                     >
                       <span className="flex min-w-0 flex-col items-start gap-0.5">
                         <span className="font-mono text-[11px] font-semibold text-[var(--ink)]">
@@ -237,7 +237,7 @@ export function AgentComposer({
                   : "Ask the agent..."
               }
               className={cn(
-                "block min-h-10 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm leading-5 tracking-[0] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0",
+                "block min-h-10 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm leading-5 tracking-[0] text-[var(--ink)] outline-none placeholder:text-[var(--muted-2)] focus:ring-0",
                 large ? "max-h-48" : "max-h-36",
               )}
             />
@@ -259,7 +259,7 @@ export function AgentComposer({
               aria-label="Attach files"
               title="Attach files"
               onClick={handleAttachmentClick}
-              className="h-9 w-9 rounded-[var(--rounded-md)] border-[var(--hairline)] px-0"
+              className="h-9 min-h-9 w-9 rounded-[var(--radius-md)] border-[var(--line)] px-0 py-0"
             >
               <Paperclip className="h-4 w-4 text-[var(--ink)]/70 transition-colors hover:text-[var(--ink)]" />
             </Button>
@@ -269,7 +269,7 @@ export function AgentComposer({
               title="Send message"
               disabled={isSubmitDisabled}
               onClick={onSubmit}
-              className="h-9 w-9 justify-center rounded-[var(--rounded-md)] px-0"
+              className="h-9 min-h-9 w-9 justify-center rounded-[var(--radius-md)] px-0 py-0"
             >
               {isSending ? (
                 <Loader2 className="h-4 w-4 animate-spin text-[var(--on-primary)]" />

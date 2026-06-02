@@ -89,7 +89,7 @@ export function HomePageClient({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
+    <div className="mx-auto max-w-[var(--container)] space-y-8 px-4 py-8 md:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeading
           eyebrow="Project Hub"
@@ -107,7 +107,7 @@ export function HomePageClient({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-1">New Project</p>
-              <h2 className="text-xl font-bold text-[var(--ink)]">Lightweight project setup</h2>
+              <h2 className="font-display text-xl font-bold text-[var(--ink)]">Lightweight project setup</h2>
               <p className="text-sm text-[var(--muted)] mt-1">
                 Start with the essentials, then continue inside the full project workspace.
               </p>
@@ -171,14 +171,14 @@ export function HomePageClient({
 
       <div className="space-y-4">
         {/* Notion-style database view tabs */}
-        <div className="flex items-center gap-1 border-b border-[var(--hairline)]">
+        <div className="flex items-center gap-1 border-b border-[var(--line)]">
           <button
             type="button"
             onClick={() => setActiveView("table")}
             className={cn(
               "px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2",
               activeView === "table"
-                ? "border-[var(--ink)] text-[var(--ink)] font-bold"
+                ? "border-[var(--coral)] text-[var(--coral-2)] font-bold"
                 : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
             )}
           >
@@ -191,7 +191,7 @@ export function HomePageClient({
             className={cn(
               "px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2",
               activeView === "board"
-                ? "border-[var(--ink)] text-[var(--ink)] font-bold"
+                ? "border-[var(--coral)] text-[var(--coral-2)] font-bold"
                 : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
             )}
           >
@@ -204,7 +204,7 @@ export function HomePageClient({
             className={cn(
               "px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2",
               activeView === "gallery"
-                ? "border-[var(--ink)] text-[var(--ink)] font-bold"
+                ? "border-[var(--coral)] text-[var(--coral-2)] font-bold"
                 : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
             )}
           >
@@ -221,8 +221,8 @@ export function HomePageClient({
           <>
             {/* TABLE VIEW */}
             {activeView === "table" && (
-              <Panel className="overflow-hidden p-0 border border-[var(--hairline)]">
-                <div className="flex items-center justify-between border-b border-[var(--hairline)] p-6">
+              <Panel className="overflow-hidden border border-[var(--line)] p-0">
+                <div className="flex items-center justify-between border-b border-[var(--line)] p-6">
                   <div>
                     <h2 className="text-base font-bold text-[var(--ink)]">{projects.length} Projects</h2>
                   </div>
@@ -233,7 +233,7 @@ export function HomePageClient({
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="border-b border-[var(--hairline)] bg-[var(--surface-soft)]">
+                      <tr className="border-b border-[var(--line)] bg-[rgba(255,255,255,.035)]">
                         <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Project</th>
                         <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Status</th>
                         <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Format</th>
@@ -245,7 +245,7 @@ export function HomePageClient({
                     </thead>
                     <tbody>
                       {projects.map((project) => (
-                        <tr key={project.id} className="border-b border-[var(--hairline)] hover:bg-[var(--surface-soft)]/40 transition-colors last:border-b-0">
+                        <tr key={project.id} className="border-b border-[var(--line)] transition-colors last:border-b-0 hover:bg-[rgba(255,255,255,.045)]">
                           <td className="px-6 py-4">
                             <div>
                               <p className="font-semibold text-[var(--ink)]">{project.title}</p>

@@ -1,6 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { ProjectWorkspace } from "@/lib/data/repository";
+import { fetchJson } from "@/lib/fetcher";
 
 function percent(value: number) {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
@@ -11,13 +16,43 @@ function hasText(value: string) {
 }
 
 export function ProjectMindPanel({ project }: { project: ProjectWorkspace }) {
+  const [projectMind, setProjectMind] = useState(() => projectMindDraft(project));
+  const [draft, setDraft] = useState(() => projectMindDraft(project));
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function saveProjectMind() {
+    setIsSaving(true);
+    setMessage(null);
+    try {
+      await fetchJson<ProjectWorkspace>(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          scriptLab: {
+            angle: draft.angle,
+            hook: draft.hook,
+            cta: draft.cta,
+          },
+        }),
+      });
+      setProjectMind(draft);
+      setMessage("ProjectMind updated");
+      setIsEditing(false);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to update ProjectMind.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const scriptFields = [
-    project.scriptLab.angle,
-    project.scriptLab.hook,
+    projectMind.angle,
+    projectMind.hook,
     project.scriptLab.outline,
     project.scriptLab.script,
     project.scriptLab.caption,
-    project.scriptLab.cta,
+    projectMind.cta,
   ];
   const scriptScore = (scriptFields.filter(hasText).length / scriptFields.length) * 100;
   const shootItems = [
@@ -40,12 +75,28 @@ export function ProjectMindPanel({ project }: { project: ProjectWorkspace }) {
         : "Prepare publish package";
 
   return (
-    <aside className="hidden w-72 shrink-0 border-l border-[var(--hairline)] bg-[var(--surface-soft)]/45 px-4 py-5 xl:block">
+    <aside className="hidden w-80 shrink-0 border-l border-[var(--line)] bg-[rgba(255,255,255,.045)] px-4 py-5 xl:block">
       <div className="space-y-6">
         <section>
-          <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--muted)]">Project Mind</p>
-          <h3 className="mt-2 text-sm font-bold text-[var(--ink)]">{project.title}</h3>
-          <p className="mt-1 text-xs font-mono uppercase tracking-wider text-[var(--muted)]">{project.status}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--blue-2)]">ProjectMind</p>
+              <h3 className="mt-2 text-sm font-bold text-[var(--ink)]">{project.title}</h3>
+              <p className="mt-1 text-xs font-mono uppercase tracking-wider text-[var(--muted)]">{project.status}</p>
+            </div>
+            <Button
+              type="button"
+              variant={isEditing ? "ghost" : "secondary"}
+              className="h-8 min-h-8 px-3 py-1 text-[10px]"
+              onClick={() => {
+                setMessage(null);
+                setDraft(projectMind);
+                setIsEditing((current) => !current);
+              }}
+            >
+              {isEditing ? "Cancel" : "Edit ProjectMind"}
+            </Button>
+          </div>
         </section>
 
         <section className="space-y-3">
@@ -59,8 +110,57 @@ export function ProjectMindPanel({ project }: { project: ProjectWorkspace }) {
           <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--muted)]">Brief</p>
           <Fact label="Platform" value={project.platform} />
           <Fact label="Format" value={project.format} />
-          <Fact label="Hook" value={project.scriptLab.hook || "unknown"} />
-          <Fact label="CTA" value={project.scriptLab.cta || "unknown"} />
+          {isEditing ? (
+            <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.04)] p-3">
+              <label className="grid gap-1 text-xs text-[var(--muted)]">
+                <span className="font-mono text-[9px] uppercase tracking-widest">Angle</span>
+                <Input
+                  aria-label="ProjectMind angle"
+                  value={draft.angle}
+                  onChange={(event) => setDraft((current) => ({ ...current, angle: event.target.value }))}
+                  className="h-9 text-xs"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-[var(--muted)]">
+                <span className="font-mono text-[9px] uppercase tracking-widest">Hook</span>
+                <Input
+                  aria-label="ProjectMind hook"
+                  value={draft.hook}
+                  onChange={(event) => setDraft((current) => ({ ...current, hook: event.target.value }))}
+                  className="h-9 text-xs"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-[var(--muted)]">
+                <span className="font-mono text-[9px] uppercase tracking-widest">CTA</span>
+                <Input
+                  aria-label="ProjectMind CTA"
+                  value={draft.cta}
+                  onChange={(event) => setDraft((current) => ({ ...current, cta: event.target.value }))}
+                  className="h-9 text-xs"
+                />
+              </label>
+              <Button
+                type="button"
+                variant="coral"
+                disabled={isSaving}
+                onClick={() => void saveProjectMind()}
+                className="h-8 min-h-8 justify-center px-3 py-1 text-[10px]"
+              >
+                {isSaving ? "Saving" : "Save ProjectMind"}
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Fact label="Angle" value={projectMind.angle || "unknown"} />
+              <Fact label="Hook" value={projectMind.hook || "unknown"} />
+              <Fact label="CTA" value={projectMind.cta || "unknown"} />
+            </>
+          )}
+          {message ? (
+            <p className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-2 text-xs text-[var(--muted)]">
+              {message}
+            </p>
+          ) : null}
         </section>
 
         <section className="space-y-2">
@@ -72,6 +172,14 @@ export function ProjectMindPanel({ project }: { project: ProjectWorkspace }) {
   );
 }
 
+function projectMindDraft(project: ProjectWorkspace) {
+  return {
+    hook: project.scriptLab.hook,
+    cta: project.scriptLab.cta,
+    angle: project.scriptLab.angle,
+  };
+}
+
 function ReadinessRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="space-y-1">
@@ -79,8 +187,14 @@ function ReadinessRow({ label, value }: { label: string; value: number }) {
         <span className="font-mono uppercase tracking-wider text-[var(--muted)]">{label}</span>
         <span className="font-mono font-bold text-[var(--ink)]">{percent(value)}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--canvas)]">
-        <div className="h-full bg-[var(--primary)]" style={{ width: percent(value) }} />
+      <div className="h-1.5 overflow-hidden rounded-full bg-[rgba(255,255,255,.075)]">
+        <div
+          className="h-full"
+          style={{
+            width: percent(value),
+            background: "linear-gradient(90deg, var(--coral), var(--amber))",
+          }}
+        />
       </div>
     </div>
   );
@@ -88,7 +202,7 @@ function ReadinessRow({ label, value }: { label: string; value: number }) {
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-b border-[var(--hairline)] pb-2">
+    <div className="border-b border-[var(--line)] pb-2">
       <p className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)]">{label}</p>
       <p className="mt-1 line-clamp-2 text-xs text-[var(--ink)]">{value}</p>
     </div>

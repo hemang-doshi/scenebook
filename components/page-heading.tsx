@@ -16,9 +16,9 @@ export function PageHeading({
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="mb-8"
     >
-      <div className="type-eyebrow text-[var(--muted)] text-[12px] uppercase tracking-[0.08em] mb-2">{eyebrow}</div>
-      <h1 className="type-display-lg text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-[var(--ink)] mb-3">{title}</h1>
-      <p className="type-body text-sm md:text-base text-[var(--muted)] leading-relaxed max-w-3xl">
+      <div className="type-eyebrow mb-2 text-[12px] uppercase tracking-[0.08em] text-[var(--blue-2)]">{eyebrow}</div>
+      <h1 className="type-display-lg mb-3 font-bold tracking-normal text-[var(--ink)]">{title}</h1>
+      <p className="type-body max-w-3xl text-sm leading-relaxed text-[var(--muted)]">
         {description}
       </p>
     </motion.div>

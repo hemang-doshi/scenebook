@@ -380,22 +380,26 @@ export default function ProjectHubPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 pb-20 space-y-8">
+    <div className="mx-auto max-w-[var(--container)] space-y-8 px-4 py-6 pb-20 md:px-6">
       
-      {/* Notion Page Cover & Emoji Header */}
-      <div className="relative border border-[var(--hairline)] rounded-lg overflow-hidden bg-[var(--canvas)]">
-        <div className="h-40 w-full bg-gradient-to-r from-[var(--block-lilac)] via-[var(--block-mint)] to-[var(--block-coral)] opacity-85" />
+      {/* Project overview hero */}
+      <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] shadow-[var(--shadow-soft)]">
+        <div
+          className="h-40 w-full opacity-85"
+          style={{
+            background: "linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54))",
+          }}
+        />
         
-        {/* Float emoji */}
         <div className="relative px-6 md:px-8 -mt-10 mb-4 z-10">
-          <div className="text-4xl select-none bg-[var(--canvas)] border border-[var(--hairline)] rounded-xl w-16 h-16 flex items-center justify-center shadow-sm">
-            {project.status === "posted" || project.status === "analyzed" ? "📊" : ["shot", "editing"].includes(project.status) ? "🎬" : "📝"}
+          <div className="flex h-16 w-16 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--bg)] text-[var(--coral)] shadow-[var(--shadow-soft)]">
+            <Film className="h-7 w-7" />
           </div>
         </div>
 
         <div className="px-6 md:px-8 pb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           <div className="space-y-2">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[var(--ink)]">{project.title}</h1>
+            <h1 className="font-display text-3xl font-bold tracking-normal text-[var(--ink)]">{project.title}</h1>
             <p className="text-xs text-[var(--muted)]">Project Collaboration Page</p>
           </div>
 
@@ -420,7 +424,7 @@ export default function ProjectHubPage() {
         </div>
 
         {/* Database property fields inline */}
-        <div className="border-t border-[var(--hairline)] bg-[var(--surface-soft)]/50 px-6 md:px-8 py-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+        <div className="grid grid-cols-2 gap-4 border-t border-[var(--line)] bg-[rgba(255,255,255,.035)] px-6 py-5 text-xs md:grid-cols-4 md:px-8">
           <div className="space-y-1.5">
             <span className="flex items-center gap-1.5 text-[var(--muted)] font-mono uppercase tracking-wider text-[10px]">
               <Layers className="h-3.5 w-3.5" /> Status

@@ -90,6 +90,8 @@ const emptyModels: AgentModelSelection = {
   audio: getDefaultMediaModel("audio").id,
 };
 
+const agentModes = ["Plan", "Goal", "Creation", "Review", "Workspace"];
+
 function sortEntries(entries: AgentUiEntry[]) {
   return [...entries].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
@@ -582,10 +584,10 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const totalAssets = (library?.folders.reduce((acc, f) => acc + f.assets.length, 0) || 0) + (library?.looseAssets.length || 0);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem-36px)] w-full overflow-hidden bg-[var(--canvas)]">
+    <div className="flex h-[calc(100vh-72px)] w-full overflow-hidden bg-transparent">
       
       {/* Left Sidebar for History */}
-      <div className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--hairline)] bg-[var(--surface-soft)]/60 p-4 md:flex">
+      <div className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--line)] bg-[rgba(255,255,255,.035)] p-4 md:flex">
         <div className="flex flex-col flex-1 min-h-0">
           <Button
             variant="secondary"
@@ -594,7 +596,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               setEntries([]);
             }}
             className={cn(
-              "w-full text-xs font-mono uppercase tracking-wider h-9 bg-[var(--canvas)] border-[var(--hairline)] hover:border-[var(--ink)] mb-4 shrink-0",
+              "mb-4 h-9 min-h-9 w-full shrink-0 px-3 py-1 text-xs font-mono uppercase tracking-[.07em]",
               threadId !== "new-chat" && "text-muted"
             )}
           >
@@ -611,8 +613,8 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 className={cn(
                   "w-full text-left px-3 py-2 text-xs rounded-md transition-colors truncate font-mono uppercase tracking-wider flex items-center justify-between border",
                   threadId === t.id
-                    ? "bg-[var(--canvas)] text-[var(--ink)] font-bold border-[var(--hairline)]"
-                    : "text-[var(--ink)]/65 bg-transparent hover:bg-[var(--canvas)] hover:text-[var(--ink)] border-transparent"
+                    ? "border-[var(--blue)]/40 bg-[var(--blue)]/12 text-[var(--blue-2)] font-bold"
+                    : "text-[var(--muted)] bg-transparent hover:bg-[rgba(255,255,255,.055)] hover:text-[var(--ink)] border-transparent"
                 )}
               >
                 <span className="truncate">{t.title || `Thread ${t.id.slice(0, 8)}`}</span>
@@ -631,12 +633,29 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         
         {/* Navigation Bar */}
-        <header className="h-14 border-b border-[var(--hairline)] px-3 sm:px-6 flex items-center justify-between bg-[var(--canvas)] shrink-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
-          <div className="flex items-center gap-3 min-w-0">
-            <Bot className="h-4 w-full max-w-4 text-[var(--primary)] shrink-0" />
-            <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[var(--ink)] truncate">
-              {activeProject.title} &bull; Strategic Agent
-            </h2>
+        <header className="z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] bg-[rgba(255,255,255,.025)] px-3 py-3 sm:px-6">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <Bot className="h-4 w-full max-w-4 shrink-0 text-[var(--blue)]" />
+            <div className="min-w-0">
+              <h2 className="truncate text-xs font-bold font-mono uppercase tracking-[.07em] text-[var(--ink)]">
+                {activeProject.title} / Strategic Agent
+              </h2>
+              <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Agent modes">
+                {agentModes.map((mode) => (
+                  <span
+                    key={mode}
+                    className={cn(
+                      "rounded-[var(--radius-pill)] border px-2 py-1 text-[9px] font-mono uppercase tracking-[.07em]",
+                      mode === "Creation"
+                        ? "border-[var(--coral)]/40 bg-[var(--coral)]/12 text-[var(--coral-2)]"
+                        : "border-[var(--line)] bg-[rgba(255,255,255,.035)] text-[var(--muted)]",
+                    )}
+                  >
+                    {mode}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href={editorHref}>
@@ -654,11 +673,11 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 type="button"
                 variant="ghost"
                 onClick={() => setIsAssetDrawerOpen((current) => !current)}
-                className="h-8 px-3 text-[10px] font-mono bg-[var(--surface-soft)] border border-[var(--hairline)] hover:border-[var(--ink)] flex items-center gap-1.5"
+                className="flex h-8 min-h-8 items-center gap-1.5 border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-1 text-[10px] font-mono"
               >
-                <Library className="h-3.5 w-3.5 text-[var(--ink)]/70" />
+                <Library className="h-3.5 w-3.5 text-[var(--blue-2)]" />
                 <span>Assets:</span>
-                <span className="rounded-md bg-[var(--canvas)] px-1.5 py-0.5 border border-[var(--hairline)] font-bold font-mono">{library ? totalAssets : "—"}</span>
+                <span className="rounded-md border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-1.5 py-0.5 font-bold font-mono">{library ? totalAssets : "-"}</span>
               </Button>
               <AssetDrawer projectId={project.id} open={isAssetDrawerOpen} onOpenChange={setIsAssetDrawerOpen} />
             </div>
@@ -676,10 +695,10 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 <Badge className={cn(
                   "border text-[9px] px-2 py-0.5 rounded-[var(--rounded-sm)]",
                   activity.tone === "error"
-                    ? "border-[var(--danger)]/30 bg-red-50 text-[var(--danger)]"
+                    ? "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]"
                     : activity.tone === "warning"
-                      ? "border-amber-500/30 bg-amber-500/10 text-amber-800"
-                      : "border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]"
+                      ? "border-[var(--amber)]/40 bg-[var(--amber)]/10 text-[var(--amber)]"
+                      : "border-[var(--line)] bg-[rgba(255,255,255,.045)] text-[var(--muted)]"
                 )}>
                   {activity.label.toUpperCase()}
                 </Badge>
@@ -765,7 +784,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </div>
 
         {/* Composer bottom sticky aligned */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-[var(--canvas)] via-[var(--canvas)]/95 to-transparent pointer-events-none z-20 sm:p-6">
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-[var(--bg)] via-[rgba(7,8,11,.92)] to-transparent p-3 pointer-events-none sm:p-6">
           <div className="max-w-3xl mx-auto w-full pointer-events-auto">
             <AgentComposer
               value={draft}

@@ -1,0 +1,19 @@
+{
+  "name": "SceneBook Brand Pack",
+  "created_at": "2026-06-02T05:59:24.803098Z",
+  "source": "Pasted code.html",
+  "files": [
+    "README.md",
+    "brand-pack.md",
+    "design.md",
+    "logos/scenebook-mark-dark.svg",
+    "logos/scenebook-mark-light.svg",
+    "motion-pack.md",
+    "prompts/codex-implementation-brief.md",
+    "source/Pasted code.html",
+    "tokens/scenebook.motion.css",
+    "tokens/scenebook.motion.ts",
+    "tokens/scenebook.tokens.css",
+    "tokens/scenebook.tokens.json"
+  ]
+}

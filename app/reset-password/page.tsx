@@ -44,13 +44,15 @@ export default function ResetPasswordPage() {
   }, [client]);
 
   return (
-    <div className="flex min-h-screen bg-[var(--canvas)] items-center justify-center px-4 py-12">
-      <main className="w-full max-w-[420px] bg-[var(--canvas)] border border-[var(--hairline)] rounded-[var(--rounded-lg)] p-8 md:p-10">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+      <main className="w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(255,255,255,.055)] p-8 shadow-[var(--shadow)] backdrop-blur-[18px] md:p-10">
         <div className="text-center mb-8">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/scenebook-mark-dark.svg" alt="" className="mx-auto mb-4 h-14 w-14" />
           <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-2">
             Reset Password
           </p>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[var(--ink)]">
+          <h1 className="font-display text-5xl font-bold tracking-normal text-[var(--ink)]">
             SceneBook
           </h1>
         </div>

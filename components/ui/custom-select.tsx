@@ -64,7 +64,7 @@ export function CustomSelect({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex h-11 w-full items-center justify-between rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] px-4 py-2.5 text-sm text-[var(--ink)] transition-all duration-200 outline-none hover:border-[var(--ink)] focus:ring-2 focus:ring-[var(--ink)]/10 cursor-pointer select-none",
+          "flex h-11 w-full items-center justify-between rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-4 py-2.5 text-sm text-[var(--ink)] transition-all duration-[var(--sb-motion-fast)] outline-none hover:border-[var(--line-strong)] focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 cursor-pointer select-none",
           triggerClassName
         )}
       >
@@ -76,7 +76,7 @@ export function CustomSelect({
       {isOpen && (
         <div
           className={cn(
-            "absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] animate-[ed-fadeIn_0.15s_ease-out] min-w-[150px] scrollbar-thin",
+            "absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel)] p-1.5 shadow-[var(--shadow-soft)] animate-[ed-fadeIn_0.15s_ease-out] min-w-[150px] scrollbar-thin",
             align === "right" ? "right-0" : "left-0",
             dropdownClassName
           )}
@@ -91,8 +91,8 @@ export function CustomSelect({
                 className={cn(
                   "flex w-full items-center rounded-sm px-3 py-2 text-left text-sm transition-colors duration-150 cursor-pointer select-none",
                   isSelected
-                    ? "bg-[var(--surface-soft)] text-[var(--ink)] font-semibold"
-                    : "text-[var(--ink)]/70 hover:bg-[var(--surface-soft)] hover:text-[var(--ink)]",
+                    ? "bg-[rgba(105,167,255,.16)] text-[var(--blue-2)] font-semibold"
+                    : "text-[var(--muted)] hover:bg-[rgba(255,255,255,.055)] hover:text-[var(--ink)]",
                   opt.className
                 )}
               >

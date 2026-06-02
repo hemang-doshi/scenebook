@@ -20,13 +20,13 @@ export default async function SettingsIntegrationsPage() {
   const nangoConfigured = isNangoConfigured();
 
   return (
-    <main className="min-h-screen bg-[var(--canvas)] px-4 py-8 md:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-8 md:px-8">
       <div className="mx-auto w-full max-w-6xl space-y-8">
-        <header className="border-b border-[var(--hairline)] pb-6">
-          <p className="text-xs font-mono uppercase tracking-widest text-[var(--muted)]">
+        <header className="border-b border-[var(--line)] pb-6">
+          <p className="text-xs font-mono uppercase tracking-widest text-[var(--blue-2)]">
             Settings
           </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-normal text-[var(--ink)]">
+          <h1 className="mt-2 font-display text-4xl font-bold tracking-normal text-[var(--ink)]">
             Integrations
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">

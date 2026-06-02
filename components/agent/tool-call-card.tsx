@@ -34,7 +34,7 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
   }
 
   return (
-    <Card className="border border-[var(--hairline)] bg-[var(--canvas)] shadow-none">
+    <Card className="border border-[var(--line)] bg-[rgba(255,255,255,.035)] shadow-none">
       <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
         <div>
           <CardTitle className="text-sm font-bold text-[var(--ink)]">{toolCall.toolName}</CardTitle>
@@ -77,7 +77,7 @@ export function ToolCallCard({ toolCall, onQuickCommand }: ToolCallCardProps) {
 
             {kind === "prompt_questions" ? renderQuestions(toolCall.id, output) : null}
 
-            <pre className="overflow-x-auto rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/50 p-4 text-xs leading-relaxed text-[var(--ink)] font-mono">
+            <pre className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.055)] p-4 text-xs leading-relaxed text-[var(--ink)] font-mono">
               {prettyPrint(toolCall.output)}
             </pre>
 
@@ -155,12 +155,12 @@ function summarizeToolCall(toolCall: AgentUiToolCall, output: Record<string, unk
 
 function badgeClass(status: string) {
   if (status === "failed") {
-    return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--danger)] text-[10px] rounded-[var(--rounded-sm)]";
+    return "border border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)] text-[10px] rounded-[var(--radius-pill)]";
   }
   if (status === "awaiting_approval" || status === "awaiting_input") {
-    return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-amber-800 text-[10px] rounded-[var(--rounded-sm)]";
+    return "border border-[var(--amber)]/40 bg-[var(--amber)]/10 text-[var(--amber)] text-[10px] rounded-[var(--radius-pill)]";
   }
-  return "border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]/80 text-[10px] rounded-[var(--rounded-sm)]";
+  return "border border-[var(--line)] bg-[rgba(255,255,255,.055)] text-[var(--muted)] text-[10px] rounded-[var(--radius-pill)]";
 }
 
 function renderQuestions(toolCallId: string, output: Record<string, unknown>) {

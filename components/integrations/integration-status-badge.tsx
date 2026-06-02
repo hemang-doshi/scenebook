@@ -21,7 +21,13 @@ export function IntegrationStatusBadge({
   return (
     <Badge
       className={cn(
-        "border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]/70",
+        status === "connected"
+          ? "border-[var(--lime)]/40 bg-[var(--lime)]/10 text-[var(--lime)]"
+          : status === "failed" || status === "revoked"
+            ? "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]"
+            : status === "pending"
+              ? "border-[var(--amber)]/40 bg-[var(--amber)]/10 text-[var(--amber)]"
+              : "border-[var(--line)] bg-[rgba(255,255,255,.055)] text-[var(--muted)]",
         className,
       )}
     >

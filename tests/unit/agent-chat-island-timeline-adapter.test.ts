@@ -252,6 +252,6 @@ describe("agent chat island timeline adapters", () => {
         }),
       }),
     ]);
-    expect(activityForRuntimeV4Event(approvalEvent ?? {})).toEqual({ label: "approval needed", tone: "warning" });
+    expect(activityForRuntimeV4Event(approvalEvent ?? {})).toEqual({ label: "approval required", tone: "warning" });
   });
 });

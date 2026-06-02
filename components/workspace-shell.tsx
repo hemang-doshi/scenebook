@@ -144,39 +144,40 @@ export function WorkspaceShell({
   }, [activeCardId, pathname, projectTitle, showActiveProject]);
 
   return (
-    <div className="relative min-h-screen bg-[var(--canvas)] text-[var(--ink)] flex flex-col font-sans">
-      {/* Sticky Top Nav */}
-      <header className="sticky top-0 z-40 h-14 w-full bg-[var(--canvas)] border-b border-[var(--hairline)] px-4 lg:px-6 flex items-center justify-between">
-        {/* Left: Logo + Breadcrumbs */}
+    <div className="relative flex min-h-screen flex-col bg-transparent text-[var(--ink)] font-sans">
+      <header className="sticky top-0 z-40 flex h-[72px] w-full items-center justify-between border-b border-[var(--line)] bg-[rgba(7,8,11,.74)] px-4 backdrop-blur-[18px] lg:px-6">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/home" className="text-lg font-bold tracking-tight text-[var(--ink)] hover:opacity-80 transition-opacity shrink-0">
-            SceneBook
+          <Link href="/home" className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-normal text-[var(--ink)] transition-opacity hover:opacity-80">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/scenebook-mark-dark.svg" alt="" className="h-9 w-9" />
+            <span className="font-display">SceneBook</span>
           </Link>
           {breadcrumbItems.length > 0 && (
             <>
-              <span className="text-[var(--hairline)] select-none">/</span>
+              <span className="text-[var(--line-strong)] select-none">/</span>
               <AppBreadcrumbs items={breadcrumbItems} className="min-w-0" />
             </>
           )}
         </div>
 
-        {/* Center: Nav links (Desktop) */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-2">
           {items.map((item) => {
             const active =
               pathname === item.href ||
               (item.match && item.match.some((m) => pathname.startsWith(m)));
+            const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "text-xs font-mono tracking-wider uppercase transition-colors py-1",
+                  "inline-flex items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-2 text-[11px] font-mono uppercase tracking-[.07em] transition-colors",
                   active
-                    ? "text-[var(--ink)] font-bold border-b-2 border-[var(--ink)]"
-                    : "text-[var(--ink)]/60 hover:text-[var(--ink)]"
+                    ? "border-[var(--coral)]/50 bg-[var(--coral)]/12 text-[var(--coral-2)]"
+                    : "border-transparent text-[var(--muted)] hover:border-[var(--line)] hover:text-[var(--ink)]"
                 )}
               >
+                <Icon className={cn("h-3.5 w-3.5", active ? "text-[var(--coral)]" : "text-[var(--muted-2)]")} />
                 {item.label}
               </Link>
             );
@@ -194,7 +195,7 @@ export function WorkspaceShell({
 
           {/* User Email (Desktop/Tablet) */}
           {accountEmail && (
-            <div className="hidden lg:block text-xs font-mono text-[var(--ink)]/60 bg-[var(--surface-soft)] px-3 py-1.5 rounded-[var(--rounded-md)] border border-[var(--hairline)]">
+            <div className="hidden rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-1.5 text-xs font-mono text-[var(--muted)] lg:block">
               {accountEmail}
             </div>
           )}
@@ -212,42 +213,34 @@ export function WorkspaceShell({
           {/* Mobile Menu Button */}
           <button
             type="button"
-            className="md:hidden p-2 text-[var(--ink)] hover:bg-[var(--surface-soft)] rounded-[var(--rounded-md)] transition-colors"
+            className="rounded-[var(--radius-md)] p-2 text-[var(--ink)] transition-colors hover:bg-[rgba(255,255,255,.055)] md:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle navigation"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </header>
 
-      {/* Marquee Strip */}
-      <div className="marquee-strip relative flex items-center w-full border-b border-[var(--hairline)]">
-        <div className="marquee-track flex whitespace-nowrap text-[10px] font-mono tracking-widest py-2 select-none uppercase">
-          <span>SCENEBOOK AI &bull; WRITE SCRIPTS &bull; GENERATE STORYBOARDS &bull; REFINE SCENES &bull; EXPORT VIDEO &bull;&nbsp;</span>
-          <span>SCENEBOOK AI &bull; WRITE SCRIPTS &bull; GENERATE STORYBOARDS &bull; REFINE SCENES &bull; EXPORT VIDEO &bull;&nbsp;</span>
-          <span>SCENEBOOK AI &bull; WRITE SCRIPTS &bull; GENERATE STORYBOARDS &bull; REFINE SCENES &bull; EXPORT VIDEO &bull;&nbsp;</span>
-          <span>SCENEBOOK AI &bull; WRITE SCRIPTS &bull; GENERATE STORYBOARDS &bull; REFINE SCENES &bull; EXPORT VIDEO &bull;&nbsp;</span>
-        </div>
-      </div>
-
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-[92px] z-30 bg-[var(--canvas)] flex flex-col p-6 animate-[ed-fadeIn_0.15s_ease-out]">
+        <div className="fixed inset-0 top-[72px] z-30 flex flex-col border-t border-[var(--line)] bg-[rgba(7,8,11,.96)] p-6 backdrop-blur-[18px] animate-[ed-fadeIn_0.15s_ease-out] md:hidden">
           <nav className="flex flex-col gap-4 mb-8">
             {items.map((item) => {
               const active =
                 pathname === item.href ||
                 (item.match && item.match.some((m) => pathname.startsWith(m)));
+              const Icon = item.icon;
               return (
                 <Link
                   key={`${item.href}-mobile`}
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
-                    "text-lg font-semibold tracking-tight py-2 border-b border-[var(--hairline)]",
-                    active ? "text-[var(--primary)]" : "text-[var(--ink)]/60"
+                    "flex items-center gap-3 border-b border-[var(--line)] py-3 text-lg font-semibold tracking-normal",
+                    active ? "text-[var(--coral-2)]" : "text-[var(--muted)]"
                   )}
                 >
+                  <Icon className={cn("h-4 w-4", active ? "text-[var(--coral)]" : "text-[var(--muted-2)]")} />
                   {item.label}
                 </Link>
               );
@@ -255,7 +248,7 @@ export function WorkspaceShell({
           </nav>
           <div className="flex flex-col gap-3 mt-auto">
             {accountEmail && (
-              <div className="text-xs font-mono text-center text-[var(--ink)]/60 bg-[var(--surface-soft)] py-2 rounded-[var(--rounded-md)] border border-[var(--hairline)]">
+              <div className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] py-2 text-center text-xs font-mono text-[var(--muted)]">
                 {accountEmail}
               </div>
             )}
@@ -279,8 +272,7 @@ export function WorkspaceShell({
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full bg-[var(--canvas)]">
+      <main className="w-full flex-1 bg-transparent">
         {children}
       </main>
     </div>

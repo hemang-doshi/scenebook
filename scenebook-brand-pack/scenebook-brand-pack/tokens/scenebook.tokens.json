@@ -1,0 +1,86 @@
+{
+  "source": "Pasted code.html / :root and component CSS",
+  "colors": {
+    "background": {
+      "bg": "#07080b",
+      "bg2": "#0b0d12",
+      "bg3": "#10131a",
+      "black": "#07080b"
+    },
+    "panels": {
+      "panel": "#141821",
+      "panel2": "#191e29",
+      "panel3": "#202633"
+    },
+    "ink": {
+      "ink": "#fffdf8",
+      "inkSoft": "#f6efe2",
+      "muted": "#9aa3b2",
+      "muted2": "#737d8c"
+    },
+    "lightSurfaces": {
+      "white": "#fffdf8",
+      "bone": "#f7f3ea",
+      "stone": "#e8dfd2",
+      "lightInkFromCss": "#111318",
+      "lightMutedFromCss": "#5d6470"
+    },
+    "accents": {
+      "coral": "#ff6847",
+      "coral2": "#ff9b80",
+      "blue": "#69a7ff",
+      "blue2": "#a8cdff",
+      "violet": "#a78bfa",
+      "lime": "#b8ff6a",
+      "amber": "#ffcf6a",
+      "mint": "#6cf0c2",
+      "danger": "#ff5d73",
+      "success": "#7cf29a"
+    },
+    "lines": {
+      "line": "rgba(255,255,255,.105)",
+      "lineStrong": "rgba(255,255,255,.18)"
+    }
+  },
+  "radius": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "16px",
+    "lg": "22px",
+    "xl": "30px",
+    "2xl": "38px",
+    "pill": "999px"
+  },
+  "shadow": {
+    "shadow": "0 24px 80px rgba(0,0,0,.42)",
+    "shadowSoft": "0 10px 42px rgba(0,0,0,.28)"
+  },
+  "typography": {
+    "display": "\"Space Grotesk\", \"Inter Tight\", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "body": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "mono": "\"SFMono-Regular\", \"Cascadia Code\", \"Roboto Mono\", ui-monospace, Menlo, Monaco, Consolas, monospace"
+  },
+  "layout": {
+    "container": "1180px"
+  },
+  "motion": {
+    "sourceObserved": [
+      "html { scroll-behavior: smooth; }",
+      ".btn transition uses .18s ease",
+      ".btn:hover translates -1px",
+      "copy button feedback resets after 1400ms"
+    ],
+    "tokens": {
+      "instant": "0ms",
+      "micro": "90ms",
+      "fast": "180ms",
+      "standard": "270ms",
+      "slow": "360ms",
+      "receipt": "540ms",
+      "feedbackHold": "1400ms"
+    },
+    "easing": {
+      "primary": "ease"
+    }
+  }
+}

@@ -27,10 +27,10 @@ export function IntegrationCard({
   const Icon = icons[provider.provider];
 
   return (
-    <article className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] p-5">
+    <article className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] p-5 shadow-[var(--shadow-soft)]">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--surface-soft)] text-[var(--ink)]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--line)] bg-[rgba(105,167,255,.12)] text-[var(--blue-2)]">
             <Icon className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
@@ -41,7 +41,7 @@ export function IntegrationCard({
         <IntegrationStatusBadge status={status} />
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-[var(--hairline)] pt-4">
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
         <p className="text-[11px] leading-relaxed text-[var(--muted)]">
           {connectEnabled
             ? "Credentials stay in Nango while SceneBook tracks connection status."

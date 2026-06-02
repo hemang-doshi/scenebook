@@ -14,14 +14,14 @@ function parseInline(text: string): React.ReactNode[] {
   return matches.map((part, idx) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={idx} className="font-bold text-[var(--ink)]">
+          <strong key={idx} className="font-bold text-current">
           {part.slice(2, -2)}
         </strong>
       );
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={idx} className="bg-[rgba(0,0,0,0.06)] text-[var(--ink)] rounded px-1.5 py-0.5 text-xs font-mono border border-[rgba(0,0,0,0.04)]">
+        <code key={idx} className="rounded border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-1.5 py-0.5 text-xs font-mono text-current">
           {part.slice(1, -1)}
         </code>
       );
@@ -39,12 +39,12 @@ function CodeBlock({ code }: { code: string }) {
   };
   return (
     <div className="relative group my-3">
-      <pre className="bg-[var(--surface-soft)] border border-[var(--hairline)] rounded-md p-4 overflow-x-auto text-xs font-mono text-[var(--ink)]">
+      <pre className="overflow-x-auto rounded-md border border-[var(--line)] bg-[rgba(255,255,255,.055)] p-4 text-xs font-mono text-current">
         <code>{code}</code>
       </pre>
       <button
         onClick={handleCopy}
-        className="absolute right-3 top-3 p-1 rounded bg-[var(--canvas)] border border-[var(--hairline)] hover:border-[var(--ink)] text-[var(--muted)] hover:text-[var(--ink)] opacity-0 group-hover:opacity-100 transition-all duration-200"
+        className="absolute right-3 top-3 rounded border border-[var(--line)] bg-[rgba(255,255,255,.055)] p-1 text-[var(--muted)] opacity-0 transition-all duration-200 hover:border-[var(--line-strong)] hover:text-[var(--ink)] group-hover:opacity-100"
         title="Copy to clipboard"
       >
         {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
@@ -220,23 +220,23 @@ export function ChatMessage({
         transition={{ duration: 0.20, delay: Math.min(index * 0.02, 0.15) }}
         className="flex justify-end w-full"
       >
-        <div className="max-w-[85%] px-4 py-3 rounded-lg border border-[var(--hairline)] bg-[var(--surface-soft)] text-xs text-[var(--ink)] shadow-none space-y-1">
-          <div className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--ink)]/55 mb-1 justify-end">
+        <div className="max-w-[85%] space-y-1 rounded-[var(--radius-lg)] border border-[rgba(17,19,24,.10)] bg-[rgba(255,253,248,.92)] px-4 py-3 text-xs text-[var(--light-ink)] shadow-[var(--shadow-soft)]">
+          <div className="mb-1 flex items-center justify-end gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--light-muted)]">
             <span>You</span>
             <User className="h-3 w-3" />
           </div>
-          <div className="space-y-1 text-xs leading-relaxed text-[var(--ink)]/95">
+          <div className="space-y-1 text-xs leading-relaxed text-[var(--light-ink)]/95">
             {parseMarkdown(message.content)}
           </div>
           {!!(message.metadata?.attachments && Array.isArray(message.metadata.attachments)) && (
-            <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[var(--hairline)] pt-2">
+            <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[rgba(17,19,24,.12)] pt-2">
               {(message.metadata.attachments as Attachment[]).map((file, i) => (
                 <a
                   key={i}
                   href={file.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--canvas)] px-2.5 py-1 text-[10px] font-mono text-[var(--ink)]/80 hover:bg-[var(--surface-soft)] transition-all"
+                  className="flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[rgba(17,19,24,.12)] bg-[var(--white)] px-2.5 py-1 text-[10px] font-mono text-[var(--light-ink)]/80 transition-all hover:bg-[var(--bone)]"
                 >
                   <span>📎 {file.name.length > 15 ? file.name.substring(0, 12) + "..." : file.name}</span>
                 </a>
@@ -256,7 +256,7 @@ export function ChatMessage({
       className="flex justify-start w-full gap-3 py-2 items-start"
     >
       {/* Bot Icon Indicator */}
-      <div className="h-7 w-7 rounded-md border border-[var(--hairline)] bg-[var(--surface-soft)] flex items-center justify-center text-[var(--primary)] shrink-0">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[rgba(105,167,255,.12)] text-[var(--blue-2)]">
         <Bot className="h-4 w-4" />
       </div>
 
@@ -264,7 +264,7 @@ export function ChatMessage({
       <div className="flex-1 min-w-0 space-y-1 max-w-[min(48rem,100%)]">
         <div className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--ink)]/55 mb-1.5">
           <span>SceneBook Agent</span>
-          <Sparkles className="h-3 w-3 text-[var(--primary)] animate-pulse" />
+          <Sparkles className="h-3 w-3 text-[var(--coral)] animate-pulse" />
         </div>
         <div className="space-y-1 text-xs leading-relaxed text-[var(--ink)]/95">
           {parseMarkdown(message.content)}

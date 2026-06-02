@@ -9,7 +9,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[var(--rounded-sm)] bg-[var(--surface-soft)] px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.40px] text-[var(--ink)] border border-[var(--hairline)]",
+        "inline-flex items-center rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[.07em] text-[var(--muted)]",
         className,
       )}
       {...props}

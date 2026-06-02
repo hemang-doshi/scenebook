@@ -6,5 +6,5 @@ export function Panel({
   className,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("sb-panel p-6", className)} {...props} />;
+  return <div className={cn("sb-panel p-6 shadow-[var(--shadow-soft)]", className)} {...props} />;
 }

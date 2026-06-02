@@ -41,17 +41,17 @@ const copyLabels: Record<string, string> = {
 
 export function ArtifactPreviewCard({ entry }: ArtifactPreviewCardProps) {
   return (
-    <Card className="border border-[var(--hairline)] bg-[var(--canvas)] shadow-none">
+    <Card className="border border-[var(--line)] bg-[rgba(255,255,255,.045)] shadow-[var(--shadow-soft)]">
       <CardHeader className="flex-row items-start justify-between gap-3 p-5 pb-3">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2 text-[9px] font-mono uppercase tracking-widest text-[var(--ink)]/55">
-            <FileText className="h-3.5 w-3.5 text-[var(--primary)]" />
+          <div className="mb-2 flex items-center gap-2 text-[9px] font-mono uppercase tracking-widest text-[var(--coral-2)]">
+            <FileText className="h-3.5 w-3.5 text-[var(--coral)]" />
             <span>Artifact</span>
           </div>
           <CardTitle className="text-sm font-bold leading-snug text-[var(--ink)]">{entry.title}</CardTitle>
           {entry.summary ? <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]/90">{entry.summary}</p> : null}
         </div>
-        <Badge className="border border-[var(--hairline)] bg-[var(--surface-soft)] text-[10px] text-[var(--ink)]/80">
+        <Badge className="border border-[var(--line)] bg-[rgba(255,255,255,.055)] text-[10px] text-[var(--muted)]">
           {humanize(entry.artifactType)}
         </Badge>
       </CardHeader>
@@ -78,7 +78,7 @@ function renderFullProductionPackage(payload: Record<string, unknown>) {
         {fullPackageSections.map((section) => (
           <span
             key={section.title}
-            className="rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--canvas)] px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[var(--ink)]/65"
+            className="rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]"
           >
             {section.title}
           </span>
@@ -93,7 +93,7 @@ function renderFullProductionPackage(payload: Record<string, unknown>) {
         return (
           <section
             key={section.title}
-            className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/45 p-3"
+            className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] p-3"
           >
             <h4 className="text-xs font-bold text-[var(--ink)]">{section.title}</h4>
             <div className="mt-2 grid gap-2">{renderRecordFields(value, section.artifactType)}</div>
@@ -120,7 +120,7 @@ function renderArtifactPayload(artifactType: string, payload: Record<string, unk
       return (
         <section
           key={section.title}
-          className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/45 p-3"
+          className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] p-3"
         >
           <h4 className="text-xs font-bold text-[var(--ink)]">{section.title}</h4>
           <div className="mt-2 grid gap-2">
@@ -200,7 +200,7 @@ function FieldValue({ fieldKey, label, value }: { fieldKey: string; label: strin
     return (
       <div className="grid gap-1">
         {labelRow}
-        <div className="grid gap-1 rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--canvas)] px-3 py-2">
+        <div className="grid gap-1 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-2">
           {Object.entries(value).map(([key, nested]) => (
             <FieldValue key={key} fieldKey={key} label={humanize(key)} value={nested} />
           ))}

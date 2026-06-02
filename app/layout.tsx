@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
 import "./globals.css";
 
 const bodyFont = Inter({
   variable: "--font-body",
+  subsets: ["latin"],
+});
+
+const displayFont = Space_Grotesk({
+  variable: "--font-display",
   subsets: ["latin"],
 });
 
@@ -26,9 +31,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${bodyFont.variable} ${monoFont.variable} h-full antialiased`}
+      className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[var(--canvas)] text-[var(--ink)] font-sans">
+      <body className="min-h-full bg-[var(--bg)] text-[var(--ink)] font-sans">
         <div className="relative flex min-h-full flex-col">{children}</div>
       </body>
     </html>

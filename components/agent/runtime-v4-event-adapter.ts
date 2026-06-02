@@ -329,8 +329,11 @@ export function activityForRuntimeV4Event(event: Record<string, unknown>): Runti
   if (!type) return null;
   if (type === "run_started" || type === "agent_thinking") return { label: "thinking" };
   if (type === "workflow_started") return { label: "working" };
-  if (type === "workflow_needs_input" || type === "patch_approval_required" || type === "approval_required") {
-    return { label: "approval needed", tone: "warning" };
+  if (type === "workflow_needs_input") {
+    return { label: "needs input", tone: "warning" };
+  }
+  if (type === "patch_approval_required" || type === "approval_required") {
+    return { label: "approval required", tone: "warning" };
   }
   if (type === "workflow_failed" || type === "tool_failed" || type === "patch_failed" || type === "run_failed") {
     return { label: "error", tone: "error" };
@@ -339,9 +342,12 @@ export function activityForRuntimeV4Event(event: Record<string, unknown>): Runti
     return { label: "working" };
   }
   if (type === "workflow_patch_planned" || type === "patch_planned") {
-    return { label: "draft ready", tone: "warning" };
+    return { label: "patch planned", tone: "warning" };
   }
-  if (type === "run_completed" || type === "workflow_completed" || type === "patch_completed" || type === "tool_completed") {
+  if (type === "patch_completed") {
+    return { label: "patch applied" };
+  }
+  if (type === "run_completed" || type === "workflow_completed" || type === "tool_completed") {
     return { label: "done" };
   }
   return null;

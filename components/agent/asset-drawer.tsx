@@ -12,19 +12,20 @@ import { fetchJson } from "@/lib/fetcher";
 import type { CardAsset } from "@/lib/types";
 import type { ProjectAssetLibrary } from "@/lib/assets/asset-folders";
 
-function AssetRow({ asset }: { asset: CardAsset }) {
+function AssetRow({ asset, projectId }: { asset: CardAsset; projectId: string }) {
   const showImagePreview = asset.type === "image" || asset.type === "thumbnail";
   const showVideoPreview = asset.type === "video";
   const showAudioPreview = asset.type === "audio";
+  const provenance = assetProvenance(asset);
 
   return (
-    <div className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] px-3 py-3">
+    <div className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-3">
       {showImagePreview ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={asset.url}
           alt={asset.title}
-          className="mb-3 aspect-video w-full rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] object-cover"
+          className="mb-3 aspect-video w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel-2)] object-cover"
         />
       ) : null}
       {showVideoPreview ? (
@@ -32,7 +33,7 @@ function AssetRow({ asset }: { asset: CardAsset }) {
           src={asset.url}
           controls
           preload="metadata"
-          className="mb-3 aspect-video w-full rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)] object-cover"
+          className="mb-3 aspect-video w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel-2)] object-cover"
         />
       ) : null}
       {showAudioPreview ? (
@@ -47,19 +48,37 @@ function AssetRow({ asset }: { asset: CardAsset }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[var(--ink)] truncate" title={asset.title}>{asset.title}</p>
           <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">{asset.type}</p>
+          <p className="mt-1 text-[10px] font-mono uppercase tracking-wider text-[var(--blue-2)]">{provenance}</p>
         </div>
-        <a
-          href={asset.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex h-7 shrink-0 items-center rounded-full border border-[var(--hairline)] bg-[var(--canvas)] hover:bg-[var(--surface-soft)] px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--ink)] transition-colors"
-          aria-label={`Open ${asset.title}`}
-        >
-          Open
-        </a>
+        <div className="flex shrink-0 flex-col gap-2">
+          <a
+            href={`/editor/${projectId}?asset=${asset.id}`}
+            className="inline-flex h-7 items-center rounded-[var(--radius-pill)] border border-[var(--blue)]/40 bg-[var(--blue)]/12 px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--blue-2)] transition-colors hover:border-[var(--blue)]"
+            aria-label={`Import ${asset.title} to editor`}
+          >
+            Import
+          </a>
+          <a
+            href={asset.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-7 items-center rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--ink)] transition-colors hover:border-[var(--line-strong)]"
+            aria-label={`Open ${asset.title}`}
+          >
+            Open
+          </a>
+        </div>
       </div>
     </div>
   );
+}
+
+function assetProvenance(asset: CardAsset) {
+  const metadata = asset.metadata ?? {};
+  const model = typeof metadata.model === "string" ? metadata.model : null;
+  const provider = typeof metadata.provider === "string" ? metadata.provider : null;
+  const source = typeof asset.source === "string" ? asset.source : "generated";
+  return [provider, model, source].filter(Boolean).join(" / ");
 }
 
 export function AssetDrawer({
@@ -117,13 +136,13 @@ export function AssetDrawer({
           data-testid="asset-library-panel"
           className="absolute left-0 top-full z-30 mt-2 w-[min(24rem,calc(100vw-2rem))]"
         >
-          <Card className="flex max-h-[min(32rem,calc(100vh-10rem))] flex-col border border-[var(--hairline)] bg-[var(--canvas)] shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-[var(--rounded-lg)]">
-            <CardHeader className="flex-row items-center justify-between border-b border-[var(--hairline)] py-3 px-5">
+          <Card className="flex max-h-[min(32rem,calc(100vh-10rem))] flex-col rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--panel)] shadow-[var(--shadow-soft)]">
+            <CardHeader className="flex-row items-center justify-between border-b border-[var(--line)] py-3 px-5">
               <CardTitle className="text-sm font-bold text-[var(--ink)]">Asset Library</CardTitle>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 w-8 rounded-full px-0 hover:bg-[var(--surface-soft)]"
+                className="h-8 min-h-8 w-8 rounded-full px-0 py-0"
                 aria-label="Close asset menu"
                 onClick={() => onOpenChange(false)}
               >
@@ -149,32 +168,32 @@ export function AssetDrawer({
                         </Empty>
                       ) : (
                         library.folders.map((folder) => (
-                          <Card key={folder.id} className="border border-[var(--hairline)] bg-[var(--surface-soft)]/30 rounded-[var(--rounded-md)] shadow-none">
-                            <CardHeader className="py-3 px-4 border-b border-[var(--hairline)]">
+                          <Card key={folder.id} className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] shadow-none">
+                            <CardHeader className="py-3 px-4 border-b border-[var(--line)]">
                               <div className="flex items-center gap-2">
-                                <FolderOpen className="h-4 w-4 text-[var(--ink)]" />
+                                <FolderOpen className="h-4 w-4 text-[var(--blue-2)]" />
                                 <CardTitle className="text-xs font-bold text-[var(--ink)]">{folder.name}</CardTitle>
                               </div>
                             </CardHeader>
-                            <CardContent className="grid gap-2 p-3 bg-[var(--canvas)]">
+                            <CardContent className="grid gap-2 bg-transparent p-3">
                               {folder.assets.length === 0 ? (
                                 <p className="text-xs text-[var(--muted)]">Empty folder</p>
                               ) : (
-                                folder.assets.map((asset) => <AssetRow key={asset.id} asset={asset} />)
+                                folder.assets.map((asset) => <AssetRow key={asset.id} asset={asset} projectId={projectId} />)
                               )}
                             </CardContent>
                           </Card>
                         ))
                       )}
-                      <Card className="border border-[var(--hairline)] bg-[var(--surface-soft)]/30 rounded-[var(--rounded-md)] shadow-none">
-                        <CardHeader className="py-3 px-4 border-b border-[var(--hairline)]">
+                      <Card className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] shadow-none">
+                        <CardHeader className="py-3 px-4 border-b border-[var(--line)]">
                           <CardTitle className="text-xs font-bold text-[var(--ink)]">Loose Assets</CardTitle>
                         </CardHeader>
-                        <CardContent className="grid gap-2 p-3 bg-[var(--canvas)]">
+                        <CardContent className="grid gap-2 bg-transparent p-3">
                           {library.looseAssets.length === 0 ? (
                             <p className="text-xs text-[var(--muted)]">No loose assets.</p>
                           ) : (
-                            library.looseAssets.map((asset) => <AssetRow key={asset.id} asset={asset} />)
+                            library.looseAssets.map((asset) => <AssetRow key={asset.id} asset={asset} projectId={projectId} />)
                           )}
                         </CardContent>
                       </Card>

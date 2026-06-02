@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="SceneBook logo mark light surface">
+  <rect x="7" y="7" width="50" height="50" rx="15" fill="#fffdf8" stroke="#111318" stroke-width="2.5"/>
+  <path d="M18 19.5h28.5M18 28.5h28.5M18 37.5h15.5" stroke="#111318" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M39.5 36.2l9.2 5.4-9.2 5.3v-10.7z" fill="#ff6847"/>
+  <path d="M18 47c5.9-4.4 11.4-4.4 17 0 5.6-4.4 11.1-4.4 17 0" stroke="#69a7ff" stroke-width="2.3" stroke-linecap="round" fill="none"/>
+</svg>

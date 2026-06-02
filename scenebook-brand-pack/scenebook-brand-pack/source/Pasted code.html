@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SceneBook Brand + UX Source of Truth</title>
+  <meta name="description" content="Self-contained brand kit, logo system, UX audit, product flows, and UI revamp source of truth for SceneBook." />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07080b;
+      --bg-2: #0b0d12;
+      --bg-3: #10131a;
+      --panel: #141821;
+      --panel-2: #191e29;
+      --panel-3: #202633;
+      --ink: #fffdf8;
+      --ink-soft: #f6efe2;
+      --muted: #9aa3b2;
+      --muted-2: #737d8c;
+      --line: rgba(255,255,255,.105);
+      --line-strong: rgba(255,255,255,.18);
+      --white: #fffdf8;
+      --bone: #f7f3ea;
+      --stone: #e8dfd2;
+      --black: #07080b;
+      --coral: #ff6847;
+      --coral-2: #ff9b80;
+      --blue: #69a7ff;
+      --blue-2: #a8cdff;
+      --violet: #a78bfa;
+      --lime: #b8ff6a;
+      --amber: #ffcf6a;
+      --mint: #6cf0c2;
+      --danger: #ff5d73;
+      --success: #7cf29a;
+      --shadow: 0 24px 80px rgba(0,0,0,.42);
+      --shadow-soft: 0 10px 42px rgba(0,0,0,.28);
+      --radius-xs: 4px;
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 22px;
+      --radius-xl: 30px;
+      --radius-2xl: 38px;
+      --radius-pill: 999px;
+      --container: 1180px;
+      --display: "Space Grotesk", "Inter Tight", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 17% -3%, rgba(255,104,71,.20), transparent 26rem),
+        radial-gradient(circle at 90% 3%, rgba(105,167,255,.16), transparent 28rem),
+        linear-gradient(180deg, #07080b 0%, #0b0d12 38%, #07080b 100%);
+      color: var(--ink);
+      font-family: var(--body);
+      line-height: 1.55;
+      letter-spacing: -.01em;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; }
+    .page { overflow: hidden; }
+    .container { width: min(var(--container), calc(100vw - 40px)); margin: 0 auto; }
+    .section { padding: 92px 0; position: relative; }
+    .section.compact { padding: 58px 0; }
+    .section.light {
+      background: var(--bone);
+      color: #111318;
+      border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+      margin-top: 50px;
+    }
+    .section.white-panel {
+      background: var(--white);
+      color: #111318;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(18px);
+      background: rgba(7,8,11,.74);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav {
+      height: 72px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 24px;
+    }
+    .brand-lockup { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
+    .mark { width: 40px; height: 40px; flex: 0 0 auto; }
+    .wordmark {
+      font-family: var(--display);
+      font-size: 19px;
+      font-weight: 640;
+      letter-spacing: -.06em;
+    }
+    .navlinks {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .navlinks a {
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: var(--radius-pill);
+    }
+    .navlinks a:hover { color: var(--white); background: rgba(255,255,255,.07); }
+    .nav-actions { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,.055);
+      color: var(--ink);
+      border-radius: var(--radius-pill);
+      padding: 11px 17px;
+      font: 620 13px/1 var(--body);
+      letter-spacing: -.01em;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.32); background: rgba(255,255,255,.09); }
+    .btn.primary { background: var(--white); color: #08090c; border-color: var(--white); }
+    .btn.coral { background: var(--coral); border-color: var(--coral); color: #120a07; }
+    .btn.dark { background: #090b10; color: var(--white); border-color: rgba(0,0,0,.2); }
+    .btn.ghost-light { color: #17191f; border-color: rgba(17,19,24,.18); background: transparent; }
+
+    .hero { padding: 88px 0 72px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      color: var(--muted);
+      font: 520 12px/1 var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      background: rgba(255,255,255,.045);
+    }
+    .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 18px rgba(184,255,106,.8); }
+    h1, h2, h3, h4 { font-family: var(--display); margin: 0; letter-spacing: -.065em; line-height: .96; }
+    h1 { font-size: clamp(56px, 10vw, 122px); max-width: 1040px; margin-top: 26px; }
+    h2 { font-size: clamp(42px, 6vw, 76px); }
+    h3 { font-size: clamp(30px, 3.1vw, 46px); line-height: 1.04; }
+    h4 { font-size: 24px; line-height: 1.08; letter-spacing: -.04em; }
+    .lead { max-width: 780px; color: var(--muted); font-size: clamp(18px, 2vw, 22px); line-height: 1.45; margin: 24px 0 0; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+    .hero-grid { display: grid; grid-template-columns: 1.26fr .74fr; gap: 18px; margin-top: 58px; align-items: stretch; }
+    .product-frame {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      min-height: 500px;
+      overflow: hidden;
+      position: relative;
+    }
+    .product-frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 70% 20%, rgba(255,104,71,.18), transparent 22rem), radial-gradient(circle at 20% 90%, rgba(105,167,255,.13), transparent 22rem);
+      pointer-events: none;
+    }
+    .window-bar { height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 18px; border-bottom: 1px solid var(--line); background: rgba(0,0,0,.20); position: relative; z-index: 1; }
+    .traffic { display: flex; gap: 7px; }
+    .traffic span { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.18); }
+    .traffic span:nth-child(1) { background: var(--coral); }
+    .traffic span:nth-child(2) { background: var(--amber); }
+    .traffic span:nth-child(3) { background: var(--success); }
+    .window-title { color: var(--muted); font: 500 12px/1 var(--mono); }
+    .workspace-shell { position: relative; z-index: 1; display: grid; grid-template-columns: 190px 1fr 250px; gap: 1px; min-height: 456px; background: rgba(255,255,255,.08); }
+    .rail, .inspector, .canvas { background: rgba(10,12,18,.84); padding: 16px; }
+    .rail .item { color: var(--muted); padding: 10px 11px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+    .rail .item.active { color: var(--white); background: rgba(255,255,255,.08); }
+    .glyph { width: 8px; height: 8px; border-radius: 50%; background: var(--muted-2); }
+    .item.active .glyph { background: var(--coral); box-shadow: 0 0 18px rgba(255,104,71,.75); }
+    .canvas { display: flex; flex-direction: column; gap: 14px; }
+    .chat-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,.045);
+      padding: 16px;
+      box-shadow: var(--shadow-soft);
+    }
+    .chat-card.user { margin-left: 14%; background: rgba(255,253,248,.92); color: #111318; }
+    .chat-card.agent { margin-right: 10%; }
+    .card-label { font: 640 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; gap: 10px; }
+    .user .card-label { color: #697080; }
+    .timeline-card { display: grid; gap: 10px; margin-top: 4px; }
+    .timeline-row { display: grid; grid-template-columns: 84px 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; background: rgba(255,255,255,.046); border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--muted); }
+    .timeline-row strong { color: var(--white); font-weight: 600; }
+    .pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: var(--radius-pill); border: 1px solid var(--line); color: var(--muted); background: rgba(255,255,255,.045); font: 560 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+    .pill.good { color: var(--lime); border-color: rgba(184,255,106,.28); background: rgba(184,255,106,.08); }
+    .pill.hot { color: var(--coral-2); border-color: rgba(255,104,71,.32); background: rgba(255,104,71,.09); }
+    .pill.blue { color: var(--blue-2); border-color: rgba(105,167,255,.34); background: rgba(105,167,255,.09); }
+    .pill.violet { color: #d2c5ff; border-color: rgba(167,139,250,.34); background: rgba(167,139,250,.10); }
+    .promptbar { margin-top: auto; border: 1px solid rgba(255,255,255,.15); border-radius: 19px; padding: 13px 14px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,.06); }
+    .inspector { display: grid; align-content: start; gap: 12px; }
+    .asset-mini { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: rgba(255,255,255,.045); }
+    .asset-thumb { height: 74px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54)), repeating-linear-gradient(90deg, rgba(255,255,255,.16) 0 4px, transparent 4px 11px); margin-bottom: 10px; }
+    .side-card { padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: rgba(255,255,255,.05); position: relative; overflow: hidden; }
+    .side-card::before { content: ""; position: absolute; inset: -80px -120px auto auto; width: 280px; height: 280px; border-radius: 50%; background: rgba(255,104,71,.18); filter: blur(8px); }
+    .poster { position: relative; z-index: 1; aspect-ratio: 4 / 5; border-radius: 18px; border: 1px solid var(--line); overflow: hidden; background: linear-gradient(160deg, #141821, #07080b 62%); display: grid; place-items: center; }
+    .poster::before { content: ""; position: absolute; width: 74%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(255,253,248,.82), rgba(255,104,71,.42) 44%, transparent 66%); filter: blur(2px); }
+    .poster::after { content: "SCRIPT → SHOTS → ASSETS → EDIT"; position: absolute; bottom: 18px; left: 18px; right: 18px; color: var(--white); font: 700 18px/1.05 var(--display); letter-spacing: -.04em; }
+    .side-card p { position: relative; z-index: 1; color: var(--muted); margin: 18px 0 0; }
+
+    .section-head { display: grid; grid-template-columns: 1fr minmax(260px, 440px); gap: 32px; align-items: end; margin-bottom: 34px; }
+    .section-head p { color: var(--muted); margin: 0; font-size: 17px; }
+    .light .section-head p, .white-panel .section-head p { color: #5d6470; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .card { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; background: rgba(255,255,255,.045); min-height: 190px; }
+    .light .card, .white-panel .card { background: rgba(255,255,255,.62); border-color: rgba(17,19,24,.11); }
+    .card p { color: var(--muted); margin: 14px 0 0; }
+    .light .card p, .white-panel .card p { color: #5d6470; }
+    .rule-card { border-top: 1px solid var(--line-strong); padding-top: 20px; }
+    .light .rule-card { border-top-color: rgba(17,19,24,.16); }
+    .iconline { width: 46px; height: 46px; border-radius: 14px; border: 1px solid var(--line); display: grid; place-items: center; margin-bottom: 18px; background: rgba(255,255,255,.04); }
+    .light .iconline { border-color: rgba(17,19,24,.14); background: #fffdf8; }
+    .iconline svg { width: 26px; height: 26px; }
+
+    .logo-stage { display: grid; grid-template-columns: .8fr 1.2fr; gap: 18px; align-items: stretch; }
+    .logo-display { border-radius: var(--radius-2xl); background: #07080b; border: 1px solid rgba(255,255,255,.12); display: grid; place-items: center; padding: 48px 24px; min-height: 360px; }
+    .logo-display .mark { width: 152px; height: 152px; }
+    .logo-details { display: grid; gap: 16px; }
+    .logo-row { border-radius: var(--radius-lg); border: 1px solid var(--line); background: rgba(255,255,255,.045); padding: 22px; }
+    .logo-row.lightrow { background: var(--bone); color: #111318; border-color: rgba(17,19,24,.12); }
+    .logo-row .brand-lockup { color: inherit; }
+    .logo-row .mark { width: 52px; height: 52px; }
+    .spec-list { display: grid; gap: 10px; margin-top: 16px; color: var(--muted); font-size: 14px; }
+    .lightrow .spec-list { color: #5d6470; }
+    .spec-list div { display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid currentColor; border-color: rgba(154,163,178,.16); padding-top: 10px; }
+    .spec-list strong { color: var(--white); }
+    .lightrow .spec-list strong { color: #111318; }
+
+    .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .swatch { border-radius: 18px; overflow: hidden; border: 1px solid var(--line); min-height: 150px; background: rgba(255,255,255,.04); }
+    .swatch .tone { height: 82px; border-bottom: 1px solid rgba(255,255,255,.12); }
+    .swatch .meta { padding: 13px; display: grid; gap: 4px; }
+    .swatch b { font-family: var(--display); letter-spacing: -.04em; }
+    .swatch code { color: var(--muted); font: 12px/1.3 var(--mono); }
+    .light .swatch { border-color: rgba(17,19,24,.14); background: rgba(255,255,255,.62); }
+    .light .swatch code { color: #5d6470; }
+
+    .type-sample { border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; }
+    .type-row { display: grid; grid-template-columns: 190px 1fr 180px; gap: 20px; padding: 18px; border-bottom: 1px solid var(--line); align-items: center; }
+    .type-row:last-child { border-bottom: 0; }
+    .type-role { color: var(--muted); font: 12px/1.3 var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .type-example { font-family: var(--display); letter-spacing: -.055em; line-height: 1; }
+    .type-spec { color: var(--muted); font: 12px/1.4 var(--mono); }
+    .light .type-sample { border-color: rgba(17,19,24,.14); }
+    .light .type-row { border-bottom-color: rgba(17,19,24,.10); }
+    .light .type-role, .light .type-spec { color: #5d6470; }
+
+    .flow { display: grid; gap: 12px; }
+    .flow-step { display: grid; grid-template-columns: 56px 1fr auto; gap: 16px; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-lg); background: rgba(255,255,255,.045); padding: 16px; }
+    .flow-step .num { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: var(--white); color: #090b10; font: 800 14px/1 var(--display); }
+    .flow-step h4 { margin-bottom: 5px; }
+    .flow-step p { color: var(--muted); margin: 0; }
+    .flow-step .tag { color: var(--muted); font: 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .light .flow-step { background: rgba(255,255,255,.62); border-color: rgba(17,19,24,.12); }
+    .light .flow-step p, .light .flow-step .tag { color: #5d6470; }
+    .light .flow-step .num { background: #111318; color: var(--white); }
+
+    .screen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .screen { border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; background: rgba(255,255,255,.045); min-height: 360px; display: flex; flex-direction: column; }
+    .screen .screen-top { height: 42px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; color: var(--muted); font: 12px/1 var(--mono); }
+    .screen-body { padding: 18px; flex: 1; display: grid; gap: 12px; align-content: start; }
+    .project-tile { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: rgba(255,255,255,.04); display: grid; gap: 14px; }
+    .progress { height: 7px; background: rgba(255,255,255,.1); border-radius: var(--radius-pill); overflow: hidden; }
+    .progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--coral), var(--amber)); border-radius: inherit; }
+    .mock-list { display: grid; gap: 9px; }
+    .mock-list div { height: 36px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid var(--line); }
+    .diff-tree { display: grid; gap: 8px; }
+    .diff-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.055); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .diff-row b { color: var(--white); }
+    .risk-low { color: var(--lime); }
+    .risk-med { color: var(--amber); }
+    .risk-high { color: var(--danger); }
+
+    .component-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .component-demo { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; background: rgba(255,255,255,.045); min-height: 220px; }
+    .component-demo p { color: var(--muted); margin: 12px 0 0; }
+    .cmd { border: 1px solid var(--line); border-radius: 18px; padding: 13px 14px; color: var(--muted); display: flex; gap: 10px; align-items: center; background: rgba(255,255,255,.06); margin-top: 14px; }
+    .cmd kbd { color: var(--white); background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 8px; padding: 4px 7px; font: 11px/1 var(--mono); }
+
+    .code-block { position: relative; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; background: #06070a; box-shadow: var(--shadow-soft); }
+    .code-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font: 12px/1 var(--mono); }
+    pre { margin: 0; padding: 18px; overflow: auto; color: #e9edf5; font: 12px/1.7 var(--mono); max-height: 520px; }
+    .copy { border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--white); border-radius: 10px; padding: 7px 9px; font: 11px/1 var(--mono); cursor: pointer; }
+
+    .table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; display: table; }
+    .table th, .table td { padding: 14px 15px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .table th { color: var(--muted); font: 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; background: rgba(255,255,255,.04); }
+    .table tr:last-child td { border-bottom: 0; }
+    .table td { color: var(--muted); }
+    .table td strong { color: var(--white); }
+    .light .table, .light .table th, .light .table td { border-color: rgba(17,19,24,.13); }
+    .light .table th, .light .table td { color: #5d6470; }
+    .light .table td strong { color: #111318; }
+
+    .footer { padding: 66px 0 88px; border-top: 1px solid var(--line); }
+    .footer-grid { display: grid; grid-template-columns: 1.3fr .7fr; gap: 24px; align-items: end; }
+    .footer h2 { font-size: clamp(42px, 5vw, 72px); max-width: 760px; }
+    .footer p { color: var(--muted); max-width: 580px; }
+
+    .mini-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+    .divider { height: 1px; background: var(--line); margin: 28px 0; }
+    .focus-ring { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+    @media (max-width: 1060px) {
+      .navlinks { display: none; }
+      .hero-grid, .section-head, .logo-stage, .grid-2, .screen-grid, .component-matrix, .footer-grid { grid-template-columns: 1fr; }
+      .workspace-shell { grid-template-columns: 150px 1fr; }
+      .inspector { display: none; }
+      .swatches { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 720px) {
+      .container { width: min(var(--container), calc(100vw - 28px)); }
+      .section { padding: 66px 0; }
+      .hero { padding-top: 56px; }
+      .workspace-shell { grid-template-columns: 1fr; }
+      .rail { display: none; }
+      .product-frame { min-height: 450px; }
+      .grid-3 { grid-template-columns: 1fr; }
+      .swatches { grid-template-columns: 1fr; }
+      .type-row { grid-template-columns: 1fr; }
+      .flow-step { grid-template-columns: 44px 1fr; }
+      .flow-step .tag { grid-column: 2; }
+      .nav { grid-template-columns: 1fr auto; }
+      .nav-actions .btn:first-child { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div class="container nav">
+      <a class="brand-lockup" href="#top" aria-label="SceneBook brand source of truth">
+        <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <linearGradient id="sbGradient" x1="10" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#fffdf8"/>
+              <stop offset="0.42" stop-color="#ff6847"/>
+              <stop offset="1" stop-color="#69a7ff"/>
+            </linearGradient>
+          </defs>
+          <rect x="7" y="7" width="50" height="50" rx="15" fill="#07080b" stroke="url(#sbGradient)" stroke-width="2.5"/>
+          <path d="M18 19.5h28.5M18 28.5h28.5M18 37.5h15.5" stroke="#fffdf8" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M39.5 36.2l9.2 5.4-9.2 5.3v-10.7z" fill="#ff6847"/>
+          <path d="M18 47c5.9-4.4 11.4-4.4 17 0 5.6-4.4 11.1-4.4 17 0" stroke="#69a7ff" stroke-width="2.3" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="wordmark">SceneBook</span>
+      </a>
+      <nav class="navlinks" aria-label="Design source sections">
+        <a href="#brand">Brand</a>
+        <a href="#logo">Logo</a>
+        <a href="#ux">UX</a>
+        <a href="#screens">Screens</a>
+        <a href="#runtime">Runtime UI</a>
+        <a href="#handoff">Handoff</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn" href="#tokens">Tokens</a>
+        <a class="btn primary" href="#handoff">Implement</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container">
+        <span class="eyebrow"><span class="dot"></span> SceneBook UI Revamp</span>
+        <h1>SceneBook turns rough creator ideas into scripts, assets, edits, and publish-ready short-form videos.</h1>
+        <p class="lead">A dark-first product language for an AI production workspace that helps creators plan reels, generate scripts and assets, organize every scene, review changes safely, and move from messy idea to publishable cut.</p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#brand">Open brand system</a>
+          <a class="btn" href="#screens">Preview product screens</a>
+          <a class="btn" href="#handoff">Copy implementation brief</a>
+        </div>
+
+        <div class="hero-grid" aria-label="SceneBook product preview">
+          <div class="product-frame">
+            <div class="window-bar">
+              <div class="traffic"><span></span><span></span><span></span></div>
+              <div class="window-title">scenebook://projects/build-launch-reel</div>
+              <span class="pill good">Live ProjectMind</span>
+            </div>
+            <div class="workspace-shell">
+              <aside class="rail">
+                <div class="item active"><span class="glyph"></span> Agent</div>
+                <div class="item"><span class="glyph"></span> Overview</div>
+                <div class="item"><span class="glyph"></span> Assets</div>
+                <div class="item"><span class="glyph"></span> Editor</div>
+                <div class="item"><span class="glyph"></span> Analytics</div>
+                <div class="divider"></div>
+                <div class="item"><span class="glyph"></span> /script</div>
+                <div class="item"><span class="glyph"></span> /shotlist</div>
+                <div class="item"><span class="glyph"></span> /package</div>
+              </aside>
+              <section class="canvas">
+                <div class="chat-card user">
+                  <div class="card-label"><span>Creator brief</span><span>00:01</span></div>
+                  Make a launch reel about me building SceneBook. Make it feel useful, honest, and product-led — not like a generic SaaS ad.
+                </div>
+                <div class="chat-card agent">
+                  <div class="card-label"><span>Production agent</span><span class="pill hot">Package planned</span></div>
+                  I’ll convert this into a full production package: hooks, narrative spine, shot list, asset prompts, editor handoff, and publishing notes.
+                  <div class="timeline-card">
+                    <div class="timeline-row"><strong>Script</strong><span>3 hook options + chosen spine</span><span class="pill good">Ready</span></div>
+                    <div class="timeline-row"><strong>Assets</strong><span>5 visual prompts + folders</span><span class="pill blue">Queued</span></div>
+                    <div class="timeline-row"><strong>Patch</strong><span>Workspace update requires review</span><span class="pill hot">Planned</span></div>
+                  </div>
+                </div>
+                <div class="promptbar"><span>Ask the agent, use /commands, or review planned patch…</span><span>⌘ ↵</span></div>
+              </section>
+              <aside class="inspector">
+                <span class="pill violet">Asset Drawer</span>
+                <div class="asset-mini"><div class="asset-thumb"></div><strong>Opening shot</strong><br><span class="mini-note">Workspace chaos → clarity</span></div>
+                <div class="asset-mini"><div class="asset-thumb" style="background:linear-gradient(135deg,rgba(184,255,106,.65),rgba(167,139,250,.55));"></div><strong>Patch preview</strong><br><span class="mini-note">Script + tasks + folders</span></div>
+              </aside>
+            </div>
+          </div>
+          <aside class="side-card">
+            <div class="poster"></div>
+            <p>Design principle: keep the shell restrained, let generated work feel tactile, and make agent decisions visible enough to trust.</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="brand" class="section compact">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow"><span class="dot"></span> Brand foundation</span>
+            <h2>Premium creator tooling, not enterprise cosplay.</h2>
+          </div>
+          <p>The reference design system uses monumental type, restrained color, dark console surfaces, pill CTAs, and whitespace as a trust signal. SceneBook keeps the restraint but shifts the emotional center to creator throughput: a product that feels like a planning desk, production assistant, asset library, and editing handoff system in one.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card rule-card">
+            <div class="iconline"><svg viewBox="0 0 32 32" fill="none"><path d="M6 23V9l10-4 10 4v14l-10 4-10-4z" stroke="#ff6847" stroke-width="2"/><path d="M11 12h10M11 17h7" stroke="#fffdf8" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <h4>Personality</h4>
+            <p>Sharp, creative, practical, fast, calm under pressure. It should feel like a senior creative producer who can also operate the workspace.</p>
+          </article>
+          <article class="card rule-card">
+            <div class="iconline"><svg viewBox="0 0 32 32" fill="none"><path d="M6 8h20v16H6z" stroke="#69a7ff" stroke-width="2"/><path d="M12 13l7 3-7 3v-6z" fill="#ff6847"/><path d="M9 5v6M15 5v6M21 5v6" stroke="#fffdf8" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <h4>Product promise</h4>
+            <p>One project per reel. One agent that remembers the context. One path from idea → script → assets → edit → publish → learn.</p>
+          </article>
+          <article class="card rule-card">
+            <div class="iconline"><svg viewBox="0 0 32 32" fill="none"><path d="M7 22c6-8 12-8 18 0" stroke="#b8ff6a" stroke-width="2" stroke-linecap="round"/><path d="M7 10h18M7 16h12" stroke="#fffdf8" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="16" r="2" fill="#ff6847"/></svg></div>
+            <h4>Design stance</h4>
+            <p>Dark-first and focused. White surfaces are reserved for review, documents, exports, and “final answer” clarity — not the main workspace.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="logo" class="section light">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow" style="background:#111318;color:#d8dce4;border-color:rgba(255,255,255,.14)"><span class="dot"></span> Logo system</span>
+            <h2>The SceneBook mark combines frame, script, play, and memory.</h2>
+          </div>
+          <p>The logo should work as a dock icon, favicon, navbar mark, splash screen emblem, and creator-facing watermark. It must remain recognizable at 24px while feeling premium at 160px.</p>
+        </div>
+        <div class="logo-stage">
+          <div class="logo-display">
+            <svg class="mark" viewBox="0 0 64 64" aria-label="SceneBook logo mark">
+              <defs>
+                <linearGradient id="sbGradientLarge" x1="10" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#fffdf8"/>
+                  <stop offset="0.42" stop-color="#ff6847"/>
+                  <stop offset="1" stop-color="#69a7ff"/>
+                </linearGradient>
+              </defs>
+              <rect x="7" y="7" width="50" height="50" rx="15" fill="#07080b" stroke="url(#sbGradientLarge)" stroke-width="2.5"/>
+              <path d="M18 19.5h28.5M18 28.5h28.5M18 37.5h15.5" stroke="#fffdf8" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M39.5 36.2l9.2 5.4-9.2 5.3v-10.7z" fill="#ff6847"/>
+              <path d="M18 47c5.9-4.4 11.4-4.4 17 0 5.6-4.4 11.1-4.4 17 0" stroke="#69a7ff" stroke-width="2.3" stroke-linecap="round" fill="none"/>
+            </svg>
+          </div>
+          <div class="logo-details">
+            <div class="logo-row">
+              <a class="brand-lockup" href="#logo">
+                <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><use href="#logoSmallUse"></use></svg>
+                <span class="wordmark" style="font-size:31px">SceneBook</span>
+              </a>
+              <div class="spec-list">
+                <div><span>Mark idea</span><strong>Scene frame + book lines + play triangle</strong></div>
+                <div><span>Primary use</span><strong>Dark shell, app chrome, splash</strong></div>
+                <div><span>Clear space</span><strong>1× inner radius around mark</strong></div>
+              </div>
+            </div>
+            <div class="logo-row lightrow">
+              <a class="brand-lockup" href="#logo">
+                <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+                  <rect x="7" y="7" width="50" height="50" rx="15" fill="#fffdf8" stroke="#111318" stroke-width="2.5"/>
+                  <path d="M18 19.5h28.5M18 28.5h28.5M18 37.5h15.5" stroke="#111318" stroke-width="3.2" stroke-linecap="round"/>
+                  <path d="M39.5 36.2l9.2 5.4-9.2 5.3v-10.7z" fill="#ff6847"/>
+                  <path d="M18 47c5.9-4.4 11.4-4.4 17 0 5.6-4.4 11.1-4.4 17 0" stroke="#69a7ff" stroke-width="2.3" stroke-linecap="round" fill="none"/>
+                </svg>
+                <span class="wordmark" style="font-size:31px">SceneBook</span>
+              </a>
+              <div class="spec-list">
+                <div><span>Secondary use</span><strong>White docs, exported PDFs, social cards</strong></div>
+                <div><span>Wordmark tracking</span><strong>-0.06em, medium-bold</strong></div>
+                <div><span>Minimum size</span><strong>24px mark / 96px lockup</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg width="0" height="0" style="position:absolute">
+          <symbol id="logoSmallUse" viewBox="0 0 64 64">
+            <defs><linearGradient id="sbGradientSymbol" x1="10" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf8"/><stop offset="0.42" stop-color="#ff6847"/><stop offset="1" stop-color="#69a7ff"/></linearGradient></defs>
+            <rect x="7" y="7" width="50" height="50" rx="15" fill="#07080b" stroke="url(#sbGradientSymbol)" stroke-width="2.5"/>
+            <path d="M18 19.5h28.5M18 28.5h28.5M18 37.5h15.5" stroke="#fffdf8" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M39.5 36.2l9.2 5.4-9.2 5.3v-10.7z" fill="#ff6847"/>
+            <path d="M18 47c5.9-4.4 11.4-4.4 17 0 5.6-4.4 11.1-4.4 17 0" stroke="#69a7ff" stroke-width="2.3" stroke-linecap="round" fill="none"/>
+          </symbol>
+        </svg>
+      </div>
+    </section>
+
+    <section id="tokens" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow"><span class="dot"></span> Tokens</span>
+            <h2>Dark-first palette with white as the document surface.</h2>
+          </div>
+          <p>Use color as signal, not decoration. The app chrome stays in midnight neutrals. Coral marks creative energy and primary generated work. Blue marks agent/system actions. Lime marks safe/applied state. White is for review, exports, and readable source-of-truth surfaces.</p>
+        </div>
+        <div class="swatches">
+          <div class="swatch"><div class="tone" style="background:#07080b"></div><div class="meta"><b>Midnight</b><code>#07080B · app bg</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#141821"></div><div class="meta"><b>Console</b><code>#141821 · panels</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#fffdf8"></div><div class="meta"><b>Script White</b><code>#FFFDF8 · docs</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#f7f3ea"></div><div class="meta"><b>Studio Bone</b><code>#F7F3EA · secondary</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#ff6847"></div><div class="meta"><b>Cue Coral</b><code>#FF6847 · creative</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#69a7ff"></div><div class="meta"><b>Runtime Blue</b><code>#69A7FF · agent</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#b8ff6a"></div><div class="meta"><b>Applied Lime</b><code>#B8FF6A · success</code></div></div>
+          <div class="swatch"><div class="tone" style="background:#a78bfa"></div><div class="meta"><b>Model Violet</b><code>#A78BFA · model</code></div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-3">
+          <article class="card">
+            <h4>Gradient rule</h4>
+            <p>Gradients appear inside media cards, thumbnails, generated asset previews, and hero posters. They should not become generic button or full-page backgrounds.</p>
+          </article>
+          <article class="card">
+            <h4>Border rule</h4>
+            <p>Most containment uses 1px translucent lines. Shadows are rare and reserved for floating chat island, patch review, and modal drawers.</p>
+          </article>
+          <article class="card">
+            <h4>Focus rule</h4>
+            <p>Keyboard focus uses Runtime Blue rings. Do not rely on color alone; pair with borders, labels, and state text.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="type" class="section light">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow" style="background:#111318;color:#d8dce4;border-color:rgba(255,255,255,.14)"><span class="dot"></span> Typography</span>
+            <h2>Huge claims, quiet UI, readable production details.</h2>
+          </div>
+          <p>The type system borrows the reference file’s tight display logic and restrained UI copy. The difference: SceneBook adds more mono labels for agent timeline, model routing, versioning, patch status, and asset provenance.</p>
+        </div>
+        <div class="type-sample">
+          <div class="type-row"><div class="type-role">Hero Display</div><div class="type-example" style="font-size:72px">Make the messy idea visible.</div><div class="type-spec">88–122px / 0.96 / -0.065em</div></div>
+          <div class="type-row"><div class="type-role">Section</div><div class="type-example" style="font-size:46px">Agentic creation needs receipts.</div><div class="type-spec">44–76px / 1.00 / -0.055em</div></div>
+          <div class="type-row"><div class="type-role">Card title</div><div class="type-example" style="font-size:28px">Planned patch review</div><div class="type-spec">24–32px / 1.08 / -0.04em</div></div>
+          <div class="type-row"><div class="type-role">Body</div><div style="font-size:17px;max-width:640px">SceneBook should explain what the agent created, what it will change, what needs approval, and what is safe to apply.</div><div class="type-spec">15–18px / 1.5 / body</div></div>
+          <div class="type-row"><div class="type-role">Mono Label</div><div style="font:13px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase">workflow_package · project_patch_planned · asset_generated</div><div class="type-spec">11–13px / mono / +0.08em</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ux" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow"><span class="dot"></span> UX architecture</span>
+            <h2>From tab maze to project cockpit.</h2>
+          </div>
+          <p>The old workspace tab model splits assets, script, generation, tasks, editor, and analytics too early. The revamped IA makes the project overview a hub, the agent island the creation surface, the timeline the receipt trail, and patch review the trust layer.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card">
+            <span class="pill hot">Keep</span>
+            <h4 style="margin-top:18px">Project overview hub</h4>
+            <p>Status, current brief, chosen direction, next recommended action, recent agent outputs, and analytics summary.</p>
+          </article>
+          <article class="card">
+            <span class="pill blue">Move</span>
+            <h4 style="margin-top:18px">Creation into agent chat</h4>
+            <p>Script, shot list, prompts, assets, tasks, and packages become workflow-aware chat artifacts, not isolated tabs.</p>
+          </article>
+          <article class="card">
+            <span class="pill good">Elevate</span>
+            <h4 style="margin-top:18px">Patch review/apply</h4>
+            <p>Any large workspace mutation appears as a planned patch with diff, risk level, affected entities, and explicit apply action.</p>
+          </article>
+        </div>
+        <div class="divider"></div>
+        <div class="flow">
+          <div class="flow-step"><div class="num">1</div><div><h4>Start or open project</h4><p>Creator lands on Overview. SceneBook shows project memory, current stage, missing inputs, and recommended next move.</p></div><div class="tag">Overview</div></div>
+          <div class="flow-step"><div class="num">2</div><div><h4>Enter agent island</h4><p>The user talks naturally or uses slash commands. Modes guide behavior: Plan, Goal, Creation, Review, Workspace.</p></div><div class="tag">Agent</div></div>
+          <div class="flow-step"><div class="num">3</div><div><h4>Generate structured package</h4><p>The runtime produces typed workflow artifacts: hooks, script, scenes, asset prompts, tasks, editor handoff, publish notes.</p></div><div class="tag">Workflow</div></div>
+          <div class="flow-step"><div class="num">4</div><div><h4>Review planned patch</h4><p>Large ProjectPatch outputs do not silently mutate the workspace. The UI shows a diff tree with risk and versioning.</p></div><div class="tag">Trust</div></div>
+          <div class="flow-step"><div class="num">5</div><div><h4>Apply, edit, or branch</h4><p>The user can apply the patch, edit individual chunks, or create a new version of the creative direction.</p></div><div class="tag">Apply</div></div>
+          <div class="flow-step"><div class="num">6</div><div><h4>Import into editor and learn</h4><p>Generated assets and final selections flow into the editor; analytics later feeds the next project’s recommendations.</p></div><div class="tag">Loop</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screens" class="section light">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow" style="background:#111318;color:#d8dce4;border-color:rgba(255,255,255,.14)"><span class="dot"></span> Screen system</span>
+            <h2>Core screens for the revamp.</h2>
+          </div>
+          <p>These are the surfaces the implementation should converge around. The goal is not more pages; it is fewer surfaces with richer state.</p>
+        </div>
+        <div class="screen-grid">
+          <article class="screen" style="background:#090b10;color:var(--white)">
+            <div class="screen-top"><span>01 · Project Overview</span><span class="pill good">Healthy</span></div>
+            <div class="screen-body">
+              <div class="project-tile"><span class="pill hot">Launch reel</span><h4>Building SceneBook: from messy content workflow to AI production cockpit.</h4><div class="progress"><span style="width:62%"></span></div><span class="mini-note">Next: review production package patch</span></div>
+              <div class="grid-2" style="grid-template-columns:1fr 1fr"><div class="project-tile"><strong>Current stage</strong><span class="mini-note">Script approved · assets pending</span></div><div class="project-tile"><strong>Agent memory</strong><span class="mini-note">Tone: honest, useful, product-led</span></div></div>
+              <div class="mock-list"><div></div><div style="width:86%"></div><div style="width:72%"></div></div>
+            </div>
+          </article>
+          <article class="screen" style="background:#090b10;color:var(--white)">
+            <div class="screen-top"><span>02 · Agent Island</span><span class="pill blue">Workflow-aware</span></div>
+            <div class="screen-body">
+              <div class="chat-card user" style="margin-left:18%">Give me a punchier opening and turn the rest into a shot list.</div>
+              <div class="chat-card agent" style="margin-right:8%"><span class="pill violet">Review mode</span><p style="color:var(--muted);margin-bottom:0">I’ll keep the approved narrative spine, replace the first 4 seconds, and create shot beats without touching assets yet.</p></div>
+              <div class="cmd"><kbd>/shotlist</kbd><span>Generate beats from selected script</span></div>
+              <div class="promptbar"><span>Plan, ask, create, or review…</span><span>⌘K</span></div>
+            </div>
+          </article>
+          <article class="screen" style="background:#090b10;color:var(--white)">
+            <div class="screen-top"><span>03 · Patch Review</span><span class="pill hot">Action required</span></div>
+            <div class="screen-body">
+              <div class="project-tile"><h4>Apply production package?</h4><span class="mini-note">This patch will create 1 script version, 7 shot tasks, 5 asset prompts, and 1 editor handoff.</span></div>
+              <div class="diff-tree">
+                <div class="diff-row"><span>＋</span><b>scripts/v2-launch-reel</b><span class="risk-low">low</span></div>
+                <div class="diff-row"><span>＋</span><b>tasks/shot-list</b><span class="risk-low">low</span></div>
+                <div class="diff-row"><span>＋</span><b>assets/prompts</b><span class="risk-med">medium</span></div>
+                <div class="diff-row"><span>↻</span><b>project/currentDirection</b><span class="risk-med">medium</span></div>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn coral">Apply patch</button><button class="btn">Edit first</button><button class="btn">Branch version</button></div>
+            </div>
+          </article>
+          <article class="screen" style="background:#090b10;color:var(--white)">
+            <div class="screen-top"><span>04 · Asset Drawer + Editor Bridge</span><span class="pill violet">Folders</span></div>
+            <div class="screen-body">
+              <div class="grid-2" style="grid-template-columns:1fr 1fr"><div class="asset-mini"><div class="asset-thumb"></div><strong>Hook visual</strong><br><span class="mini-note">Scene 01 / generated</span></div><div class="asset-mini"><div class="asset-thumb" style="background:linear-gradient(135deg,rgba(105,167,255,.65),rgba(184,255,106,.40));"></div><strong>B-roll card</strong><br><span class="mini-note">Scene 03 / prompt</span></div></div>
+              <div class="project-tile"><h4>Editor handoff</h4><span class="mini-note">Send selected script + shot tasks + assets to timeline. Keep source links attached.</span><div class="progress"><span style="width:48%;background:linear-gradient(90deg,var(--blue),var(--violet))"></span></div></div>
+              <button class="btn primary">Import selection into editor</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="runtime" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow"><span class="dot"></span> Agent Runtime UI contract</span>
+            <h2>Runtime events must become visible product objects.</h2>
+          </div>
+          <p>The agent runtime should make workflows feel model-backed, inspectable, and less hardcoded. The design gap is representation: typed workflow outputs, planned patches, needs-input states, and tool receipts need dedicated cards, not generic tool blobs.</p>
+        </div>
+        <table class="table">
+          <thead><tr><th>Runtime event</th><th>UI component</th><th>Required user affordance</th></tr></thead>
+          <tbody>
+            <tr><td><strong>assistant_message</strong></td><td>Chat bubble with mode label and memory references</td><td>Reply, pin, convert to task, create alternate direction</td></tr>
+            <tr><td><strong>workflow_package</strong></td><td>Production Package Card with tabs for Script, Shots, Assets, Publish</td><td>Preview, select sections, request revision, plan patch</td></tr>
+            <tr><td><strong>project_patch_planned</strong></td><td>Patch Review Panel with diff tree and risk labels</td><td>Apply, edit, reject, version, inspect JSON</td></tr>
+            <tr><td><strong>creative_workflow_needs_input</strong></td><td>Input Request Card, not an approval state</td><td>Answer missing question, choose defaults, skip safely</td></tr>
+            <tr><td><strong>tool_call / tool_result</strong></td><td>Collapsible receipt row in timeline</td><td>Inspect params/result, copy, retry when safe</td></tr>
+            <tr><td><strong>asset_generated</strong></td><td>Asset card in drawer with provenance and scene link</td><td>Rename, folder, regenerate, import to editor</td></tr>
+            <tr><td><strong>error / recovery</strong></td><td>Recovery card with exact failed step</td><td>Retry, change model, continue from last safe state</td></tr>
+          </tbody>
+        </table>
+        <div class="divider"></div>
+        <div class="component-matrix">
+          <article class="component-demo">
+            <span class="pill hot">Production Package Card</span>
+            <h4 style="margin-top:18px">Make generated packages skimmable.</h4>
+            <p>Top summary, chosen recommendation, collapsible sections, “plan workspace patch” CTA, and revision prompt shortcuts.</p>
+            <div class="cmd"><kbd>Tabs</kbd><span>Script · Shots · Assets · Publish · Patch</span></div>
+          </article>
+          <article class="component-demo">
+            <span class="pill blue">Timeline Rail</span>
+            <h4 style="margin-top:18px">Show the agent’s receipts.</h4>
+            <p>Timeline rows should be calm, compact, and filterable: all, decisions, tools, patches, assets, errors.</p>
+            <div class="cmd"><kbd>Filter</kbd><span>Decisions only / All receipts / Risky changes</span></div>
+          </article>
+          <article class="component-demo">
+            <span class="pill violet">Model Menu</span>
+            <h4 style="margin-top:18px">Power-user control without clutter.</h4>
+            <p>Accordion model controls live behind the composer: chat model, image model, audio model, video model, fallback policy.</p>
+            <div class="cmd"><kbd>Model</kbd><span>NIM chat · HF image · HF audio · deterministic fallback</span></div>
+          </article>
+          <article class="component-demo">
+            <span class="pill good">ProjectMind Drawer</span>
+            <h4 style="margin-top:18px">Memory should feel editable.</h4>
+            <p>Expose project facts, decisions, brand voice, chosen hooks, rejected directions, and missing inputs with edit affordances.</p>
+            <div class="cmd"><kbd>Memory</kbd><span>Facts · Decisions · Open questions · Risks</span></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="components" class="section light">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow" style="background:#111318;color:#d8dce4;border-color:rgba(255,255,255,.14)"><span class="dot"></span> Component rules</span>
+            <h2>Build fewer components, make them state-rich.</h2>
+          </div>
+          <p>The app should not become a wall of cards. Open space, thin rules, and carefully named states will make the agent feel calmer and more credible.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card"><h4>App shell</h4><p>Left compact rail, center workspace, right contextual drawer. Keep navigation quiet; creation should dominate.</p></article>
+          <article class="card"><h4>Chat island</h4><p>Centered on empty projects, then docks into the workspace once conversation begins. Composer supports /commands and model accordion.</p></article>
+          <article class="card"><h4>Artifact cards</h4><p>Workflow outputs are previewable, versioned, and selectable. Every generated object has provenance and next actions.</p></article>
+          <article class="card"><h4>Patch review</h4><p>Use white or high-contrast panels for diff readability. Risk labels, affected objects, and before/after copy are mandatory.</p></article>
+          <article class="card"><h4>Asset drawer</h4><p>Folders by scene/beat. Cards show type, model, prompt, status, and import state. Generated media gets thumbnail-first treatment.</p></article>
+          <article class="card"><h4>Analytics</h4><p>Keep analytics as the learning loop, not the main workspace. Use restrained charts, insight cards, and next experiment prompts.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="handoff" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow"><span class="dot"></span> Implementation handoff</span>
+            <h2>Codex-ready UI revamp brief.</h2>
+          </div>
+          <p>Use this as the implementation source of truth for the SceneBook UI revamp. The goal is to make agent/runtime outputs first-class UI objects while applying the new brand system.</p>
+        </div>
+        <div class="code-block">
+          <div class="code-head"><span>prompt-for-coding-agent.md</span><button class="copy" data-copy="codexPrompt">Copy brief</button></div>
+          <pre id="codexPrompt">You are implementing the SceneBook UI revamp across the current SceneBook app and agent runtime.
+
+Primary objective:
+Turn SceneBook from a tab-heavy creator workspace into a dark-first AI production workspace for short-form video creation. The agent chat must feel like the primary creation surface, while workflow packages, planned ProjectPatch outputs, timeline receipts, and asset/editor handoff become first-class UI objects.
+
+Brand direction:
+- Dark-first product shell: #07080B background, #141821 panels, #FFFDF8 document/review surfaces.
+- Accent system: #FF6847 creative/cue coral, #69A7FF runtime/system blue, #B8FF6A applied/success, #A78BFA model selection.
+- Typography: large tight display headings; restrained body copy; mono uppercase labels for runtime state.
+- Use thin borders, rounded media/product cards, minimal shadows, pill controls, and generous whitespace.
+- Avoid generic SaaS gradients, heavy shadows, childish rounded cards, and corporate dashboard clutter.
+
+Information architecture:
+1. Keep /projects/[id] as the overview hub.
+2. Move script, shot list, generation, tasks, and package creation into the Agent workspace/chat island.
+3. Keep Analytics as a separate learning-loop surface.
+4. Asset drawer/folders should be accessible from the agent workspace and editor bridge.
+5. Editor should receive selected scripts, shot tasks, generated assets, and handoff metadata.
+
+Core screens to implement or refactor:
+- Project Overview Hub: status, ProjectMind summary, selected direction, current stage, recent outputs, next recommended action.
+- Agent Workspace: centered chat island, mode switcher, slash-command composer, model accordion, timeline rail, contextual drawer.
+- Production Package Card: typed workflow output renderer with tabs/sections for script, shots, asset prompts, publish notes, editor handoff.
+- Planned Patch Review: diff tree, affected objects, risk labels, inspect JSON, apply/edit/reject/version actions.
+- Asset Drawer: scene/beat folders, generated thumbnails, prompt provenance, import-to-editor action.
+- Editor Bridge: imports selected package parts and preserves provenance.
+
+Runtime event renderers required:
+- assistant_message → chat bubble with mode label and optional memory references.
+- workflow_package → production package artifact card.
+- project_patch_planned → patch review panel, not a generic tool card.
+- creative_workflow_needs_input → missing-input card, not approval UI.
+- tool_call/tool_result → collapsible receipt rows in timeline.
+- asset_generated → asset card with provenance and scene link.
+- error/recovery → recovery card with failed step and retry options.
+
+Acceptance criteria:
+- No workflow/package/patch output is rendered as a generic raw tool card.
+- Large ProjectPatch outputs are never silently applied; they appear as planned patches with explicit Apply action.
+- Timeline hydration persists enough state to reload workflow cards and patch review after refresh.
+- UI clearly distinguishes needs_input, approval_required, patch_planned, patch_applied, and error states.
+- ProjectMind facts/decisions are visible and editable from the agent workspace.
+- The design is responsive: desktop 3-pane cockpit; tablet 2-pane; mobile single-column with drawers.
+- Add tests for event-to-component mapping and patch review state transitions.
+
+Suggested implementation phases:
+Phase A: Add design tokens and app-shell primitives.
+Phase B: Build typed runtime event renderer registry.
+Phase C: Implement ProductionPackageCard and WorkflowTimeline.
+Phase D: Implement PlannedPatchReview with apply/edit/reject states.
+Phase E: Implement AssetDrawer and EditorBridge handoff.
+Phase F: Polish responsive behavior, empty states, animations, a11y, and tests.
+
+At the end of each phase: run lint/typecheck/tests and create a clear commit.</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section white-panel">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow" style="background:#111318;color:#d8dce4;border-color:rgba(255,255,255,.14)"><span class="dot"></span> Do / Don’t</span>
+            <h2>Guardrails for the revamp.</h2>
+          </div>
+          <p>Use these to keep the implementation from drifting into either “enterprise AI dashboard” or “toy creator app.”</p>
+        </div>
+        <div class="grid-2">
+          <article class="card"><h4>Do</h4><p>Make the agent’s outputs inspectable. Show memory, decisions, receipts, patches, and provenance. Use dark surfaces for creation and white surfaces for final review.</p></article>
+          <article class="card"><h4>Don’t</h4><p>Do not scatter creation across disconnected tabs. Do not hide workspace mutations behind tool cards. Do not overuse gradients, glassmorphism, or vague AI sparkle.</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span> SceneBook Brand Pack</span>
+        <h2>Design the interface like the agent is part producer, part editor, part memory.</h2>
+        <p>This file is self-contained and can travel with the repo as the portable design source of truth for the SceneBook UI revamp.</p>
+      </div>
+      <div class="logo-row">
+        <a class="brand-lockup" href="#top">
+          <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><use href="#logoSmallUse"></use></svg>
+          <span class="wordmark">SceneBook</span>
+        </a>
+        <p class="mini-note">AI production workspace for planning, generating, organizing, and shipping short-form videos.</p>
+      </div>
+    </div>
+  </footer>
+</div>
+<script>
+  document.querySelectorAll('[data-copy]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const target = document.getElementById(button.dataset.copy);
+      if (!target) return;
+      try {
+        await navigator.clipboard.writeText(target.innerText);
+        const previous = button.textContent;
+        button.textContent = 'Copied';
+        setTimeout(() => button.textContent = previous, 1400);
+      } catch (error) {
+        button.textContent = 'Select text';
+      }
+    });
+  });
+</script>
+</body>
+</html>
