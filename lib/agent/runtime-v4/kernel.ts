@@ -36,6 +36,7 @@ import {
 } from "@/lib/agent/runtime-v4/tools/registry";
 import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 import type { JsonValue } from "@/lib/types";
+import type { ProjectSnapshot } from "@/lib/agent/runtime-v3/types";
 
 function responseForQuestions(decision: Extract<AgentDecision, { type: "ask_question" }>) {
   return [
@@ -56,6 +57,43 @@ function responseForGoalQuestions(progress: Extract<GoalCheck, { status: "ask_us
     "I need one thing before I continue:",
     ...progress.questions.map((question, index) => `${index + 1}. ${question}`),
   ].join("\n");
+}
+
+function isLowConfidenceFallback(decision: AgentDecision) {
+  return decision.type === "final_response"
+    && decision.confidence <= 0.35
+    && /^I can still help\b/i.test(decision.response);
+}
+
+function createNoWritePlanDecision(snapshot: ProjectSnapshot, message: string): Extract<AgentDecision, { type: "propose_plan" }> {
+  const topic = message.trim() || snapshot.project.title || "this project";
+  const format = snapshot.project.format || "short-form video";
+  const platform = snapshot.project.platform || "the target platform";
+
+  return {
+    type: "propose_plan",
+    plan: {
+      title: `Plan a ${format} about ${topic}`,
+      steps: [
+        { label: `Anchor the ${format} in one specific story angle.`, sideEffect: "none", requiresApproval: false },
+        { label: "Draft the hook, three-beat outline, and payoff before making workspace edits.", sideEffect: "none", requiresApproval: false },
+        { label: `Map A-roll, B-roll, and screen captures that make the ${platform} story concrete.`, sideEffect: "none", requiresApproval: false },
+      ],
+    },
+    reason: "The custom runtime used deterministic no-write planning after low-confidence fallback text.",
+  };
+}
+
+function maybeReplaceLowConfidenceFallback(snapshot: ProjectSnapshot, message: string, previousObservations: ToolObservation[], decision: AgentDecision) {
+  if (
+    isLowConfidenceFallback(decision)
+    && previousObservations.length === 0
+    && Boolean(snapshot.project.format)
+  ) {
+    return createNoWritePlanDecision(snapshot, message);
+  }
+
+  return decision;
 }
 
 export type AgentOrchestrator = "custom" | "langgraph";
@@ -304,39 +342,42 @@ export class AgentKernel {
 
           const decision = await decideNextStep({
             message: request.message,
+            commandHint: request.commandHint,
+            commandInput: request.commandInput,
             snapshot,
             toolSummaries,
             previousObservations,
             model: request.selectedModels?.chat,
             modelGateway,
           });
+          const resolvedDecision = maybeReplaceLowConfidenceFallback(snapshot, request.commandInput ?? request.message, previousObservations, decision);
 
           stream.emit("decision", {
-            decision: JSON.parse(JSON.stringify(decision)),
+            decision: JSON.parse(JSON.stringify(resolvedDecision)),
           });
 
-          if (decision.type === "final_response") {
-            await finish(decision.response, {
-              decisionType: decision.type,
+          if (resolvedDecision.type === "final_response") {
+            await finish(resolvedDecision.response, {
+              decisionType: resolvedDecision.type,
             });
             return;
           }
 
-          if (decision.type === "ask_question") {
-            await finish(responseForQuestions(decision), {
-              decisionType: decision.type,
-              expectedFieldTargets: decision.expectedFieldTargets ?? [],
+          if (resolvedDecision.type === "ask_question") {
+            await finish(responseForQuestions(resolvedDecision), {
+              decisionType: resolvedDecision.type,
+              expectedFieldTargets: resolvedDecision.expectedFieldTargets ?? [],
             }, true);
             return;
           }
 
-          if (decision.type === "propose_plan") {
-            const response = responseForPlan(decision);
+          if (resolvedDecision.type === "propose_plan") {
+            const response = responseForPlan(resolvedDecision);
             stream.emit("plan", {
-              plan: JSON.parse(JSON.stringify(decision.plan)),
+              plan: JSON.parse(JSON.stringify(resolvedDecision.plan)),
             });
             await finish(response, {
-              decisionType: decision.type,
+              decisionType: resolvedDecision.type,
             });
             return;
           }
@@ -344,10 +385,10 @@ export class AgentKernel {
           let newObservations: ToolObservation[] = [];
           let workflowFinalResponse: string | undefined;
 
-          if (decision.type === "tool_call") {
+          if (resolvedDecision.type === "tool_call") {
             const toolResult = await runtimeV4Execution.toolExecutor.execute({
-              toolName: decision.toolName,
-              input: decision.input,
+              toolName: resolvedDecision.toolName,
+              input: resolvedDecision.input,
               context: {
                 userId: request.userId,
                 projectId: request.projectId,
@@ -388,9 +429,9 @@ export class AgentKernel {
             newObservations = [observation];
           }
 
-          if (decision.type === "project_patch") {
+          if (resolvedDecision.type === "project_patch") {
             const patchResult = await runtimeV4Execution.patchExecutor.apply({
-              patch: decision.patch,
+              patch: resolvedDecision.patch,
               context: {
                 userId: request.userId,
                 projectId: request.projectId,
@@ -409,10 +450,10 @@ export class AgentKernel {
             newObservations = [projectPatchExecutionResultToObservation(patchResult)];
           }
 
-          if (decision.type === "workflow_call") {
+          if (resolvedDecision.type === "workflow_call") {
             const result = await runtimeV4Execution.workflowExecutor.execute({
-              workflowName: decision.workflowName,
-              input: decision.input,
+              workflowName: resolvedDecision.workflowName,
+              input: resolvedDecision.input,
               projectMind: snapshot,
               context: {
                 userId: request.userId,
@@ -435,15 +476,15 @@ export class AgentKernel {
               : result.observation.message;
           }
 
-          if (decision.type === "stop_with_error") {
-            throw new Error(decision.message);
+          if (resolvedDecision.type === "stop_with_error") {
+            throw new Error(resolvedDecision.message);
           }
 
           previousObservations.push(...newObservations);
           const awaitingApproval = newObservations.find((observation) => observation.status === "awaiting_approval");
           if (awaitingApproval) {
             await finish(awaitingApproval.message, {
-              decisionType: decision.type,
+              decisionType: resolvedDecision.type,
               goalStatus: "awaiting_approval",
             }, true);
             return;
@@ -460,7 +501,7 @@ export class AgentKernel {
 
           if (progress.status === "satisfied") {
             await finish(progress.response, {
-              decisionType: decision.type,
+              decisionType: resolvedDecision.type,
               goalStatus: progress.status,
             });
             return;
@@ -468,7 +509,7 @@ export class AgentKernel {
 
           if (progress.status === "ask_user") {
             await finish(responseForGoalQuestions(progress), {
-              decisionType: decision.type,
+              decisionType: resolvedDecision.type,
               goalStatus: progress.status,
             }, true);
             return;

@@ -96,6 +96,48 @@
   --space-xl: 24px;
   --space-xxl: 32px;
   --space-section: 64px;
+  --workspace-rail-collapsed: 56px;
+  --workspace-rail-expanded: 248px;
+  --sb-ambient-page:
+    radial-gradient(circle at 17% -3%, rgba(255,104,71,.20), transparent 26rem),
+    radial-gradient(circle at 90% 3%, rgba(105,167,255,.16), transparent 28rem),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 38%, var(--bg) 100%);
+  --sb-gradient-thumbnail: linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54));
+  --sb-gradient-panel: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
+}
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fffdf8;
+  --bg-2: #f7f3ea;
+  --bg-3: #ede9e4;
+  --panel: #ffffff;
+  --panel-2: #f7f3ea;
+  --panel-3: #ede9e4;
+  --ink: #111318;
+  --ink-soft: #2a2f38;
+  --muted: #5d6470;
+  --muted-2: #7d8490;
+  --line: rgba(17,19,24,.12);
+  --line-strong: rgba(17,19,24,.2);
+  --canvas: var(--bg);
+  --surface-soft: rgba(17,19,24,.045);
+  --hairline: var(--line);
+  --hairline-soft: rgba(17,19,24,.07);
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --muted-foreground: var(--muted);
+  --shadow: 0 24px 80px rgba(17,19,24,.12);
+  --shadow-soft: 0 10px 42px rgba(17,19,24,.10);
+  --sb-ambient-page:
+    radial-gradient(circle at 17% -3%, rgba(255,104,71,.12), transparent 26rem),
+    radial-gradient(circle at 90% 3%, rgba(105,167,255,.10), transparent 28rem),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 38%, var(--bg) 100%);
 }
 
 @theme inline {
@@ -117,16 +159,12 @@
 }
 
 html {
-  color-scheme: dark;
   scroll-behavior: smooth;
 }
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 17% -3%, rgba(255,104,71,.20), transparent 26rem),
-    radial-gradient(circle at 90% 3%, rgba(105,167,255,.16), transparent 28rem),
-    linear-gradient(180deg, #07080b 0%, #0b0d12 38%, #07080b 100%);
+  background: var(--sb-ambient-page);
   color: var(--ink);
   font-family: var(--body);
   font-feature-settings: "kern";
@@ -247,10 +285,18 @@ textarea {
 
 .sb-panel,
 .sb-card {
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
+  background: var(--sb-gradient-panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   color: var(--ink);
+}
+
+.sb-gradient-thumbnail {
+  background: var(--sb-gradient-thumbnail);
+}
+
+.sb-gradient-panel {
+  background: var(--sb-gradient-panel);
 }
 
 .sb-card-light,

@@ -21,3 +21,8 @@ export function getNimApiKey(source: EnvSource = process.env) {
   assertServerOnlyModelSecrets(source);
   return source.NIM_API_KEY ?? source.NVIDIA_NIM_API_KEY ?? "";
 }
+
+export function getOpenRouterApiKey(source: EnvSource = process.env) {
+  assertServerOnlyModelSecrets(source);
+  return source.OPENROUTER_API_KEY ?? "";
+}

@@ -24,6 +24,7 @@ function env(name: string) {
 function normalizeProvider(provider: string | undefined): ModelProviderId {
   if (provider === "google" || provider === "gemini") return "google";
   if (provider === "nim") return "nim";
+  if (provider === "openrouter") return "openrouter";
   if (provider === "fake") return "fake";
   return defaultAgentModelProvider;
 }
@@ -133,7 +134,7 @@ export function isModelProfileName(value: string | undefined): value is ModelPro
 }
 
 export function isModelProviderId(value: string | undefined): value is ModelProviderId {
-  return value === "google" || value === "nim" || value === "fake";
+  return value === "google" || value === "nim" || value === "openrouter" || value === "fake";
 }
 
 export function resolveModelProfile(input: {

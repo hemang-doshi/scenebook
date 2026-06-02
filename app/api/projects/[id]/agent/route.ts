@@ -6,6 +6,7 @@ import { generateTextStream } from "@/lib/ai/client";
 import { buildAgentSystemInstruction } from "@/lib/agent/context-builder";
 import { parseSlashCommand } from "@/lib/agent/command-parser";
 import {
+  archiveAgentThread,
   appendAgentMessage,
   completeAgentToolCall,
   completeAgentRun,
@@ -392,6 +393,8 @@ export async function POST(
         account,
         permissions: account?.permissions,
         message: body.message,
+        commandHint: parsed.command,
+        commandInput: parsed.input || null,
         selectedModels: body.models,
         attachments: body.attachments,
       });
@@ -890,21 +893,37 @@ export async function POST(
 
 export async function PATCH(
   request: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createSupabaseServerClient();
     const user = await requireServerUser({ supabase: supabase as any });
 
-    const { toolCallId, status, output, action } = z
+    const { toolCallId, threadId, status, output, action } = z
       .object({
-        toolCallId: z.string().uuid(),
-        action: z.enum(["apply"]).optional(),
+        toolCallId: z.string().uuid().optional(),
+        threadId: z.string().uuid().optional(),
+        action: z.enum(["apply", "archiveThread"]).optional(),
         status: z.enum(["completed", "failed", "rejected", "approved", "awaiting_approval", "awaiting_input"]).optional(),
         output: z.record(z.string(), z.any()).optional(),
       })
       .parse(await request.json());
 
+    if (action === "archiveThread") {
+      if (!threadId) {
+        return NextResponse.json({ error: "Missing threadId for archive action." }, { status: 400 });
+      }
+
+      const { id: projectId } = await params;
+      await archiveAgentThread(projectId, threadId);
+      return NextResponse.json({ success: true, status: "archived", threadId });
+    }
+
     if (action === "apply") {
+      if (!toolCallId) {
+        return NextResponse.json({ error: "Missing toolCallId for apply action." }, { status: 400 });
+      }
+
       if (isRuntimeV3Enabled()) {
         const { approveRuntimeV3ToolCall } = await import("@/lib/agent/runtime-v3/tools/executor");
         const approved = await approveRuntimeV3ToolCall({
@@ -928,6 +947,10 @@ export async function PATCH(
 
     if (!status) {
       return NextResponse.json({ error: "Missing status or apply action." }, { status: 400 });
+    }
+
+    if (!toolCallId) {
+      return NextResponse.json({ error: "Missing toolCallId for status update." }, { status: 400 });
     }
 
     const updatePayload: any = {

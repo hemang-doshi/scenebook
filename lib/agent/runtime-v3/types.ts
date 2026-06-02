@@ -1,6 +1,6 @@
 import type { ZodType } from "zod";
 
-import type { AgentModelsSelection, AgentToolCallRecord } from "@/lib/agent/types";
+import type { AgentCommand, AgentModelsSelection, AgentToolCallRecord } from "@/lib/agent/types";
 import type { AccountContext, PermissionSummary } from "@/lib/auth/account-context";
 import type { CardAsset, ContentFormat, ContentPlatform, ContentStatus, JsonValue, ScriptLab, ShootPack } from "@/lib/types";
 
@@ -33,6 +33,8 @@ export type AgentRunRequest = {
   threadId?: string;
   userId: string;
   message: string;
+  commandHint?: AgentCommand | null;
+  commandInput?: string | null;
   attachments?: AgentAttachment[];
   selectedModels?: AgentModelsSelection;
   account?: AccountContext;

@@ -384,12 +384,7 @@ export default function ProjectHubPage() {
       
       {/* Project overview hero */}
       <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] shadow-[var(--shadow-soft)]">
-        <div
-          className="h-40 w-full opacity-85"
-          style={{
-            background: "linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54))",
-          }}
-        />
+        <div className="sb-gradient-thumbnail h-40 w-full opacity-85" />
         
         <div className="relative px-6 md:px-8 -mt-10 mb-4 z-10">
           <div className="flex h-16 w-16 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--bg)] text-[var(--coral)] shadow-[var(--shadow-soft)]">
@@ -617,7 +612,7 @@ export default function ProjectHubPage() {
         <div className="space-y-6">
           
           {/* Agent Activity Summary */}
-          <Panel className="border border-[var(--hairline)] bg-[var(--surface-soft)]/50 p-6 space-y-4">
+          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-[var(--ink)]" />
               <h3 className="font-bold text-sm text-[var(--ink)]">Agent Reflection</h3>
@@ -639,7 +634,7 @@ export default function ProjectHubPage() {
           </Panel>
 
           {/* Database-style Asset Gallery */}
-          <Panel className="border border-[var(--hairline)] bg-[var(--canvas)] p-6 space-y-4">
+          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
             <div className="flex items-center justify-between border-b border-[var(--hairline)] pb-3">
               <div className="flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-[var(--ink)]" />
@@ -697,7 +692,7 @@ export default function ProjectHubPage() {
           </Panel>
 
           {/* Delivery & Instagram Publishing */}
-          <Panel className="border border-[var(--hairline)] bg-[var(--canvas)] p-6 space-y-4">
+          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
             <div className="flex items-center gap-2 border-b border-[var(--hairline)] pb-3">
               <InstagramIcon className="h-4 w-4 text-[var(--ink)]" />
               <h3 className="font-bold text-sm text-[var(--ink)]">Instagram Delivery</h3>
@@ -727,7 +722,7 @@ export default function ProjectHubPage() {
           </Panel>
 
           {/* Learnings / Feedback loop */}
-          <Panel className="border border-[var(--hairline)] bg-[var(--canvas)] p-6 space-y-4">
+          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
             <div className="flex items-center gap-2 border-b border-[var(--hairline)] pb-3">
               <Clock className="h-4 w-4 text-[var(--ink)]" />
               <h3 className="font-bold text-sm text-[var(--ink)]">Learnings reflection</h3>

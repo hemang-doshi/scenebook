@@ -1,54 +1,5 @@
-import { IntegrationCard } from "@/components/integrations/integration-card";
-import { requireServerUser } from "@/lib/auth/server-user";
-import { listIntegrationProviders } from "@/lib/integrations/connections/registry";
-import {
-  listIntegrationConnections,
-  type IntegrationConnectionStoreClient,
-} from "@/lib/integrations/connections/store";
-import { isNangoConfigured } from "@/lib/integrations/nango/config";
-import { isNangoProviderConfigured } from "@/lib/integrations/nango/provider-map";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export default async function SettingsIntegrationsPage() {
-  const supabase = await createSupabaseServerClient();
-  const user = await requireServerUser({ supabase: supabase as never });
-  const providers = listIntegrationProviders();
-  const connections = await listIntegrationConnections({
-    supabase: supabase as unknown as IntegrationConnectionStoreClient,
-    ownerId: user.id,
-  });
-  const nangoConfigured = isNangoConfigured();
-
-  return (
-    <main className="min-h-screen bg-transparent px-4 py-8 md:px-8">
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-        <header className="border-b border-[var(--line)] pb-6">
-          <p className="text-xs font-mono uppercase tracking-widest text-[var(--blue-2)]">
-            Settings
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-bold tracking-normal text-[var(--ink)]">
-            Integrations
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
-            Connect external accounts through Nango. SceneBook stores status and connection ids, while credentials stay outside the app database.
-          </p>
-        </header>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Integration providers">
-          {providers.map((provider) => {
-            const connection = connections.find((item) => item.provider === provider.provider);
-
-            return (
-              <IntegrationCard
-                key={provider.provider}
-                provider={provider}
-                status={connection?.status ?? "not_connected"}
-                connectEnabled={nangoConfigured && isNangoProviderConfigured(provider.provider)}
-              />
-            );
-          })}
-        </section>
-      </div>
-    </main>
-  );
+export default function SettingsIntegrationsPage() {
+  redirect("/settings?tab=integrations");
 }

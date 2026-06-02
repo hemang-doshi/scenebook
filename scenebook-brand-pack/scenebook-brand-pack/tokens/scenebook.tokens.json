@@ -61,7 +61,15 @@
     "mono": "\"SFMono-Regular\", \"Cascadia Code\", \"Roboto Mono\", ui-monospace, Menlo, Monaco, Consolas, monospace"
   },
   "layout": {
-    "container": "1180px"
+    "container": "1180px",
+    "workspace-rail-collapsed": "56px",
+    "workspace-rail-expanded": "248px",
+    "workspaceRailCollapsed": "56px",
+    "workspaceRailExpanded": "248px"
+  },
+  "gradients": {
+    "thumbnail": "linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54))",
+    "panel": "linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035))"
   },
   "motion": {
     "sourceObserved": [

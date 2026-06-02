@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai";
 import type { z } from "zod";
 
-export type ModelProviderId = "google" | "nim" | "fake";
+export type ModelProviderId = "google" | "nim" | "openrouter" | "fake";
 
 export type ModelProfileName =
   | "agent_decision"

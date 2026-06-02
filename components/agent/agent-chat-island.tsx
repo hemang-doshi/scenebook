@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Bot, Library } from "lucide-react";
+import { Archive, Bot, Library } from "lucide-react";
 
 import { AgentComposer, type Attachment } from "@/components/agent/agent-composer";
 import { ApprovalCard } from "@/components/agent/approval-card";
@@ -10,6 +10,7 @@ import { ArtifactPreviewCard } from "@/components/agent/artifact-preview-card";
 import { AssetDrawer } from "@/components/agent/asset-drawer";
 import { ChatMessage } from "@/components/agent/chat-message";
 import { EmptyAgentState } from "@/components/agent/empty-agent-state";
+import { useChatAutoscroll } from "@/components/agent/use-chat-autoscroll";
 import { PatchPreviewCard } from "@/components/agent/patch-preview-card";
 import { ToolCallCard } from "@/components/agent/tool-call-card";
 import { WorkflowCard } from "@/components/agent/workflow-card";
@@ -90,8 +91,6 @@ const emptyModels: AgentModelSelection = {
   audio: getDefaultMediaModel("audio").id,
 };
 
-const agentModes = ["Plan", "Goal", "Creation", "Review", "Workspace"];
-
 function sortEntries(entries: AgentUiEntry[]) {
   return [...entries].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
@@ -151,6 +150,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const lastFetchedThreadId = useRef<string | "new-chat" | null>(null);
   const lastFetchedVersion = useRef(0);
+  const { containerRef, bottomRef, handleScroll } = useChatAutoscroll(entries, isSending);
 
   const loadThreadsList = useCallback(async () => {
     try {
@@ -184,6 +184,26 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
     void loadAssets();
     void loadProject();
   }, [loadAssets, loadProject]);
+
+  const archiveThread = useCallback(async (thread: ThreadInfo) => {
+    await fetchJson(`/api/projects/${project.id}/agent`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "archiveThread",
+        threadId: thread.id,
+      }),
+    });
+
+    setThreads((current) => current.filter((item) => item.id !== thread.id));
+
+    if (threadId === thread.id) {
+      setThreadId("new-chat");
+      setEntries([]);
+      lastFetchedThreadId.current = "new-chat";
+    }
+
+    void loadThreadsList();
+  }, [loadThreadsList, project.id, threadId]);
 
   // Load threads list and asset library on mount and when project changes
   useEffect(() => {
@@ -329,7 +349,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
 
                 if (eventType === "run_completed") {
                   sawRuntimeV4RunCompleted = true;
-                  setHistoryVersion((version) => version + 1);
+                  setActivity({ label: "done" });
                 }
 
                 const timelineEntries = timelineEntriesFromRuntimeV4Event(event);
@@ -433,7 +453,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                   lastFetchedThreadId.current = data.threadId;
                 }
                 setActivity({ label: "done" });
-                setHistoryVersion((version) => version + 1);
+                void loadThreadsList();
               } else if (data.type === "run_failed") {
                 setActivity({ label: "error", tone: "error" });
                 if (typeof data.error === "string") {
@@ -581,7 +601,9 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
 
   const hasMessages = entries.length > 0;
   const editorHref = `/editor/${project.id}`;
-  const totalAssets = (library?.folders.reduce((acc, f) => acc + f.assets.length, 0) || 0) + (library?.looseAssets.length || 0);
+  const totalAssets =
+    (library?.folders?.reduce((acc, folder) => acc + folder.assets.length, 0) || 0) +
+    (library?.looseAssets?.length || 0);
 
   return (
     <div className="flex h-[calc(100vh-72px)] w-full overflow-hidden bg-transparent">
@@ -606,19 +628,33 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
           <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2 shrink-0">Recent Conversations</span>
           <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
             {threads.map((t) => (
-              <button
+              <div
                 key={t.id}
-                type="button"
-                onClick={() => setThreadId(t.id)}
                 className={cn(
-                  "w-full text-left px-3 py-2 text-xs rounded-md transition-colors truncate font-mono uppercase tracking-wider flex items-center justify-between border",
+                  "group flex items-center rounded-md border",
                   threadId === t.id
-                    ? "border-[var(--blue)]/40 bg-[var(--blue)]/12 text-[var(--blue-2)] font-bold"
-                    : "text-[var(--muted)] bg-transparent hover:bg-[rgba(255,255,255,.055)] hover:text-[var(--ink)] border-transparent"
+                    ? "border-[var(--blue)]/40 bg-[var(--blue)]/12 text-[var(--blue-2)]"
+                    : "border-transparent bg-transparent text-[var(--muted)] hover:bg-[rgba(255,255,255,.055)] hover:text-[var(--ink)]"
                 )}
               >
-                <span className="truncate">{t.title || `Thread ${t.id.slice(0, 8)}`}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setThreadId(t.id)}
+                  className="min-w-0 flex-1 truncate px-3 py-2 text-left text-xs font-mono uppercase tracking-wider"
+                >
+                  <span className="truncate">{t.title || `Thread ${t.id.slice(0, 8)}`}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Archive ${t.title || `Thread ${t.id.slice(0, 8)}`}`}
+                  onClick={() => {
+                    void archiveThread(t);
+                  }}
+                  className="mr-2 rounded p-1 text-[var(--muted)] opacity-0 transition-opacity hover:text-[var(--danger)] group-hover:opacity-100"
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
             {threads.length === 0 && (
               <div className="text-center py-8 text-[10px] text-[var(--muted)] font-mono">
@@ -640,21 +676,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               <h2 className="truncate text-xs font-bold font-mono uppercase tracking-[.07em] text-[var(--ink)]">
                 {activeProject.title} / Strategic Agent
               </h2>
-              <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Agent modes">
-                {agentModes.map((mode) => (
-                  <span
-                    key={mode}
-                    className={cn(
-                      "rounded-[var(--radius-pill)] border px-2 py-1 text-[9px] font-mono uppercase tracking-[.07em]",
-                      mode === "Creation"
-                        ? "border-[var(--coral)]/40 bg-[var(--coral)]/12 text-[var(--coral-2)]"
-                        : "border-[var(--line)] bg-[rgba(255,255,255,.035)] text-[var(--muted)]",
-                    )}
-                  >
-                    {mode}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -685,7 +706,11 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </header>
 
         {/* Conversation Area */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin flex flex-col sm:px-6 sm:py-6">
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="flex flex-1 flex-col overflow-y-auto px-3 py-4 scrollbar-thin sm:px-6 sm:py-6"
+        >
           <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-between">
             <div className="w-full flex-1">
               
@@ -777,6 +802,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                       </div>
                     );
                   })}
+                  <div ref={bottomRef} aria-hidden="true" />
                 </div>
               )}
             </div>

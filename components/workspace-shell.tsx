@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -12,10 +13,15 @@ import {
   Film,
   BarChart3,
   Settings2,
+  Link2,
+  Plus,
+  UserCircle2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
-import { AppBreadcrumbs } from "@/components/ui/app-breadcrumbs";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { fetchJson } from "@/lib/fetcher";
@@ -31,6 +37,7 @@ export function WorkspaceShell({
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isActionRailExpanded, setIsActionRailExpanded] = useState(false);
   const [currentProject, setCurrentProject] = useState<{
     id: string;
     title: string;
@@ -65,7 +72,6 @@ export function WorkspaceShell({
   ];
 
   const visibleProject = activeCardId && activeCardId !== "new" ? currentProject : null;
-  const projectTitle = visibleProject ? visibleProject.title : "No active project";
 
   useEffect(() => {
     const client = createSupabaseBrowserClient();
@@ -113,54 +119,37 @@ export function WorkspaceShell({
     }
   }
 
-  const breadcrumbItems = useMemo(() => {
-    if (pathname === "/home") return [{ label: "Projects" }];
-    if (pathname === "/analytics") return [{ label: "Analytics" }];
-    if (pathname === "/settings") return [{ label: "Settings" }];
-    if (pathname === "/editor") {
-      return [{ label: "Projects", href: "/home" }, { label: "Editor" }];
-    }
-    if (pathname.startsWith("/editor/")) {
-      if (showActiveProject) {
-        return [
-          { label: "Projects", href: "/home" },
-          { label: projectTitle, href: `/projects/${activeCardId}/chat` },
-          { label: "Editor" },
-        ];
-      }
-      return [{ label: "Projects", href: "/home" }, { label: "Editor" }];
-    }
-    if (pathname.startsWith("/projects/") && pathname.endsWith("/chat")) {
-      return [
-        { label: "Projects", href: "/home" },
-        { label: projectTitle, href: `/projects/${activeCardId}` },
-        { label: "Agent" },
-      ];
-    }
-    if (pathname.startsWith("/projects/")) {
-      return [{ label: "Projects", href: "/home" }, { label: projectTitle }];
-    }
-    return [{ label: "Projects", href: "/home" }];
-  }, [activeCardId, pathname, projectTitle, showActiveProject]);
-
   return (
-    <div className="relative flex min-h-screen flex-col bg-transparent text-[var(--ink)] font-sans">
-      <header className="sticky top-0 z-40 flex h-[72px] w-full items-center justify-between border-b border-[var(--line)] bg-[rgba(7,8,11,.74)] px-4 backdrop-blur-[18px] lg:px-6">
-        <div className="flex items-center gap-4 min-w-0">
+    <div
+      className="relative flex min-h-screen flex-col bg-transparent text-[var(--ink)] font-sans"
+      style={
+        {
+          "--workspace-rail-width": isActionRailExpanded ? "248px" : "56px",
+        } as React.CSSProperties
+      }
+    >
+      <header className="sticky top-0 z-40 grid h-[72px] w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[var(--line)] bg-[rgba(7,8,11,.74)] px-4 backdrop-blur-[18px] lg:px-6">
+        <div className="flex min-w-0 items-center gap-4">
           <Link href="/home" className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-normal text-[var(--ink)] transition-opacity hover:opacity-80">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/scenebook-mark-dark.svg" alt="" className="h-9 w-9" />
             <span className="font-display">SceneBook</span>
           </Link>
-          {breadcrumbItems.length > 0 && (
-            <>
-              <span className="text-[var(--line-strong)] select-none">/</span>
-              <AppBreadcrumbs items={breadcrumbItems} className="min-w-0" />
-            </>
-          )}
+          {visibleProject ? (
+            <div className="hidden min-w-0 md:block">
+              <p className="truncate text-[10px] font-mono uppercase tracking-[.08em] text-[var(--muted)]">
+                Active project
+              </p>
+              <p className="truncate text-sm font-semibold text-[var(--ink)]">{visibleProject.title}</p>
+            </div>
+          ) : null}
         </div>
 
-        <nav className="hidden md:flex items-center gap-2">
+        <nav
+          aria-label="Primary workspace"
+          data-alignment="center"
+          className="hidden items-center justify-center gap-2 md:flex"
+        >
           {items.map((item) => {
             const active =
               pathname === item.href ||
@@ -184,33 +173,8 @@ export function WorkspaceShell({
           })}
         </nav>
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-2">
-          {/* New Project (Desktop) */}
-          <Link href="/home?create=1" className="hidden sm:block">
-            <Button variant="primary" className="h-9 px-4 text-xs font-medium">
-              New project
-            </Button>
-          </Link>
-
-          {/* User Email (Desktop/Tablet) */}
-          {accountEmail && (
-            <div className="hidden rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-1.5 text-xs font-mono text-[var(--muted)] lg:block">
-              {accountEmail}
-            </div>
-          )}
-
-          {/* Sign Out (Desktop) */}
-          <Button
-            variant="secondary"
-            className="hidden sm:inline-flex h-9 px-4 text-xs font-medium"
-            disabled={isSigningOut}
-            onClick={handleSignOut}
-          >
-            {isSigningOut ? "Signing out..." : "Sign out"}
-          </Button>
-
-          {/* Mobile Menu Button */}
+        <div className="flex items-center justify-end gap-2">
+          <ThemeToggle />
           <button
             type="button"
             className="rounded-[var(--radius-md)] p-2 text-[var(--ink)] transition-colors hover:bg-[rgba(255,255,255,.055)] md:hidden"
@@ -272,7 +236,101 @@ export function WorkspaceShell({
         </div>
       )}
 
-      <main className="w-full flex-1 bg-transparent">
+      <aside
+        aria-label="Workspace actions"
+        data-side="left"
+        data-state={isActionRailExpanded ? "expanded" : "collapsed"}
+        className="fixed left-0 top-[72px] z-30 hidden h-[calc(100vh-72px)] border-r border-[var(--line)] bg-[rgba(7,8,11,.82)] backdrop-blur-[18px] transition-[width] duration-[var(--sb-motion-standard)] md:flex"
+        style={{ width: "var(--workspace-rail-width)" }}
+      >
+        <div className="flex w-full flex-col gap-2 px-2 py-4">
+          <Link href="/home?create=1" aria-label="Create project" className="w-full">
+            <Button
+              variant="ghost"
+              className={cn("h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
+              aria-label="Create project"
+            >
+              <Plus className="h-4 w-4" />
+              {isActionRailExpanded ? <span className="ml-2 text-xs">New project</span> : null}
+            </Button>
+          </Link>
+          <Link href="/settings?tab=integrations" aria-label="Integrations" className="w-full">
+            <Button
+              variant="ghost"
+              className={cn("h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
+              aria-label="Integrations"
+            >
+              <Link2 className="h-4 w-4" />
+              {isActionRailExpanded ? <span className="ml-2 text-xs">Integrations</span> : null}
+            </Button>
+          </Link>
+          <Link href="/settings" aria-label="Settings" className="w-full">
+            <Button
+              variant="ghost"
+              className={cn("h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
+              aria-label="Settings"
+            >
+              <Settings2 className="h-4 w-4" />
+              {isActionRailExpanded ? <span className="ml-2 text-xs">Settings</span> : null}
+            </Button>
+          </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn("mt-auto h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
+            aria-label={isActionRailExpanded ? "Collapse workspace actions" : "Expand workspace actions"}
+            onClick={() => setIsActionRailExpanded((open) => !open)}
+          >
+            {isActionRailExpanded ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            {isActionRailExpanded ? <span className="ml-2 text-xs">Collapse</span> : null}
+          </Button>
+
+          {isActionRailExpanded ? (
+            <div className="mt-3 flex flex-1 flex-col rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(11,13,18,.96)] p-5 backdrop-blur-[18px]">
+            <div className="flex items-center gap-3 border-b border-[var(--line)] pb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,.04)]">
+                <UserCircle2 className="h-5 w-5 text-[var(--ink)]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-mono uppercase tracking-[.08em] text-[var(--blue-2)]">Account</p>
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">{accountEmail ?? "Signed in"}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] px-3 py-2">
+                <span className="text-[10px] font-mono uppercase tracking-[.08em] text-[var(--muted)]">
+                  Theme
+                </span>
+                <ThemeToggle />
+              </div>
+              <Link href="/home?create=1">
+                <Button variant="secondary" className="w-full justify-start text-xs">New project</Button>
+              </Link>
+              <Link href="/settings">
+                <Button variant="secondary" className="w-full justify-start text-xs">Settings</Button>
+              </Link>
+              <Link href="/settings?tab=integrations">
+                <Button variant="secondary" className="w-full justify-start text-xs">Integrations</Button>
+              </Link>
+            </div>
+
+            <div className="mt-auto pt-5">
+              <Button
+                variant="secondary"
+                className="w-full justify-start text-xs"
+                disabled={isSigningOut}
+                onClick={handleSignOut}
+              >
+                {isSigningOut ? "Signing out..." : "Sign out"}
+              </Button>
+            </div>
+            </div>
+          ) : null}
+        </div>
+      </aside>
+
+      <main className="w-full flex-1 bg-transparent transition-[padding] duration-[var(--sb-motion-standard)] md:pl-[var(--workspace-rail-width)]">
         {children}
       </main>
     </div>

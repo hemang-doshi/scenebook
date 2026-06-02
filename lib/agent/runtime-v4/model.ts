@@ -2,17 +2,20 @@ import type { ModelMessage } from "ai";
 import { z } from "zod";
 
 import {
+  ModelConfigurationError,
   createModelGateway,
   type CreateModelGatewayOptions,
   type GenerateStructuredInput,
   type GenerateTextInput,
   type ModelGateway,
+  type ModelProviderId,
   type StreamTextInput,
 } from "@/lib/ai/model-gateway";
 import {
   agentDecisionSchema,
   type AgentDecision,
 } from "@/lib/agent/runtime-v4/decision/schemas";
+import { getChatModelPresets } from "@/lib/ai/model-registry";
 
 export const intentUnderstandingSchema = z.object({
   intentType: z.enum([
@@ -41,8 +44,70 @@ type RuntimeV4ModelCallOptions = RuntimeV4ModelGatewayOptions & {
   modelGateway?: ModelGateway;
 };
 
+const nimPrefixes = ["nvidia/", "meta/", "deepseek-ai/", "mistralai/", "qwen/"];
+
+export function resolveRuntimeV4ChatModel(modelId?: string): { provider: ModelProviderId; model: string } {
+  const selectedModel = modelId?.trim();
+  const defaultPreset = getChatModelPresets().find((preset) => preset.recommended) ?? getChatModelPresets()[0];
+
+  if (!selectedModel) {
+    if (!defaultPreset) {
+      throw new ModelConfigurationError({
+        message: "No chat model preset is configured for runtime-v4.",
+        recoverable: false,
+      });
+    }
+
+    return resolveRuntimeV4ChatModel(defaultPreset.id);
+  }
+
+  const preset = getChatModelPresets().find((candidate) => candidate.id === selectedModel);
+  if (preset) {
+    const provider = preset.provider === "gemini"
+      ? "google"
+      : preset.provider === "openrouter"
+        ? "openrouter"
+        : preset.provider;
+    return {
+      provider,
+      model: preset.id,
+    };
+  }
+
+  if (/^gemini-/i.test(selectedModel)) {
+    return { provider: "google", model: selectedModel };
+  }
+
+  if (/^google\//i.test(selectedModel)) {
+    return { provider: "openrouter", model: selectedModel };
+  }
+
+  if (nimPrefixes.some((prefix) => selectedModel.startsWith(prefix))) {
+    return { provider: "nim", model: selectedModel };
+  }
+
+  throw new ModelConfigurationError({
+    provider: "unsupported",
+    message: `Unsupported runtime-v4 chat model selection: ${selectedModel}`,
+    recoverable: true,
+  });
+}
+
 export function createRuntimeV4ModelGateway(options: RuntimeV4ModelGatewayOptions = {}): ModelGateway {
-  return createModelGateway(options);
+  if (options.provider === "fake") {
+    return createModelGateway(options);
+  }
+
+  if (options.provider && options.provider !== "fake") {
+    return createModelGateway(options);
+  }
+
+  const resolved = resolveRuntimeV4ChatModel(options.model);
+  return createModelGateway({
+    ...options,
+    provider: options.provider ?? resolved.provider,
+    model: resolved.model,
+  });
 }
 
 function gatewayFor(options: RuntimeV4ModelCallOptions = {}) {

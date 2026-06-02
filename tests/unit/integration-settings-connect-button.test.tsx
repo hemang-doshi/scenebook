@@ -132,4 +132,18 @@ describe("IntegrationConnectButton", () => {
       );
     });
   });
+
+  test("connected integrations expose health check and disconnect actions", () => {
+    render(
+      <IntegrationConnectButton
+        provider="google_drive"
+        displayName="Google Drive"
+        status="connected"
+        enabled
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Check Google Drive health" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disconnect Google Drive" })).toBeInTheDocument();
+  });
 });

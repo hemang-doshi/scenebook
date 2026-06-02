@@ -1,207 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { motion } from "motion/react";
-import { Bot, Sparkles, Copy, Check, User } from "lucide-react";
+import { Bot, Sparkles, User } from "lucide-react";
 
-import type { AgentUiMessage } from "@/components/agent/types";
 import type { Attachment } from "@/components/agent/agent-composer";
-
-function parseInline(text: string): React.ReactNode[] {
-  const regex = /(\*\*.*?\*\*|`.*?`)/g;
-  const matches = text.split(regex);
-
-  return matches.map((part, idx) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-          <strong key={idx} className="font-bold text-current">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return (
-        <code key={idx} className="rounded border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-1.5 py-0.5 text-xs font-mono text-current">
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    return part;
-  });
-}
-
-function CodeBlock({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className="relative group my-3">
-      <pre className="overflow-x-auto rounded-md border border-[var(--line)] bg-[rgba(255,255,255,.055)] p-4 text-xs font-mono text-current">
-        <code>{code}</code>
-      </pre>
-      <button
-        onClick={handleCopy}
-        className="absolute right-3 top-3 rounded border border-[var(--line)] bg-[rgba(255,255,255,.055)] p-1 text-[var(--muted)] opacity-0 transition-all duration-200 hover:border-[var(--line-strong)] hover:text-[var(--ink)] group-hover:opacity-100"
-        title="Copy to clipboard"
-      >
-        {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-      </button>
-    </div>
-  );
-}
-
-function parseMarkdown(text: string): React.ReactNode[] {
-  if (!text) return [];
-  const lines = text.split("\n");
-  const renderedElements: React.ReactNode[] = [];
-  let listItems: React.ReactNode[] = [];
-  let inList = false;
-  let inOrderedList = false;
-  let inCodeBlock = false;
-  let codeBlockLines: string[] = [];
-
-  const flushLists = (keyPrefix: string) => {
-    if (inList) {
-      renderedElements.push(
-        <ul key={`ul-${keyPrefix}`} className="my-2 space-y-1.5 pl-5 list-disc text-[var(--ink)]/90">
-          {listItems}
-        </ul>
-      );
-      inList = false;
-      listItems = [];
-    }
-    if (inOrderedList) {
-      renderedElements.push(
-        <ol key={`ol-${keyPrefix}`} className="my-2 space-y-1.5 pl-5 list-decimal text-[var(--ink)]/90">
-          {listItems}
-        </ol>
-      );
-      inOrderedList = false;
-      listItems = [];
-    }
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.startsWith("```")) {
-      if (inCodeBlock) {
-        inCodeBlock = false;
-        renderedElements.push(
-          <CodeBlock key={`code-${i}`} code={codeBlockLines.join("\n")} />
-        );
-        codeBlockLines = [];
-      } else {
-        flushLists(`code-start-${i}`);
-        inCodeBlock = true;
-      }
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeBlockLines.push(line);
-      continue;
-    }
-
-    // Headers
-    if (/^\s*---+\s*$/.test(line)) {
-      flushLists(`hr-${i}`);
-      renderedElements.push(
-        <hr key={`hr-${i}`} className="my-3 border-[var(--hairline)]" />
-      );
-      continue;
-    }
-
-    if (line.trim().startsWith(">")) {
-      flushLists(`quote-${i}`);
-      renderedElements.push(
-        <blockquote
-          key={`quote-${i}`}
-          className="my-2 border-l-2 border-[var(--primary)]/40 pl-3 text-xs leading-relaxed text-[var(--ink)]/80"
-        >
-          {parseInline(line.trim().replace(/^>\s?/, ""))}
-        </blockquote>
-      );
-      continue;
-    }
-
-    if (line.startsWith("### ")) {
-      flushLists(`h3-${i}`);
-      renderedElements.push(
-        <h3 key={`h3-${i}`} className="text-sm font-bold mt-4 mb-2 text-[var(--ink)]">
-          {parseInline(line.slice(4))}
-        </h3>
-      );
-      continue;
-    }
-    if (line.startsWith("## ")) {
-      flushLists(`h2-${i}`);
-      renderedElements.push(
-        <h2 key={`h2-${i}`} className="text-base font-extrabold mt-5 mb-2 text-[var(--ink)]">
-          {parseInline(line.slice(3))}
-        </h2>
-      );
-      continue;
-    }
-    if (line.startsWith("# ")) {
-      flushLists(`h1-${i}`);
-      renderedElements.push(
-        <h1 key={`h1-${i}`} className="text-lg font-black mt-6 mb-3 text-[var(--ink)]">
-          {parseInline(line.slice(2))}
-        </h1>
-      );
-      continue;
-    }
-
-    // Unordered lists
-    if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-      if (!inList) {
-        flushLists(`ul-start-${i}`);
-        inList = true;
-      }
-      const content = line.trim().startsWith("- ") ? line.trim().slice(2) : line.trim().slice(2);
-      listItems.push(
-        <li key={`li-${i}`} className="text-xs leading-relaxed text-[var(--ink)]/90">
-          {parseInline(content)}
-        </li>
-      );
-      continue;
-    }
-
-    // Ordered lists
-    const olMatch = line.trim().match(/^(\d+)\.\s+(.*)$/);
-    if (olMatch) {
-      if (!inOrderedList) {
-        flushLists(`ol-start-${i}`);
-        inOrderedList = true;
-      }
-      listItems.push(
-        <li key={`li-${i}`} className="text-xs leading-relaxed text-[var(--ink)]/90">
-          {parseInline(olMatch[2])}
-        </li>
-      );
-      continue;
-    }
-
-    // Paragraph or blank line
-    flushLists(`para-${i}`);
-    if (line.trim() === "") {
-      renderedElements.push(<div key={`blank-${i}`} className="h-2" />);
-    } else {
-      renderedElements.push(
-        <p key={`para-${i}`} className="text-xs leading-relaxed text-[var(--ink)]/90 my-1">
-          {parseInline(line)}
-        </p>
-      );
-    }
-  }
-
-  flushLists("end");
-  return renderedElements;
-}
+import { MarkdownBlocks } from "@/components/agent/markdown-blocks";
+import type { AgentUiMessage } from "@/components/agent/types";
 
 export function ChatMessage({
   message,
@@ -218,15 +23,15 @@ export function ChatMessage({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.20, delay: Math.min(index * 0.02, 0.15) }}
-        className="flex justify-end w-full"
+        className="flex w-full justify-end"
       >
         <div className="max-w-[85%] space-y-1 rounded-[var(--radius-lg)] border border-[rgba(17,19,24,.10)] bg-[rgba(255,253,248,.92)] px-4 py-3 text-xs text-[var(--light-ink)] shadow-[var(--shadow-soft)]">
           <div className="mb-1 flex items-center justify-end gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--light-muted)]">
             <span>You</span>
             <User className="h-3 w-3" />
           </div>
-          <div className="space-y-1 text-xs leading-relaxed text-[var(--light-ink)]/95">
-            {parseMarkdown(message.content)}
+          <div className="space-y-1 text-[var(--light-ink)]">
+            <MarkdownBlocks id={message.id} content={message.content} />
           </div>
           {!!(message.metadata?.attachments && Array.isArray(message.metadata.attachments)) && (
             <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[rgba(17,19,24,.12)] pt-2">
@@ -238,7 +43,7 @@ export function ChatMessage({
                   rel="noreferrer"
                   className="flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[rgba(17,19,24,.12)] bg-[var(--white)] px-2.5 py-1 text-[10px] font-mono text-[var(--light-ink)]/80 transition-all hover:bg-[var(--bone)]"
                 >
-                  <span>📎 {file.name.length > 15 ? file.name.substring(0, 12) + "..." : file.name}</span>
+                  <span>📎 {file.name.length > 15 ? `${file.name.substring(0, 12)}...` : file.name}</span>
                 </a>
               ))}
             </div>
@@ -253,21 +58,18 @@ export function ChatMessage({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.20, delay: Math.min(index * 0.02, 0.15) }}
-      className="flex justify-start w-full gap-3 py-2 items-start"
+      className="flex w-full items-start justify-start gap-3 py-2"
     >
-      {/* Bot Icon Indicator */}
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[rgba(105,167,255,.12)] text-[var(--blue-2)]">
         <Bot className="h-4 w-4" />
       </div>
-
-      {/* Message content */}
-      <div className="flex-1 min-w-0 space-y-1 max-w-[min(48rem,100%)]">
-        <div className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--ink)]/55 mb-1.5">
-          <span>SceneBook Agent</span>
-          <Sparkles className="h-3 w-3 text-[var(--coral)] animate-pulse" />
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--muted)]">
+          <Sparkles className="h-3 w-3 text-[var(--blue-2)]" />
+          <span>SceneBook</span>
         </div>
-        <div className="space-y-1 text-xs leading-relaxed text-[var(--ink)]/95">
-          {parseMarkdown(message.content)}
+        <div className="mt-1 text-[var(--ink)]">
+          <MarkdownBlocks id={message.id} content={message.content} />
         </div>
       </div>
     </motion.div>

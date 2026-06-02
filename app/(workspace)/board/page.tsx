@@ -38,7 +38,7 @@ const boardStatuses: ContentStatus[] = [
 
 const platformStyles: Record<string, string> = {
   youtube: "bg-red-500/10 text-red-400 border-red-500/20",
-  instagram: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+  instagram: "bg-[var(--coral)]/10 text-[var(--coral-2)] border-[var(--coral)]/20",
   tiktok: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
   linkedin: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   x: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20",
@@ -104,7 +104,7 @@ export default function BoardPage() {
   };
 
   if (isLoading) {
-    return <Panel className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-accent" /></Panel>;
+    return <Panel className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-[var(--coral-2)]" /></Panel>;
   }
 
   if (error || !data) {
@@ -163,7 +163,7 @@ export default function BoardPage() {
         </div>
         
         {isPending && (
-          <div className="flex items-center gap-2 font-mono text-[10px] text-accent uppercase tracking-wider animate-pulse">
+          <div className="flex items-center gap-2 font-mono text-[10px] text-[var(--coral-2)] uppercase tracking-wider animate-pulse">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Updating Board...
           </div>
         )}
@@ -232,7 +232,7 @@ function DroppableColumn({
       ref={setNodeRef}
       className={`flex flex-col w-[280px] min-w-[280px] rounded-xl border p-3 transition-colors ${
         isOver 
-          ? "border-accent bg-accent/[0.03] shadow-[0_0_15px_rgba(99,102,241,0.05)]" 
+          ? "border-[var(--coral)] bg-[var(--coral)]/[0.03] shadow-[0_0_15px_rgba(255,104,71,0.08)]" 
           : "border-border/60 bg-surface-soft/40"
       }`}
     >
@@ -285,12 +285,12 @@ function DraggableCard({
       style={style}
       {...listeners}
       {...attributes}
-      className={`group cursor-grab active:cursor-grabbing select-none rounded-xl border border-border/50 bg-black/25 p-4 space-y-3 transition-all duration-300 hover:border-accent/40 hover:bg-black/35 hover:shadow-[0_4px_20px_rgba(0,0,0,0.3)] ${
-        isDragging ? "shadow-2xl border-accent" : ""
+      className={`group cursor-grab active:cursor-grabbing select-none rounded-xl border border-border/50 bg-black/25 p-4 space-y-3 transition-all duration-300 hover:border-[var(--coral)]/40 hover:bg-black/35 hover:shadow-[0_4px_20px_rgba(0,0,0,0.3)] ${
+        isDragging ? "shadow-2xl border-[var(--coral)]" : ""
       }`}
     >
       <div>
-        <h4 className="text-xs font-semibold text-foreground leading-snug group-hover:text-accent transition-colors duration-200">{card.title}</h4>
+        <h4 className="text-xs font-semibold text-foreground leading-snug group-hover:text-[var(--coral-2)] transition-colors duration-200">{card.title}</h4>
       </div>
 
       {/* Info Badges */}
@@ -311,7 +311,7 @@ function DraggableCard({
         </div>
         
         {totalTasks > 0 && (
-          <div className="flex items-center gap-1 text-[9px] font-mono text-accent">
+          <div className="flex items-center gap-1 text-[9px] font-mono text-[var(--coral-2)]">
             <CheckSquare className="h-2.5 w-2.5" />
             <span>{completedTasks}/{totalTasks} tasks</span>
           </div>
@@ -342,7 +342,7 @@ function DraggableCard({
           {showLeft && (
             <button 
               onClick={onMoveLeft}
-              className="p-1 hover:bg-white/5 border border-border rounded text-muted-foreground hover:text-accent transition cursor-pointer" 
+              className="p-1 hover:bg-white/5 border border-border rounded text-muted-foreground hover:text-[var(--coral-2)] transition cursor-pointer" 
               title="Move left"
             >
               <ArrowLeft className="h-3 w-3" />
@@ -351,7 +351,7 @@ function DraggableCard({
           {showRight && (
             <button 
               onClick={onMoveRight}
-              className="p-1 hover:bg-white/5 border border-border rounded text-muted-foreground hover:text-accent transition cursor-pointer" 
+              className="p-1 hover:bg-white/5 border border-border rounded text-muted-foreground hover:text-[var(--coral-2)] transition cursor-pointer" 
               title="Move right"
             >
               <ArrowRight className="h-3 w-3" />

@@ -212,4 +212,32 @@ describe("agent runtime", () => {
     expect(history.messages).toHaveLength(1);
     expect(history.toolCalls).toHaveLength(1);
   });
+
+  test("archiveAgentThread soft-archives an owned active thread", async () => {
+    const threadUpdateBuilder = createBuilder({ error: null });
+
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "agent_threads") return threadUpdateBuilder;
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    };
+
+    createSupabaseServerClient.mockResolvedValue(supabase);
+
+    const { archiveAgentThread } = await import("@/lib/agent/runtime");
+    await archiveAgentThread("project-1", "thread-1");
+
+    expect(threadUpdateBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "archived",
+      }),
+    );
+    expect(threadUpdateBuilder.eq).toHaveBeenCalledWith("id", "thread-1");
+    expect(threadUpdateBuilder.eq).toHaveBeenCalledWith("project_id", "project-1");
+    expect(threadUpdateBuilder.eq).toHaveBeenCalledWith("owner_id", "user-1");
+  });
 });

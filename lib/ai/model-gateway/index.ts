@@ -9,6 +9,7 @@ import {
 import { resolveModelProfile } from "@/lib/ai/model-gateway/model-profiles";
 import { createGoogleModel } from "@/lib/ai/model-gateway/providers/ai-sdk-google";
 import { createNimModel } from "@/lib/ai/model-gateway/providers/ai-sdk-nim";
+import { createOpenRouterModel } from "@/lib/ai/model-gateway/providers/ai-sdk-openrouter";
 import { createFakeModelGateway, type FakeModelGatewayOptions } from "@/lib/ai/model-gateway/providers/fake";
 import type {
   GenerateStructuredInput,
@@ -24,6 +25,7 @@ export * from "@/lib/ai/model-gateway/model-profiles";
 export * from "@/lib/ai/model-gateway/types";
 export { createGoogleModel } from "@/lib/ai/model-gateway/providers/ai-sdk-google";
 export { createNimModel } from "@/lib/ai/model-gateway/providers/ai-sdk-nim";
+export { createOpenRouterModel } from "@/lib/ai/model-gateway/providers/ai-sdk-openrouter";
 export { createFakeModelGateway } from "@/lib/ai/model-gateway/providers/fake";
 
 export type CreateModelGatewayOptions = {
@@ -76,6 +78,10 @@ function createProviderModel(profile: ResolvedModelProfile): LanguageModel {
 
   if (profile.provider === "nim") {
     return createNimModel(profile.model);
+  }
+
+  if (profile.provider === "openrouter") {
+    return createOpenRouterModel(profile.model);
   }
 
   throw new ModelConfigurationError({

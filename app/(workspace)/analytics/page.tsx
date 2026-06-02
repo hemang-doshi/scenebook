@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { fetchJson } from "@/lib/fetcher";
 import { getInstagramInsightIssueLabel } from "@/lib/domain/instagram-analytics";
+import { normalizeInstagramOAuthError } from "@/lib/instagram/oauth";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -99,7 +100,7 @@ type AccountAnalytics = {
 
 function SVGLineChart({
   values,
-  color = "rgb(0, 0, 0)",
+  color = "var(--coral)",
   gradId,
 }: {
   dates: string[];
@@ -231,7 +232,8 @@ export default function AnalyticsDashboard() {
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (instagram === "error") {
       const msg = params.get("message") || "An error occurred during authentication.";
-      setOauthStatus({ type: "error", message: msg });
+      const notice = normalizeInstagramOAuthError(msg);
+      setOauthStatus({ type: "error", message: notice.description });
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -387,7 +389,7 @@ export default function AnalyticsDashboard() {
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
             )}
             <div>
-              <p className="font-semibold capitalize">{oauthStatus.type === "success" ? "Success" : "Connection Error"}</p>
+              <p className="font-semibold capitalize">{oauthStatus.type === "success" ? "Success" : "Connection needs attention"}</p>
               <p className="mt-0.5 text-xs text-[var(--muted)]">{oauthStatus.message}</p>
             </div>
           </div>
@@ -419,7 +421,7 @@ export default function AnalyticsDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8 pb-16">
       {/* Saturated Signature Block-Lime Header Block */}
-      <Panel className="rounded-[var(--rounded-lg)] bg-[var(--block-lime)] text-[var(--ink)] border-0 p-8 md:p-10">
+      <Panel className="rounded-[var(--rounded-lg)] border border-[var(--line)] bg-[rgba(255,255,255,.04)] p-8 text-[var(--ink)] md:p-10">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-xs font-mono tracking-widest text-[var(--ink)]/60 uppercase mb-2">Performance</p>
@@ -491,7 +493,7 @@ export default function AnalyticsDashboard() {
             <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           )}
           <div>
-            <p className="font-semibold capitalize">{oauthStatus.type === "success" ? "Success" : "Connection Error"}</p>
+            <p className="font-semibold capitalize">{oauthStatus.type === "success" ? "Success" : "Connection needs attention"}</p>
             <p className="mt-0.5 text-xs text-[var(--muted)]">{oauthStatus.message}</p>
           </div>
         </div>
@@ -560,7 +562,7 @@ export default function AnalyticsDashboard() {
                   <SVGLineChart
                     dates={activeAccount.trends.dates}
                     values={activeAccount.trends.views}
-                    color="rgb(0, 0, 0)"
+                    color="var(--coral)"
                     gradId="viewsGrad"
                   />
                 ) : (

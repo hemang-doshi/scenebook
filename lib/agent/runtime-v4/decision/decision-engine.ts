@@ -40,9 +40,9 @@ export async function decideNextStep(input: DecideNextStepInput): Promise<AgentD
         originalPrompt: request.prompt,
         model: input.model,
       });
-      return repaired ?? createGracefulDecisionFallback(input.message);
+      return repaired ?? createGracefulDecisionFallback(input);
     }
 
-    return createDeterministicSafetyDecision(input) ?? createGracefulDecisionFallback(input.message);
+    return createDeterministicSafetyDecision(input) ?? createGracefulDecisionFallback(input);
   }
 }

@@ -400,6 +400,23 @@ export async function failAgentToolCall(
   }
 }
 
+export async function archiveAgentThread(projectId: string, threadId: string) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("agent_threads")
+    .update({
+      status: "archived",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", threadId)
+    .eq("project_id", projectId)
+    .eq("owner_id", user.id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function listAgentThreads(projectId: string): Promise<AgentThreadRecord[]> {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase

@@ -46,7 +46,7 @@ export default function InboxPage() {
   );
 
   if (isLoading) {
-    return <Panel className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-accent" /></Panel>;
+    return <Panel className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-[var(--coral-2)]" /></Panel>;
   }
 
   if (error || !data) {
@@ -93,10 +93,10 @@ export default function InboxPage() {
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-border mb-6">
               <div>
-                <p className="cmd-label text-accent">Quick Capture</p>
+                <p className="cmd-label text-[var(--coral-2)]">Quick Capture</p>
                 <h3 className="text-xl font-bold text-foreground mt-1">Jot down an idea</h3>
               </div>
-              <Badge className="bg-accent/15 text-accent border border-accent/25">{activeItems.length} in queue</Badge>
+              <Badge className="border border-[var(--coral)]/25 bg-[var(--coral)]/15 text-[var(--coral-2)]">{activeItems.length} in queue</Badge>
             </div>
 
             <div className="space-y-4">
@@ -141,7 +141,7 @@ export default function InboxPage() {
         <Panel className="border-border bg-surface-soft">
           <div className="flex items-center justify-between pb-4 border-b border-border mb-6">
             <div>
-              <p className="cmd-label text-accent">Live Queue</p>
+              <p className="cmd-label text-[var(--coral-2)]">Live Queue</p>
               <h3 className="text-xl font-bold text-foreground mt-1">Promotion Queue</h3>
             </div>
             <Badge className="bg-zinc-800 text-muted border border-border">{activeItems.length} open</Badge>
@@ -152,10 +152,10 @@ export default function InboxPage() {
               const Icon = sourceIcons[item.sourceType] || NotebookPen;
 
               return (
-                <div key={item.id} className="rounded-xl border border-border bg-black/20 p-4 transition-all duration-300 hover:border-accent/30">
+                <div key={item.id} className="rounded-xl border border-border bg-black/20 p-4 transition-all duration-300 hover:border-[var(--coral)]/30">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="mt-1 rounded-lg border border-border bg-white/5 p-2 text-accent">
+                      <div className="mt-1 rounded-lg border border-border bg-white/5 p-2 text-[var(--coral-2)]">
                         <Icon className="h-4 w-4" />
                       </div>
                       <div>
@@ -165,7 +165,7 @@ export default function InboxPage() {
                         )}
                       </div>
                     </div>
-                    <Badge className="bg-accent/10 text-accent font-mono uppercase text-[9px] border border-accent/20">
+                    <Badge className="border border-[var(--coral)]/20 bg-[var(--coral)]/10 font-mono uppercase text-[9px] text-[var(--coral-2)]">
                       {item.sourceType}
                     </Badge>
                   </div>
@@ -186,7 +186,7 @@ export default function InboxPage() {
 
                   {convertingId === item.id && (
                     <div className="mt-4 rounded-xl border border-border bg-black/40 p-4 space-y-4 animate-[ed-fadeIn_0.2s_ease-out]">
-                      <h4 className="text-xs font-mono uppercase text-accent font-semibold">Promotion Settings</h4>
+                      <h4 className="text-xs font-mono uppercase text-[var(--coral-2)] font-semibold">Promotion Settings</h4>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <label className="block text-xs font-mono uppercase text-muted">
@@ -277,7 +277,7 @@ export default function InboxPage() {
                 <p className="text-xs text-muted">
                   Inbox is clear. Capture an idea in the left panel to populate your workspace.
                 </p>
-                <Link href="/home" className="mt-4 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-accent hover:underline">
+                <Link href="/home" className="mt-4 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--coral-2)] hover:underline">
                   Go to Dashboard <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>

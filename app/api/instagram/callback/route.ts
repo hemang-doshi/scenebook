@@ -2,6 +2,21 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/secure-settings";
+import {
+  buildInstagramRequestOrigin,
+  normalizeInstagramOAuthError,
+  sanitizeInstagramApiError,
+} from "@/lib/instagram/oauth";
+
+function redirectWithOAuthError(input: {
+  settingsUrl: string;
+  message: string;
+}) {
+  const notice = normalizeInstagramOAuthError(input.message);
+  return NextResponse.redirect(
+    `${input.settingsUrl}?instagram=error&reason=${encodeURIComponent(notice.code)}&message=${encodeURIComponent(input.message)}`,
+  );
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -11,12 +26,7 @@ export async function GET(request: Request) {
 
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
-  const headers = request.headers;
-  const host = headers.get("x-forwarded-host") || headers.get("host") || "";
-  const proto = headers.get("x-forwarded-proto") || "http";
-  const origin = host.includes("localhost") || host.includes("127.0.0.1")
-    ? `${proto}://${host}`
-    : `https://${host}`;
+  const origin = buildInstagramRequestOrigin(request.headers);
   const redirectUri = `${origin}/api/instagram/callback`;
   const targetPath = returnTo === "analytics" ? "analytics" : "settings";
   const settingsUrl = `${origin}/${targetPath}`;
@@ -32,21 +42,24 @@ export async function GET(request: Request) {
     }
 
     if (!code) {
-      return NextResponse.redirect(
-        `${settingsUrl}?instagram=error&message=No+authorization+code+provided.`,
-      );
+      return redirectWithOAuthError({
+        settingsUrl,
+        message: "No authorization code provided.",
+      });
     }
 
     if (stateUserId !== user.id) {
-      return NextResponse.redirect(
-        `${settingsUrl}?instagram=error&message=Invalid+OAuth+state+parameter.`,
-      );
+      return redirectWithOAuthError({
+        settingsUrl,
+        message: "Invalid OAuth state parameter.",
+      });
     }
 
     if (!appId || !appSecret || !redirectUri) {
-      return NextResponse.redirect(
-        `${settingsUrl}?instagram=error&message=Meta+credentials+not+fully+configured+on+server.`,
-      );
+      return redirectWithOAuthError({
+        settingsUrl,
+        message: "Meta credentials not fully configured on server.",
+      });
     }
 
     // 1. Exchange authorization code for short-lived Instagram user access token
@@ -65,14 +78,9 @@ export async function GET(request: Request) {
     });
     const shortLivedData = await shortLivedRes.json();
 
-    console.log("SceneBook Meta Integration - Short-lived Token API Response:", JSON.stringify(shortLivedData, null, 2));
-
     if (shortLivedData.error || !shortLivedData.access_token) {
-      throw new Error(
-        shortLivedData.error_message ||
-        shortLivedData.error?.message ||
-        "Failed to exchange short-lived token."
-      );
+      console.error("Instagram short-lived token exchange failed:", sanitizeInstagramApiError(shortLivedData));
+      throw new Error(shortLivedData.error_message || shortLivedData.error?.message || "Failed to exchange short-lived token.");
     }
 
     const shortLivedToken = shortLivedData.access_token;
@@ -83,9 +91,8 @@ export async function GET(request: Request) {
     const longLivedRes = await fetch(longLivedExchangeUrl);
     const longLivedData = await longLivedRes.json();
 
-    console.log("SceneBook Meta Integration - Long-lived Token API Response:", JSON.stringify(longLivedData, null, 2));
-
     if (longLivedData.error || !longLivedData.access_token) {
+      console.error("Instagram long-lived token exchange failed:", sanitizeInstagramApiError(longLivedData));
       throw new Error(longLivedData.error?.message || "Failed to exchange long-lived token.");
     }
 
@@ -96,9 +103,8 @@ export async function GET(request: Request) {
     const igInfoRes = await fetch(igInfoUrl);
     const igInfo = await igInfoRes.json();
 
-    console.log("SceneBook Meta Integration - Profile Details Response:", JSON.stringify(igInfo, null, 2));
-
     if (igInfo.error) {
+      console.error("Instagram profile lookup failed:", sanitizeInstagramApiError(igInfo));
       throw new Error(igInfo.error.message || "Failed to retrieve Instagram profile info.");
     }
 
@@ -133,10 +139,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${settingsUrl}?instagram=success`);
   } catch (error: any) {
     console.error("Instagram OAuth callback error:", error);
-    return NextResponse.redirect(
-      `${settingsUrl}?instagram=error&message=${encodeURIComponent(
-        error?.message || "Internal server error",
-      )}`,
-    );
+    return redirectWithOAuthError({
+      settingsUrl,
+      message: error?.message || "Internal server error",
+    });
   }
 }

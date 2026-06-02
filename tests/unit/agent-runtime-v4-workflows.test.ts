@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, test, vi } from "vitest";
 
+import { agentDecisionSchema } from "@/lib/agent/runtime-v4/decision/schemas";
 import { listRuntimeV4Workflows } from "@/lib/agent/runtime-v4/workflows/workflow-registry";
 import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 import { runtimeV4WorkflowNames } from "@/lib/agent/runtime-v4/workflows/types";
@@ -105,6 +106,36 @@ describe("runtime-v4 creative workflows", () => {
     expect(listRuntimeV4Workflows().map((workflow) => workflow.name)).toEqual([...runtimeV4WorkflowNames]);
   });
 
+  test("decision schema only accepts executable runtime-v4 workflow names", () => {
+    const registered = new Set(listRuntimeV4Workflows().map((workflow) => workflow.name));
+
+    for (const workflowName of runtimeV4WorkflowNames) {
+      const decision = agentDecisionSchema.parse({
+        type: "workflow_call",
+        workflowName,
+        input: { prompt: "test" },
+        reason: "test",
+      });
+
+      expect(decision.workflowName).toBe(workflowName);
+      expect(registered.has(decision.workflowName)).toBe(true);
+    }
+  });
+
+  test("legacy workflow names normalize to executable runtime-v4 workflow names", () => {
+    const decision = agentDecisionSchema.parse({
+      type: "workflow_call",
+      workflowName: "script_workflow",
+      input: { prompt: "old workflow" },
+      reason: "legacy runtime named the script workflow differently",
+    });
+
+    expect(decision).toMatchObject({
+      type: "workflow_call",
+      workflowName: "create_script_package",
+    });
+  });
+
   test("executor validates input", async () => {
     const executor = new WorkflowExecutor({ applyPatch: false });
 
@@ -119,20 +150,27 @@ describe("runtime-v4 creative workflows", () => {
     expect(result.observation.message).toMatch(/prompt/i);
   });
 
-  test("executor rejects unknown workflows", async () => {
+  test("normalized legacy workflows execute through the registered v4 executor", async () => {
     const executor = new WorkflowExecutor({ applyPatch: false });
-
-    const result = await executor.execute({
+    const parsedDecision = agentDecisionSchema.parse({
+      type: "workflow_call",
       workflowName: "script_workflow",
       input: { prompt: "old workflow" },
+      reason: "legacy runtime named the script workflow differently",
+    });
+
+    if (parsedDecision.type !== "workflow_call") {
+      throw new Error(`Expected workflow_call, received ${parsedDecision.type}.`);
+    }
+
+    const result = await executor.execute({
+      workflowName: parsedDecision.workflowName,
+      input: parsedDecision.input,
       projectMind: projectMind(),
       context,
     });
 
-    expect(result.workflowResult.status).toBe("failed");
-    expect(result.observation.output).toMatchObject({
-      kind: "creative_workflow_failed",
-    });
+    expect(result.workflowResult.status).toBe("completed");
   });
 
   test("plan_reel returns structured plan and ProjectPatch", async () => {

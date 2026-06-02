@@ -25,6 +25,11 @@ Turn SceneBook from a tab-heavy creator workspace into a dark-first AI productio
 - Typography: large tight display headings; restrained body copy; mono uppercase labels for runtime state.
 - Use thin borders, rounded media/product cards, minimal shadows, pill controls, and generous whitespace.
 - Avoid generic SaaS gradients, heavy shadows, childish rounded cards, and corporate dashboard clutter.
+- Remove workspace breadcrumbs; keep the primary nav centered and use active project labels for orientation.
+- Global actions belong in an elastic left rail (`56px` collapsed, `248px` expanded).
+- Project context inside the agent workspace should use floating islands instead of permanent right columns.
+- Chat streaming must render Markdown live, preserve contrast in light and dark themes, and never hard-refresh the transcript when a run completes.
+- Support a local light mode preference while keeping dark as the default brand mode.
 
 ## Core screens
 

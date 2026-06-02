@@ -157,4 +157,21 @@ describe("agent route auth boundary", () => {
       }),
     }));
   });
+
+  test("agent POST runtime-v4 passes parsed slash-command hints into AgentKernel", async () => {
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+
+    await POST(new Request("http://localhost/api/projects/project-1/agent", {
+      method: "POST",
+      body: JSON.stringify({ message: "/script generate a script about AI taking over humans" }),
+    }), {
+      params: Promise.resolve({ id: "project-1" }),
+    });
+
+    expect(kernelMock.run).toHaveBeenCalledWith(expect.objectContaining({
+      message: "/script generate a script about AI taking over humans",
+      commandHint: "script",
+      commandInput: "generate a script about AI taking over humans",
+    }));
+  });
 });

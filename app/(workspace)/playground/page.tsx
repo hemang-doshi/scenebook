@@ -180,7 +180,7 @@ export default function PlaygroundPage() {
         {/* Left Column: AI Parameters Controls */}
         <Panel className="border-border bg-surface-soft space-y-6">
           <div>
-            <span className="cmd-label text-accent flex items-center gap-1.5 mb-3">
+            <span className="cmd-label text-[var(--coral-2)] flex items-center gap-1.5 mb-3">
               <Wrench className="h-3.5 w-3.5" /> Model Engine
             </span>
             <CustomSelect
@@ -191,7 +191,7 @@ export default function PlaygroundPage() {
           </div>
 
           <div>
-            <span className="cmd-label text-accent flex items-center gap-1.5 mb-3">
+            <span className="cmd-label text-[var(--coral-2)] flex items-center gap-1.5 mb-3">
               <MessageSquare className="h-3.5 w-3.5" /> Presets
             </span>
             <div className="grid grid-cols-2 gap-1.5">
@@ -201,7 +201,7 @@ export default function PlaygroundPage() {
                   onClick={() => handlePresetChange(key as keyof typeof systemPresets)}
                   className={`px-3 py-1.5 rounded text-[10px] font-mono uppercase border transition cursor-pointer ${
                     preset === key 
-                      ? "border-accent bg-accent/15 text-accent" 
+                      ? "border-[var(--coral)] bg-[var(--coral)]/15 text-[var(--coral-2)]" 
                       : "border-border bg-black/20 text-muted-foreground hover:bg-white/5 hover:text-foreground"
                   }`}
                 >
@@ -212,7 +212,7 @@ export default function PlaygroundPage() {
           </div>
 
           <div>
-            <span className="cmd-label text-accent flex items-center gap-1.5 mb-3">
+            <span className="cmd-label text-[var(--coral-2)] flex items-center gap-1.5 mb-3">
               System Instruction
             </span>
             <textarea
@@ -231,7 +231,7 @@ export default function PlaygroundPage() {
                 checked={useCreatorContext}
                 onChange={() => setUseCreatorContext(!useCreatorContext)}
               />
-              <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent peer-checked:after:bg-foreground"></div>
+              <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--coral)] peer-checked:after:bg-foreground"></div>
             </label>
           </div>
         </Panel>
@@ -243,7 +243,7 @@ export default function PlaygroundPage() {
           <div className="flex-1 overflow-y-auto ed-scrollbar bg-black/15 rounded-xl p-4 space-y-4 mb-4">
             {chatLog.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-20">
-                <Sparkles className="h-8 w-8 text-accent animate-pulse mb-3" />
+                <Sparkles className="mb-3 h-8 w-8 animate-pulse text-[var(--coral-2)]" />
                 <h4 className="text-sm font-semibold text-foreground">AI Creative Sandbox</h4>
                 <p className="text-xs text-muted max-w-md mt-2 leading-relaxed">
                   Start prompting the assistant. Use presets in the sidebar to specialize generations. 
@@ -258,7 +258,7 @@ export default function PlaygroundPage() {
                   </span>
                   <div className={`p-4 rounded-xl text-xs leading-relaxed max-w-[80%] whitespace-pre-wrap ${
                     msg.role === "user" 
-                      ? "bg-accent/15 border border-accent/25 text-foreground" 
+                      ? "border border-[var(--coral)]/25 bg-[var(--coral)]/15 text-foreground" 
                       : "bg-surface-contrast border border-border text-foreground"
                   }`}>
                     {msg.content}
@@ -299,7 +299,7 @@ export default function PlaygroundPage() {
                           <button
                             disabled={isLinking}
                             onClick={() => handleApplyToSection(i, msg.content)}
-                            className="text-[10px] font-mono text-accent hover:text-accent-secondary uppercase font-bold flex items-center gap-1 cursor-pointer border-l border-border pl-2"
+                            className="flex cursor-pointer items-center gap-1 border-l border-border pl-2 text-[10px] font-mono font-bold uppercase text-[var(--coral-2)] hover:text-[var(--coral)]"
                           >
                             {isLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCheck className="h-3 w-3" />}
                             Apply Section
@@ -332,7 +332,7 @@ export default function PlaygroundPage() {
             )}
 
             {isGenerating && (
-              <div className="flex items-center gap-2 text-xs text-accent">
+              <div className="flex items-center gap-2 text-xs text-[var(--coral-2)]">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Thinking...
               </div>

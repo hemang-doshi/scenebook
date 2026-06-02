@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
+import { ThemeInitScript } from "@/components/theme/theme-init-script";
+
 import "./globals.css";
 
 const bodyFont = Inter({
@@ -31,8 +33,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} h-full antialiased`}
     >
+      <head>
+        <ThemeInitScript />
+      </head>
       <body className="min-h-full bg-[var(--bg)] text-[var(--ink)] font-sans">
         <div className="relative flex min-h-full flex-col">{children}</div>
       </body>

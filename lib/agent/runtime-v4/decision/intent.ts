@@ -1,8 +1,11 @@
 import type { ProjectSnapshot, ToolObservation } from "@/lib/agent/runtime-v3/types";
+import type { AgentCommand } from "@/lib/agent/types";
 import type { AgentDecision } from "@/lib/agent/runtime-v4/decision/schemas";
 
 export type DecisionEngineInput = {
   message: string;
+  commandHint?: AgentCommand | null;
+  commandInput?: string | null;
   snapshot: ProjectSnapshot;
   toolSummaries: unknown;
   previousObservations?: ToolObservation[];
@@ -20,6 +23,9 @@ export type DecisionPrompt = {
 };
 
 export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt {
+  const commandHint = input.commandHint
+    ? `Slash command hint: /${input.commandHint}${input.commandInput?.trim() ? `\nCommand input:\n${input.commandInput.trim()}` : ""}`
+    : "Slash command hint: none";
   return {
     model: input.model,
     system: "You are SceneBook's runtime-v4 model-first decision engine. Return structured output only.",
@@ -36,6 +42,7 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
       "Use project_patch for grouped durable workspace updates that should apply as one reviewed ProjectPatch.",
       "Use final_response only when no workspace action is needed or when the goal is already satisfied.",
       "Do not finalize only because a previous tool observation exists. Consider whether the original user goal is complete.",
+      commandHint,
       `Project snapshot:\n${compactJson(input.snapshot)}`,
       `Available tools:\n${compactJson(input.toolSummaries)}`,
       `Previous observations:\n${compactJson(input.previousObservations ?? [])}`,
@@ -44,19 +51,148 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
   };
 }
 
-export function createGracefulDecisionFallback(message: string): AgentDecision {
-  const trimmed = message.trim();
+function summarizedToolNames(toolSummaries: unknown) {
+  if (!Array.isArray(toolSummaries)) {
+    return [];
+  }
+
+  return toolSummaries
+    .map((summary) => {
+      if (!summary || typeof summary !== "object") return null;
+      const name = (summary as Record<string, unknown>).name;
+      return typeof name === "string" && name.trim() ? name.trim() : null;
+    })
+    .filter((name): name is string => Boolean(name))
+    .slice(0, 4);
+}
+
+function commandPrompt(input: DecisionEngineInput) {
+  return input.commandInput?.trim() || input.message.trim();
+}
+
+function buildFallbackPlan(input: DecisionEngineInput): Extract<AgentDecision, { type: "propose_plan" }> {
+  const prompt = commandPrompt(input);
+  const topic = input.snapshot.project.title || "this project";
+  const format = input.snapshot.project.format || "short-form video";
+
   return {
-    type: "final_response",
-    response: trimmed
-      ? `I can still help with that. Tell me the outcome you want for "${trimmed.slice(0, 120)}", and I will turn it into a concrete next step.`
-      : "I can still help with that. Tell me the outcome you want, and I will turn it into a concrete next step.",
-    confidence: 0.35,
+    type: "propose_plan",
+    plan: {
+      title: `Plan a ${format} about ${prompt || topic}`,
+      steps: [
+        { label: `Clarify the core point of view for the ${format}.`, sideEffect: "none", requiresApproval: false },
+        { label: "Draft the hook, structure, and payoff before writing workspace changes.", sideEffect: "none", requiresApproval: false },
+        { label: "Map the visuals, proof points, and CTA needed to make the idea usable.", sideEffect: "none", requiresApproval: false },
+      ],
+    },
+    reason: "Model decisioning failed, so the runtime fell back to a safe no-write plan.",
   };
 }
 
-export function createDeterministicSafetyDecision(input: DecisionEngineInput): AgentDecision | null {
+function fallbackForCommand(input: DecisionEngineInput): AgentDecision | null {
+  const prompt = commandPrompt(input);
+
+  if (input.commandHint === "script") {
+    if (!prompt) {
+      return {
+        type: "ask_question",
+        questions: ["What should the script be about, and who is it for?"],
+        reason: "The /script command needs a concrete topic before the runtime can draft it.",
+        expectedFieldTargets: ["topic", "audience"],
+      };
+    }
+
+    return {
+      type: "workflow_call",
+      workflowName: "create_script_package",
+      input: { prompt },
+      reason: "The /script command maps directly to the runtime-v4 script workflow.",
+    };
+  }
+
+  if (input.commandHint === "storyboard") {
+    return {
+      type: "workflow_call",
+      workflowName: "create_shoot_pack",
+      input: { prompt },
+      reason: "The /storyboard command maps to the runtime-v4 shoot-pack workflow.",
+    };
+  }
+
+  if (input.commandHint === "instagram" || input.commandHint === "export") {
+    return {
+      type: "workflow_call",
+      workflowName: "prepare_publish_package",
+      input: { prompt: prompt || input.snapshot.project.title, platform: input.snapshot.project.platform },
+      reason: `The /${input.commandHint} command maps to the runtime-v4 publish-prep workflow.`,
+    };
+  }
+
+  if (
+    input.commandHint === "form-json-prompt"
+    || input.commandHint === "generate"
+    || input.commandHint === "generate-image"
+    || input.commandHint === "generate-video"
+    || input.commandHint === "generate-audio"
+  ) {
+    return {
+      type: "workflow_call",
+      workflowName: "create_asset_prompt_pack",
+      input: { prompt: prompt || input.snapshot.project.title },
+      reason: `The /${input.commandHint} command maps to the runtime-v4 asset prompt workflow.`,
+    };
+  }
+
+  if (input.commandHint === "analyze") {
+    return {
+      type: "workflow_call",
+      workflowName: "review_content",
+      input: {
+        target: "script",
+        content: prompt || input.snapshot.scriptLab.script || input.snapshot.project.title,
+      },
+      reason: "The /analyze command maps to the runtime-v4 review workflow.",
+    };
+  }
+
+  return null;
+}
+
+function fallbackForGeneralChat(input: DecisionEngineInput): AgentDecision | null {
   const message = input.message.trim();
+  const lower = message.toLowerCase();
+
+  if (/^who are you\??$/.test(lower)) {
+    return {
+      type: "final_response",
+      response: "I'm SceneBook's runtime-v4 agent. I can plan reels, draft scripts, prepare shoot packs, review content, and stage workspace changes without writing blindly.",
+      confidence: 0.5,
+    };
+  }
+
+  if (/do you have access to tools/.test(lower)) {
+    const toolNames = summarizedToolNames(input.toolSummaries);
+    return {
+      type: "final_response",
+      response: toolNames.length > 0
+        ? `Yes. I can use SceneBook runtime tools such as ${toolNames.join(", ")} and the registered v4 creative workflows when the request fits them.`
+        : "Yes. I can use SceneBook runtime tools and registered v4 creative workflows when the request fits them.",
+      confidence: 0.5,
+    };
+  }
+
+  return null;
+}
+
+export function createGracefulDecisionFallback(input: DecisionEngineInput): AgentDecision {
+  return fallbackForCommand(input)
+    ?? createDeterministicSafetyDecision(input)
+    ?? fallbackForGeneralChat(input)
+    ?? buildFallbackPlan(input);
+}
+
+export function createDeterministicSafetyDecision(input: DecisionEngineInput): AgentDecision | null {
+  const message = commandPrompt(input);
   const latestObservation = input.previousObservations?.at(-1);
 
   if (latestObservation?.status === "awaiting_approval") {

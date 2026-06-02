@@ -99,6 +99,9 @@ type SupabaseRepositoryClient = {
   };
   from(table: string): {
     select(query: string): {
+      neq(column: string, value: string): {
+        order(column: string, options: { ascending: boolean }): SupabaseQueryResult<unknown[]>;
+      };
       order(column: string, options: { ascending: boolean }): SupabaseQueryResult<unknown[]>;
       single(): SupabaseQueryResult<unknown>;
     };
@@ -714,7 +717,11 @@ export async function listProjectSummaries(): Promise<ProjectSummary[]> {
   const supabase =
     (await createSupabaseServerClient()) as unknown as SupabaseRepositoryClient;
   const [{ data: rows, error: cardError }, { data: assets, error: assetError }] = await Promise.all([
-    supabase.from("content_cards").select("*").order("updated_at", { ascending: false }),
+    supabase
+      .from("content_cards")
+      .select("*")
+      .neq("status", "archived")
+      .order("updated_at", { ascending: false }),
     supabase.from("card_assets").select("*").order("created_at", { ascending: true }),
   ]);
 

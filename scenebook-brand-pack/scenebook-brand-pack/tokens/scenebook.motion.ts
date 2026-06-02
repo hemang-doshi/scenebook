@@ -8,6 +8,10 @@ export const sbMotion = {
     slow: 0.36,
     receipt: 0.54,
   },
+  layout: {
+    workspaceRail: 0.27,
+    floatingIsland: 0.27,
+  },
   ease: 'easeInOut', // use only if your motion library needs a named equivalent; CSS source uses `ease`
 };
 

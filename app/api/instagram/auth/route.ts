@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { buildInstagramRequestOrigin } from "@/lib/instagram/oauth";
 
 export async function GET(request: Request) {
   try {
@@ -16,12 +17,7 @@ export async function GET(request: Request) {
     }
 
     const appId = process.env.META_APP_ID;
-    const headers = request.headers;
-    const host = headers.get("x-forwarded-host") || headers.get("host") || "";
-    const proto = headers.get("x-forwarded-proto") || "http";
-    const origin = host.includes("localhost") || host.includes("127.0.0.1")
-      ? `${proto}://${host}`
-      : `https://${host}`;
+    const origin = buildInstagramRequestOrigin(request.headers);
     const redirectUri = `${origin}/api/instagram/callback`;
 
     if (!appId || !redirectUri) {

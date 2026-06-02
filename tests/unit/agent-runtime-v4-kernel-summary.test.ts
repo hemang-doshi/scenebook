@@ -738,4 +738,51 @@ describe("runtime-v4 run summaries", () => {
       toolSummaries: [{ name: "update_script_lab" }],
     }));
   });
+
+  test("custom runtime passes slash-command hints into runtime-v4 decisioning", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "/script generate a script about a reel talking about AI taking over humans",
+      commandHint: "script",
+      commandInput: "generate a script about a reel talking about AI taking over humans",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(decideNextStep).toHaveBeenCalledWith(expect.objectContaining({
+      commandHint: "script",
+      commandInput: "generate a script about a reel talking about AI taking over humans",
+    }));
+  });
+
+  test("custom runtime replaces low-confidence fallback text with a no-write plan", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    decideNextStep.mockResolvedValueOnce({
+      type: "final_response",
+      response: "I can still help with that. Tell me the outcome you want for \"help me plan a reel about SceneBook\", and I will turn it into a concrete next step.",
+      confidence: 0.2,
+    });
+
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "help me plan a reel about SceneBook",
+      selectedModels: {},
+    });
+
+    const text = await response.text();
+
+    expect(text).not.toContain("I can still help with that");
+    expect(text).toContain("Plan a reel");
+    expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      decisionType: "propose_plan",
+    }));
+  });
 });

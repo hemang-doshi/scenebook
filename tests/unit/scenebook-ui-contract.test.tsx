@@ -1,4 +1,5 @@
 import React from "react";
+import fs from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -136,10 +137,17 @@ describe("SceneBook UI contract", () => {
     expect(screen.getByText(/"patchId": "patch-1"/)).toBeInTheDocument();
   });
 
-  test("ProjectMind panel exposes editable project facts", async () => {
+  test("ProjectMind renders as a floating collapsible island with editable facts", async () => {
     fetchJson.mockResolvedValueOnce({ ...project, scriptLab: { ...project.scriptLab, hook: "Updated hook" } });
 
     render(<ProjectMindPanel project={project} />);
+
+    const island = screen.getByRole("complementary", { name: /projectmind/i });
+    expect(island).toHaveAttribute("data-floating", "true");
+    expect(island).toHaveAttribute("data-state", "collapsed");
+
+    fireEvent.click(screen.getByRole("button", { name: /expand projectmind/i }));
+    expect(island).toHaveAttribute("data-state", "expanded");
 
     fireEvent.click(screen.getByRole("button", { name: /edit projectmind/i }));
     const hook = screen.getByLabelText("ProjectMind hook");
@@ -155,6 +163,13 @@ describe("SceneBook UI contract", () => {
         }),
       );
     });
+  });
+
+  test("project hub uses shared SceneBook gradients instead of one-off mismatched gradients", () => {
+    const source = fs.readFileSync("app/(workspace)/projects/[id]/page.tsx", "utf8");
+
+    expect(source).not.toContain("linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54))");
+    expect(source).toContain("sb-gradient-thumbnail");
   });
 
   test("asset drawer shows provenance and an editor import action", async () => {
@@ -185,5 +200,24 @@ describe("SceneBook UI contract", () => {
       "href",
       "/editor/project-1?asset=asset-1",
     );
+  });
+
+  test("workspace pages avoid retired shell color mismatches", () => {
+    const filePaths = [
+      "app/(workspace)/analytics/page.tsx",
+      "app/(workspace)/settings/page.tsx",
+      "app/(workspace)/board/page.tsx",
+      "app/(workspace)/inbox/page.tsx",
+      "app/(workspace)/playground/page.tsx",
+    ];
+
+    for (const filePath of filePaths) {
+      const source = fs.readFileSync(filePath, "utf8");
+      expect(source).not.toContain("bg-[var(--block-lime)]");
+      expect(source).not.toContain("bg-[var(--block-cream)]");
+      expect(source).not.toContain("rgb(0, 0, 0)");
+      expect(source).not.toMatch(/\b(?:text|bg|border)-accent\b/);
+      expect(source).not.toMatch(/\b(?:text|bg|border)-pink-/);
+    }
   });
 });

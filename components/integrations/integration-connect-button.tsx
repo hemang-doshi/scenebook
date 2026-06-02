@@ -126,18 +126,86 @@ export function IntegrationConnectButton({
     }
   }
 
+  async function handleHealthCheck() {
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/integrations/${provider}/health`);
+
+      if (!response.ok) {
+        throw new Error("Unable to check connection health.");
+      }
+
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to check connection health.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/integrations/${provider}/disconnect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to disconnect integration.");
+      }
+
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to disconnect integration.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex shrink-0 flex-col items-end gap-2">
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={!enabled || busy}
-        className="h-8 px-3 text-[10px]"
-        aria-label={enabled ? `${labels[status]} ${displayName}` : `${displayName} connection unavailable`}
-        onClick={handleConnect}
-      >
-        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : labels[status]}
-      </Button>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={!enabled || busy}
+          className="h-8 px-3 text-[10px]"
+          aria-label={enabled ? `${labels[status]} ${displayName}` : `${displayName} connection unavailable`}
+          onClick={handleConnect}
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : labels[status]}
+        </Button>
+        {enabled && status === "connected" ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-8 px-3 text-[10px]"
+              aria-label={`Check ${displayName} health`}
+              disabled={busy}
+              onClick={handleHealthCheck}
+            >
+              Health
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-8 px-3 text-[10px]"
+              aria-label={`Disconnect ${displayName}`}
+              disabled={busy}
+              onClick={handleDisconnect}
+            >
+              Disconnect
+            </Button>
+          </>
+        ) : null}
+      </div>
       {error ? (
         <p className="max-w-36 text-right text-[10px] leading-snug text-red-600">{error}</p>
       ) : null}

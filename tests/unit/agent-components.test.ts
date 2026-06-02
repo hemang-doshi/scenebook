@@ -296,7 +296,7 @@ describe("agent UI components", () => {
     render(React.createElement(AgentChatIsland, { project }));
 
     await screen.findByText("hello");
-    fireEvent.click(screen.getByRole("button", { name: /Beach Sunset/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Beach Sunset" }));
 
     const newConversationOptions = await screen.findAllByText("+ New Conversation");
     expect(newConversationOptions.at(-1)?.closest("button")).toHaveClass("text-muted");
@@ -682,9 +682,87 @@ describe("agent UI components", () => {
       const historyRefreshes = fetchJson.mock.calls.filter(([url]) =>
         typeof url === "string" && url.includes("threadId=thread-1")
       );
-      expect(historyRefreshes).toHaveLength(1);
+      expect(historyRefreshes).toHaveLength(0);
     });
     expect(screen.queryByText("Done once.Done once.")).not.toBeInTheDocument();
+  });
+
+  test("archives a conversation from the recent conversations rail", async () => {
+    fetchJson.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("listThreads=true")) {
+        return {
+          threads: [
+            { id: "11111111-1111-4111-8111-111111111111", title: "Hook ideas", updated_at: "2026-06-02T00:00:00.000Z" },
+          ],
+        };
+      }
+
+      if (init?.method === "PATCH") {
+        expect(init.body).toContain('"action":"archiveThread"');
+        expect(init.body).toContain("11111111-1111-4111-8111-111111111111");
+        return { success: true };
+      }
+
+      return { threadId: null, messages: [], toolCalls: [], entries: [] };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    const archive = await screen.findByRole("button", { name: /archive hook ideas/i });
+    fireEvent.click(archive);
+
+    await waitFor(() => {
+      expect(fetchJson).toHaveBeenCalledWith(
+        `/api/projects/${project.id}/agent`,
+        expect.objectContaining({ method: "PATCH" }),
+      );
+    });
+  });
+
+  test("streams assistant chunks into the active message without reloading history on completion", async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const encoder = new TextEncoder();
+
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [], entries: [] };
+    });
+
+    global.fetch = vi.fn(async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(nextController) {
+          controller = nextController;
+        },
+      });
+
+      queueMicrotask(() => {
+        controller.enqueue(encoder.encode(`data: {"type":"meta","threadId":"11111111-1111-4111-8111-111111111111"}\n\n`));
+        controller.enqueue(encoder.encode(`data: {"type":"chunk","text":"## Hook\\n"}\n\n`));
+        controller.enqueue(encoder.encode(`data: {"type":"chunk","text":"This streams."}\n\n`));
+        controller.enqueue(encoder.encode(`data: {"type":"run_completed","threadId":"11111111-1111-4111-8111-111111111111"}\n\n`));
+        controller.close();
+      });
+
+      return new Response(stream, {
+        headers: { "Content-Type": "text/event-stream" },
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    fireEvent.change(screen.getByLabelText("composer"), { target: { value: "write hook" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(
+      await screen.findByText((content) => content.includes("## Hook") && content.includes("This streams.")),
+    ).toBeInTheDocument();
+    expect(fetchJson).not.toHaveBeenCalledWith(expect.stringContaining("threadId=11111111-1111-4111-8111-111111111111"));
   });
 
   test("mixed runtime v4 streams keep legacy-only finalization", async () => {
@@ -754,7 +832,7 @@ describe("agent UI components", () => {
       const historyRefreshes = fetchJson.mock.calls.filter(([url]) =>
         typeof url === "string" && url.includes("threadId=thread-1")
       );
-      expect(historyRefreshes).toHaveLength(1);
+      expect(historyRefreshes).toHaveLength(0);
     });
     expect(await screen.findByText("Legacy final.")).toBeInTheDocument();
   });

@@ -2,9 +2,11 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { ModelGateway } from "@/lib/ai/model-gateway";
 import { ModelStructuredOutputError } from "@/lib/ai/model-gateway/errors";
+import { ModelConfigurationError } from "@/lib/ai/model-gateway/errors";
 import type { ProjectSnapshot, ToolObservation } from "@/lib/agent/runtime-v3/types";
 import { decideNextStep } from "@/lib/agent/runtime-v4/decision/decision-engine";
 import { checkGoalProgress } from "@/lib/agent/runtime-v4/decision/goal-checker";
+import { resolveRuntimeV4ChatModel } from "@/lib/agent/runtime-v4/model";
 
 function queuedStructuredGateway(...responses: unknown[]): ModelGateway & {
   generateStructured: ReturnType<typeof vi.fn>;
@@ -180,7 +182,7 @@ describe("runtime-v4 decision engine", () => {
       modelGateway: gateway,
     })).resolves.toEqual({
       type: "workflow_call",
-      workflowName: "script_workflow",
+      workflowName: "create_script_package",
       input: { prompt: "write a punchier script" },
       reason: "The user requested script generation.",
     });
@@ -232,11 +234,11 @@ describe("runtime-v4 decision engine", () => {
     expect(gateway.generateText.mock.calls[0][0].prompt).toContain("Repair");
   });
 
-  test("unrecoverable structured output produces graceful fallback", async () => {
+  test("unrecoverable structured output on general chat produces a useful identity response", async () => {
     const gateway = repairableMalformedGateway("not json", "still not json");
 
     const decision = await decideNextStep({
-      message: "help me plan a reel",
+      message: "who are you",
       snapshot: snapshot(),
       toolSummaries: [],
       modelGateway: gateway,
@@ -246,7 +248,73 @@ describe("runtime-v4 decision engine", () => {
     if (decision.type !== "final_response") {
       throw new Error(`Expected final_response, received ${decision.type}.`);
     }
-    expect(decision.response).toContain("I can still help");
+    expect(decision.response).toMatch(/scenebook|agent/i);
     expect(decision.response).not.toMatch(/decision model did not return structured output/i);
+  });
+
+  test("tool access question fallback answers concretely instead of using the hardcoded helper text", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "do you have access to tools",
+      snapshot: snapshot(),
+      toolSummaries: [{ name: "update_script_lab" }, { name: "create_script_version" }],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toMatchObject({
+      type: "final_response",
+    });
+    if (decision.type !== "final_response") {
+      throw new Error(`Expected final_response, received ${decision.type}.`);
+    }
+    expect(decision.response).toMatch(/tool/i);
+    expect(decision.response).not.toContain("I can still help with that");
+  });
+
+  test("slash-command fallback maps script requests to the v4 script workflow", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "/script generate a script about a reel talking about AI taking over humans",
+      commandHint: "script",
+      commandInput: "generate a script about a reel talking about AI taking over humans",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toEqual({
+      type: "workflow_call",
+      workflowName: "create_script_package",
+      input: { prompt: "generate a script about a reel talking about AI taking over humans" },
+      reason: expect.stringMatching(/script/i),
+    });
+  });
+});
+
+describe("runtime-v4 chat model routing", () => {
+  test("default chat routing uses the NIM provider", () => {
+    expect(resolveRuntimeV4ChatModel()).toMatchObject({
+      provider: "nim",
+    });
+  });
+
+  test("gemini chat routing uses the google provider", () => {
+    expect(resolveRuntimeV4ChatModel("gemini-2.5-flash")).toEqual({
+      provider: "google",
+      model: "gemini-2.5-flash",
+    });
+  });
+
+  test("openrouter chat routing does not get sent to google", () => {
+    expect(resolveRuntimeV4ChatModel("google/gemini-2.5-flash")).toEqual({
+      provider: "openrouter",
+      model: "google/gemini-2.5-flash",
+    });
+  });
+
+  test("unsupported chat routing fails before model invocation", () => {
+    expect(() => resolveRuntimeV4ChatModel("claude-3.7-sonnet")).toThrow(ModelConfigurationError);
   });
 });

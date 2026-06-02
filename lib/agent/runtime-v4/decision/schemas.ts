@@ -4,10 +4,23 @@ import { agentWorkflowNames } from "@/lib/agent/runtime-v3/types";
 import { projectPatchSchema } from "@/lib/agent/runtime-v4/patch/project-patch";
 import { runtimeV4WorkflowNames } from "@/lib/agent/runtime-v4/workflows/types";
 
-const supportedWorkflowNames = [
+const workflowNameMap = {
+  script_workflow: "create_script_package",
+  workspace_control_workflow: "plan_reel",
+  asset_workflow: "create_asset_prompt_pack",
+  goal_workflow: "plan_reel",
+  editor_handoff_workflow: "create_shoot_pack",
+  publish_workflow: "prepare_publish_package",
+} as const satisfies Partial<Record<(typeof agentWorkflowNames)[number], (typeof runtimeV4WorkflowNames)[number]>>;
+
+const acceptedWorkflowNames = [
   ...runtimeV4WorkflowNames,
   ...agentWorkflowNames,
 ] as const;
+
+const normalizedWorkflowNameSchema = z
+  .enum(acceptedWorkflowNames)
+  .transform((workflowName) => workflowNameMap[workflowName as keyof typeof workflowNameMap] ?? workflowName);
 
 export const agentPlanSchema = z.object({
   title: z.string(),
@@ -46,7 +59,7 @@ export const agentDecisionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("workflow_call"),
-    workflowName: z.enum(supportedWorkflowNames),
+    workflowName: normalizedWorkflowNameSchema,
     input: z.unknown(),
     reason: z.string(),
   }),
