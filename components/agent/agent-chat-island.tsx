@@ -22,12 +22,16 @@ import type {
   AgentUiEntry,
   AgentUiMessage,
   AgentUiToolCall,
-  ArtifactTimelineEntry,
   MemoryTimelineEntry,
-  PatchOperationTimelineEntry,
-  PatchTimelineEntry,
-  WorkflowTimelineEntry,
 } from "@/components/agent/types";
+import {
+  activityForRuntimeV4Event,
+  runtimeV4EventFromLegacyPacket,
+  runtimeV4EventFromPacket,
+  timelineEntriesFromRuntimeV4Event,
+} from "@/components/agent/runtime-v4-event-adapter";
+import { humanize, normalizeTimelineEntry, stringValue } from "@/components/agent/timeline-normalizers";
+import { upsertTimelineEntries } from "@/components/agent/timeline-merge";
 import { getDefaultChatModel, getDefaultMediaModel } from "@/lib/ai/model-registry";
 import type { ProjectWorkspace } from "@/lib/data/repository";
 import { fetchJson } from "@/lib/fetcher";
@@ -90,37 +94,6 @@ function sortEntries(entries: AgentUiEntry[]) {
   return [...entries].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringValue(value: unknown) {
-  return typeof value === "string" && value.trim() ? value : null;
-}
-
-function booleanValue(value: unknown, fallback = false) {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function recordValue(value: unknown): Record<string, unknown> | null {
-  return isRecord(value) ? value : null;
-}
-
-function nonEmptyRecordValue(value: unknown): Record<string, unknown> | null {
-  return isRecord(value) && Object.keys(value).length > 0 ? value : null;
-}
-
-function createdAtFrom(entry: Record<string, unknown>, fallback = new Date().toISOString()) {
-  return stringValue(entry.createdAt) ?? stringValue(entry.created_at) ?? fallback;
-}
-
-function entryKind(entry: Record<string, unknown>) {
-  const candidate = stringValue(entry.kind) ?? stringValue(entry.entryType) ?? stringValue(entry.type);
-  return ["message", "tool", "workflow", "patch", "artifact", "memory"].includes(candidate ?? "")
-    ? candidate
-    : null;
-}
-
 function toAgentEntries(history: AgentHistoryResponse): AgentUiEntry[] {
   const timelineEntries = Array.isArray(history.entries)
     ? history.entries
@@ -129,7 +102,7 @@ function toAgentEntries(history: AgentHistoryResponse): AgentUiEntry[] {
     : [];
 
   if (timelineEntries.length > 0) {
-    return sortEntries(timelineEntries);
+    return upsertTimelineEntries([], timelineEntries);
   }
 
   const messages: AgentUiMessage[] = (history.messages ?? []).map((message) => ({
@@ -155,588 +128,11 @@ function toAgentEntries(history: AgentHistoryResponse): AgentUiEntry[] {
   return sortEntries([...messages, ...toolCalls]);
 }
 
-function normalizeTimelineEntry(value: unknown): AgentTimelineEntry | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const kind = entryKind(value);
-  if (kind === "message" || (!kind && stringValue(value.role) && stringValue(value.content))) {
-    return normalizeMessageEntry(value);
-  }
-  if (kind === "tool" || (!kind && (stringValue(value.tool_name) || stringValue(value.toolName)))) {
-    return normalizeToolEntry(value);
-  }
-  if (kind === "workflow" || (!kind && (stringValue(value.workflow_name) || stringValue(value.workflowName)))) {
-    return normalizeWorkflowEntry(value);
-  }
-  if (kind === "patch" || (!kind && (recordValue(value.patch) || stringValue(value.patchId) || stringValue(value.patch_id)))) {
-    return normalizePatchEntry(value);
-  }
-  if (kind === "artifact" || (!kind && (stringValue(value.artifactType) || stringValue(value.artifact_type)))) {
-    return normalizeArtifactEntry(value, 0, createdAtFrom(value));
-  }
-  if (kind === "memory") {
-    return normalizeMemoryEntry(value);
-  }
-
-  return null;
-}
-
-function normalizeMessageEntry(entry: Record<string, unknown>): AgentUiMessage {
-  const role = stringValue(entry.role);
-  return {
-    id: stringValue(entry.id) ?? `message-${crypto.randomUUID()}`,
-    kind: "message",
-    role: role === "user" || role === "system" ? role : "assistant",
-    content: stringValue(entry.content) ?? stringValue(entry.message) ?? "",
-    createdAt: createdAtFrom(entry),
-    metadata: recordValue(entry.metadata) ?? undefined,
-  };
-}
-
-function normalizeToolEntry(entry: Record<string, unknown>): AgentUiToolCall {
-  return {
-    id: stringValue(entry.id) ?? stringValue(entry.toolCallId) ?? stringValue(entry.tool_call_id) ?? `tool-${crypto.randomUUID()}`,
-    kind: "tool",
-    toolName: stringValue(entry.toolName) ?? stringValue(entry.tool_name) ?? stringValue(entry.displayName) ?? "Agent Tool",
-    command: stringValue(entry.command),
-    status: stringValue(entry.status) ?? "completed",
-    requiresApproval: booleanValue(entry.requiresApproval, booleanValue(entry.requires_approval)),
-    output: entry.output ?? entry.payload ?? {},
-    errorMessage: stringValue(entry.errorMessage) ?? stringValue(entry.error_message),
-    createdAt: createdAtFrom(entry),
-    metadata: recordValue(entry.metadata) ?? undefined,
-  };
-}
-
-function normalizeArtifactEntry(value: unknown, index = 0, createdAt = new Date().toISOString()): ArtifactTimelineEntry | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const payload = recordValue(value.payload) ?? recordValue(value.output) ?? {};
-  const artifactType =
-    stringValue(value.artifactType)
-    ?? stringValue(value.artifact_type)
-    ?? stringValue(value.type)
-    ?? stringValue(payload.kind)
-    ?? "agent_artifact";
-  const title = stringValue(value.title) ?? humanize(artifactType);
-
-  return {
-    id: stringValue(value.id) ?? `artifact-${artifactType}-${index}`,
-    kind: "artifact",
-    artifactType,
-    title,
-    summary: stringValue(value.summary) ?? stringValue(value.message),
-    payload,
-    createdAt: createdAtFrom(value, createdAt),
-    metadata: recordValue(value.metadata) ?? undefined,
-  };
-}
-
-function normalizeWorkflowEntry(entry: Record<string, unknown>): WorkflowTimelineEntry {
-  const observation = recordValue(entry.observation);
-  const output = recordValue(observation?.output) ?? recordValue(entry.output) ?? {};
-  const workflowName = stringValue(entry.workflowName) ?? stringValue(entry.workflow_name) ?? stringValue(output.workflowName) ?? "creative_workflow";
-  const artifactsSource = Array.isArray(entry.artifacts)
-    ? entry.artifacts
-    : Array.isArray(output.artifacts)
-      ? output.artifacts
-      : [];
-  const createdAt = createdAtFrom(entry);
-  const artifacts = artifactsSource
-    .map((artifact, index) => normalizeArtifactEntry(artifact, index, createdAt))
-    .filter((artifact): artifact is ArtifactTimelineEntry => Boolean(artifact));
-  const patch = workflowPatchState(entry, output);
-
-  return {
-    id: stringValue(entry.id) ?? `workflow-${stringValue(entry.runId) ?? stringValue(entry.run_id) ?? workflowName}`,
-    kind: "workflow",
-    workflowName,
-    displayName: stringValue(entry.displayName) ?? stringValue(entry.display_name),
-    status: stringValue(entry.status) ?? stringValue(observation?.status) ?? "completed",
-    summary: stringValue(entry.summary) ?? stringValue(entry.message) ?? stringValue(observation?.message) ?? "Workflow completed.",
-    artifacts,
-    patch,
-    nextAction:
-      stringValue(entry.nextAction)
-      ?? stringValue(entry.next_action)
-      ?? stringValue(output.nextBestAction)
-      ?? stringValue(output.next_best_action),
-    createdAt,
-    metadata: recordValue(entry.metadata) ?? undefined,
-  };
-}
-
-function workflowPatchState(
-  entry: Record<string, unknown>,
-  output: Record<string, unknown>,
-): WorkflowTimelineEntry["patch"] {
-  const rawPatch = recordValue(entry.patch);
-  const patchId = stringValue(entry.patchId) ?? stringValue(entry.patch_id) ?? stringValue(output.patchId) ?? stringValue(rawPatch?.id);
-  const title = stringValue(entry.patchTitle) ?? stringValue(entry.patch_title) ?? stringValue(output.patchTitle) ?? stringValue(rawPatch?.title);
-  const summary = stringValue(entry.patchSummary) ?? stringValue(entry.patch_summary) ?? stringValue(output.patchSummary) ?? stringValue(rawPatch?.summary);
-  const status = stringValue(entry.patchStatus) ?? stringValue(entry.patch_status) ?? stringValue(output.patchStatus);
-  const autoApplySkippedReason =
-    stringValue(entry.autoApplySkippedReason)
-    ?? stringValue(entry.auto_apply_skipped_reason)
-    ?? stringValue(output.patchAutoApplyReason)
-    ?? stringValue(output.autoApplyReason);
-
-  if (!patchId && !title && !summary && !status && !rawPatch) {
-    return null;
-  }
-
-  return {
-    patchId,
-    title,
-    summary,
-    status,
-    planned: Boolean(patchId || title || status === "planned"),
-    applied: status === "completed" || status === "approved",
-    autoApplySkippedReason,
-  };
-}
-
-function normalizePatchEntry(entry: Record<string, unknown>): PatchTimelineEntry {
-  const patch = recordValue(entry.patch) ?? entry;
-  const metadata = recordValue(entry.metadata) ?? recordValue(patch.metadata);
-  const operationsSource = Array.isArray(entry.operations)
-    ? entry.operations
-    : Array.isArray(patch.operations)
-      ? patch.operations
-      : [];
-  const persistedPatchId = stringValue(entry.patchId) ?? stringValue(entry.patch_id) ?? stringValue(patch.id) ?? stringValue(entry.id);
-  const patchId = persistedPatchId ?? `patch-draft-${stringValue(patch.title) ?? stringValue(entry.title) ?? crypto.randomUUID()}`;
-  const status = stringValue(entry.status) ?? stringValue(entry.patchStatus) ?? stringValue(entry.patch_status) ?? "planned";
-
-  return {
-    id: stringValue(entry.id) ?? patchId,
-    kind: "patch",
-    patchId,
-    title: stringValue(entry.title) ?? stringValue(patch.title) ?? "Project patch",
-    summary: stringValue(entry.summary) ?? stringValue(patch.summary) ?? stringValue(entry.message),
-    status,
-    riskLevel: stringValue(entry.riskLevel) ?? stringValue(entry.risk_level) ?? stringValue(patch.riskLevel),
-    requiresApproval: booleanValue(entry.requiresApproval, booleanValue(entry.requires_approval, booleanValue(patch.requiresApproval))),
-    autoApplySkippedReason:
-      stringValue(entry.autoApplySkippedReason)
-      ?? stringValue(entry.auto_apply_skipped_reason)
-      ?? stringValue(metadata?.autoApplyReason)
-      ?? stringValue(metadata?.autoApplySkippedReason),
-    operations: operationsSource.map(normalizePatchOperation),
-    canApply: typeof entry.canApply === "boolean" ? entry.canApply : Boolean(persistedPatchId && ["planned", "awaiting_approval"].includes(status)),
-    createdAt: createdAtFrom(entry),
-    metadata: metadata ?? undefined,
-  };
-}
-
-function normalizePatchOperation(value: unknown, index: number): PatchOperationTimelineEntry {
-  const operation = isRecord(value) ? value : {};
-  const nested = recordValue(operation.operation);
-  const error = operation.error;
-  return {
-    operationIndex:
-      typeof operation.operationIndex === "number"
-        ? operation.operationIndex
-        : typeof operation.operation_index === "number"
-          ? operation.operation_index
-          : index,
-    type: stringValue(operation.type) ?? stringValue(operation.operationType) ?? stringValue(operation.operation_type) ?? stringValue(nested?.type) ?? "operation",
-    status: stringValue(operation.status) ?? stringValue(operation.operationStatus) ?? stringValue(operation.operation_status) ?? "planned",
-    reason: stringValue(operation.reason) ?? stringValue(nested?.reason),
-    message: stringValue(operation.message),
-    retryable: typeof operation.retryable === "boolean" ? operation.retryable : undefined,
-    error: typeof error === "string" ? error : nonEmptyRecordValue(error),
-  };
-}
-
-function normalizeMemoryEntry(entry: Record<string, unknown>): MemoryTimelineEntry {
-  return {
-    id: stringValue(entry.id) ?? `memory-${crypto.randomUUID()}`,
-    kind: "memory",
-    title: stringValue(entry.title),
-    summary: stringValue(entry.summary) ?? stringValue(entry.message) ?? "Project memory updated.",
-    memoryType: stringValue(entry.memoryType) ?? stringValue(entry.memory_type),
-    createdAt: createdAtFrom(entry),
-    metadata: recordValue(entry.metadata) ?? undefined,
-  };
-}
-
-function humanize(value: string) {
-  const words = value
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Agent item";
-}
-
-function runtimeV4EventFromPacket(packet: Record<string, unknown>) {
-  return recordValue(packet.event) ?? recordValue(packet.payload) ?? packet;
-}
-
-function numberValue(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function observationFromLegacyPacket(packet: Record<string, unknown>) {
-  const observation = recordValue(packet.observation);
-  if (observation) {
-    return observation;
-  }
-
-  const output = recordValue(packet.output);
-  return output ? { output } : null;
-}
-
-function runtimeV4EventFromLegacyPacket(packet: Record<string, unknown>): Record<string, unknown> | null {
-  const type = stringValue(packet.type);
-  if (!type || !["tool_planned", "tool_running", "tool_completed", "tool_failed", "approval_required"].includes(type)) {
-    return null;
-  }
-
-  const workflowName = stringValue(packet.workflowName) ?? stringValue(packet.workflow_name);
-  const patch = recordValue(packet.patch);
-  const operationIndex = numberValue(packet.operationIndex) ?? numberValue(packet.operation_index);
-  const base = {
-    runId: packet.runId,
-    threadId: packet.threadId,
-    toolName: packet.toolName,
-    toolCallId: packet.toolCallId,
-    workflowName,
-    observation: observationFromLegacyPacket(packet),
-    patch,
-    patchStatus: packet.patchStatus ?? packet.patch_status,
-    operationIndex,
-    operationType: packet.operationType ?? packet.operation_type,
-    operationStatus: packet.operationStatus ?? packet.operation_status,
-    message: packet.message,
-    error: packet.error,
-  };
-
-  if (workflowName && type === "tool_planned" && patch) {
-    return { ...base, type: "workflow_patch_planned" };
-  }
-
-  if (workflowName && type === "tool_running") {
-    return { ...base, type: "workflow_started" };
-  }
-
-  if (workflowName && type === "tool_completed") {
-    return { ...base, type: "workflow_completed" };
-  }
-
-  if (workflowName && type === "tool_failed") {
-    return { ...base, type: "workflow_failed" };
-  }
-
-  if (workflowName && type === "approval_required") {
-    return { ...base, type: "workflow_needs_input" };
-  }
-
-  if (!patch) {
-    return null;
-  }
-
-  if (operationIndex !== null) {
-    if (type === "tool_running") return { ...base, type: "patch_operation_running" };
-    if (type === "tool_completed") return { ...base, type: "patch_operation_completed" };
-    if (type === "tool_failed") return { ...base, type: "patch_operation_failed" };
-    if (type === "approval_required") return { ...base, type: "patch_operation_awaiting_approval" };
-  }
-
-  if (type === "tool_planned") return { ...base, type: "patch_planned" };
-  if (type === "tool_running") return { ...base, type: "patch_applying" };
-  if (type === "tool_completed") return { ...base, type: "patch_completed" };
-  if (type === "tool_failed") return { ...base, type: "patch_failed" };
-  if (type === "approval_required") return { ...base, type: "patch_approval_required" };
-
-  return null;
-}
-
-function workflowEntryId(event: Record<string, unknown>, workflowName: string) {
-  return `workflow-${stringValue(event.runId) ?? stringValue(event.run_id) ?? stringValue(event.threadId) ?? "run"}-${workflowName}`;
-}
-
-function patchStatusForEvent(type: string) {
-  if (type === "patch_applying") return "applying";
-  if (type === "patch_completed") return "completed";
-  if (type === "patch_partial_failed") return "partial_failed";
-  if (type === "patch_failed") return "failed";
-  if (type === "patch_approval_required") return "awaiting_approval";
-  return "planned";
-}
-
-function patchOperationStatusForEvent(type: string) {
-  if (type === "patch_operation_running") return "running";
-  if (type === "patch_operation_completed") return "completed";
-  if (type === "patch_operation_failed") return "failed";
-  if (type === "patch_operation_awaiting_approval") return "awaiting_approval";
-  return null;
-}
-
-function timelineEntriesFromRuntimeV4Event(event: Record<string, unknown>): AgentTimelineEntry[] {
-  const type = stringValue(event.type);
-  const createdAt = new Date().toISOString();
-  if (!type) {
-    return [];
-  }
-
-  if (type === "workflow_started") {
-    const workflowName = stringValue(event.workflowName) ?? stringValue(event.workflow_name) ?? stringValue(event.toolName) ?? "creative_workflow";
-    return [
-      normalizeWorkflowEntry({
-        id: workflowEntryId(event, workflowName),
-        kind: "workflow",
-        workflowName,
-        status: "running",
-        summary: stringValue(event.message) ?? `Running ${humanize(workflowName)}.`,
-        createdAt,
-      }),
-    ];
-  }
-
-  if (type === "workflow_completed" || type === "workflow_failed" || type === "workflow_needs_input") {
-    const observation = recordValue(event.observation);
-    const workflowName = stringValue(event.workflowName) ?? stringValue(event.workflow_name) ?? stringValue(event.toolName) ?? "creative_workflow";
-    const workflow = normalizeWorkflowEntry({
-      id: workflowEntryId(event, workflowName),
-      kind: "workflow",
-      workflowName,
-      status:
-        type === "workflow_completed"
-          ? "completed"
-          : type === "workflow_needs_input"
-            ? "needs_input"
-            : "failed",
-      summary: stringValue(event.message) ?? stringValue(event.error) ?? stringValue(observation?.message) ?? humanize(type),
-      observation,
-      createdAt,
-    });
-    const entries: AgentTimelineEntry[] = [workflow, ...(workflow.artifacts ?? [])];
-
-    if (workflow.patch?.patchId) {
-      entries.push(normalizePatchEntry({
-        id: workflow.patch.patchId,
-        kind: "patch",
-        patchId: workflow.patch.patchId,
-        title: workflow.patch.title ?? "Project patch",
-        summary: workflow.patch.summary ?? workflow.summary,
-        status: workflow.patch.status ?? "planned",
-        autoApplySkippedReason: workflow.patch.autoApplySkippedReason ?? undefined,
-        operations: [],
-        createdAt,
-      }));
-    }
-
-    return entries;
-  }
-
-  if (type === "workflow_patch_planned" || type.startsWith("patch_")) {
-    const patch = recordValue(event.patch);
-    if (!patch) {
-      return [];
-    }
-    const persistedPatchId = stringValue(patch.id) ?? stringValue(event.patchId) ?? stringValue(event.patch_id);
-    if (type === "workflow_patch_planned" && !persistedPatchId) {
-      return [];
-    }
-    const patchEntry = normalizePatchEntry({
-      id: persistedPatchId ?? undefined,
-      kind: "patch",
-      patch,
-      status: stringValue(event.patchStatus) ?? stringValue(event.patch_status) ?? patchStatusForEvent(type),
-      message: stringValue(event.message) ?? stringValue(event.error),
-      createdAt,
-    });
-    const operationStatus = patchOperationStatusForEvent(type);
-    const operationIndex = typeof event.operationIndex === "number"
-      ? event.operationIndex
-      : typeof event.operation_index === "number"
-        ? event.operation_index
-        : null;
-
-    if (operationStatus && operationIndex !== null) {
-      const currentOperation = patchEntry.operations.find((operation) => operation.operationIndex === operationIndex);
-      patchEntry.operations = [
-        {
-          operationIndex,
-          type:
-            currentOperation?.type
-            ?? stringValue(event.operationType)
-            ?? stringValue(event.operation_type)
-            ?? "operation",
-          reason: currentOperation?.reason,
-          retryable: currentOperation?.retryable,
-          status: operationStatus,
-          message: stringValue(event.message) ?? currentOperation?.message,
-          error: stringValue(event.error) ?? currentOperation?.error,
-        },
-      ];
-    }
-
-    return [patchEntry];
-  }
-
-  if (type === "workflow_artifact_created") {
-    const artifact = normalizeArtifactEntry(
-      {
-        id: stringValue(event.artifactId) ?? stringValue(event.artifact_id),
-        kind: "artifact",
-        artifactType: stringValue(event.artifactType) ?? stringValue(event.artifact_type) ?? "agent_artifact",
-        title: stringValue(event.message) ?? "Workflow artifact",
-        payload: recordValue(event.payload) ?? {},
-        createdAt,
-      },
-      0,
-      createdAt,
-    );
-    return artifact ? [artifact] : [];
-  }
-
-  if (type === "memory_updated") {
-    return [
-      normalizeMemoryEntry({
-        id: stringValue(event.id) ?? `memory-${stringValue(event.runId) ?? createdAt}`,
-        kind: "memory",
-        summary: stringValue(event.message) ?? "Project memory updated.",
-        createdAt,
-      }),
-    ];
-  }
-
-  if (type === "tool_completed" || type === "tool_failed" || type === "tool_running" || type === "approval_required") {
-    const observation = recordValue(event.observation);
-    const output = recordValue(observation?.output) ?? {};
-    return [
-      normalizeToolEntry({
-        id: stringValue(event.toolCallId) ?? stringValue(event.tool_call_id) ?? `${stringValue(event.runId) ?? createdAt}-${stringValue(event.toolName) ?? "tool"}`,
-        kind: "tool",
-        toolName: stringValue(event.toolName) ?? stringValue(observation?.toolName) ?? "Agent Tool",
-        status:
-          type === "tool_completed"
-            ? "completed"
-            : type === "tool_failed"
-              ? "failed"
-              : type === "approval_required"
-                ? "awaiting_approval"
-                : "running",
-        requiresApproval: type === "approval_required",
-        output,
-        errorMessage: stringValue(event.error),
-        createdAt,
-      }),
-    ];
-  }
-
-  return [];
-}
-
-function activityForRuntimeV4Event(event: Record<string, unknown>): ActivityState | null {
-  const type = stringValue(event.type);
-  if (!type) return null;
-  if (type === "run_started" || type === "agent_thinking") return { label: "thinking" };
-  if (type === "workflow_started") return { label: "working" };
-  if (type === "workflow_needs_input" || type === "patch_approval_required") {
-    return { label: "approval needed", tone: "warning" };
-  }
-  if (type === "workflow_failed" || type === "tool_failed" || type === "patch_failed" || type === "run_failed") {
-    return { label: "error", tone: "error" };
-  }
-  if (type === "patch_applying" || type === "patch_operation_running" || type === "tool_running") {
-    return { label: "working" };
-  }
-  if (type === "workflow_patch_planned" || type === "patch_planned") {
-    return { label: "draft ready", tone: "warning" };
-  }
-  if (type === "run_completed" || type === "workflow_completed" || type === "patch_completed") {
-    return { label: "done" };
-  }
-  return null;
-}
-
-function mergePatchOperations(
-  current: PatchOperationTimelineEntry[],
-  incoming: PatchOperationTimelineEntry[],
-) {
-  if (incoming.length === 0) {
-    return current;
-  }
-
-  const merged = [...current];
-  for (const operation of incoming) {
-    const index = merged.findIndex((candidate) => candidate.operationIndex === operation.operationIndex);
-    if (index >= 0) {
-      merged[index] = { ...merged[index], ...operation };
-    } else {
-      merged.push(operation);
-    }
-  }
-  return merged.sort((left, right) => left.operationIndex - right.operationIndex);
-}
-
-function mergeTimelineEntry(current: AgentTimelineEntry, incoming: AgentTimelineEntry): AgentTimelineEntry {
-  if (current.kind === "patch" && incoming.kind === "patch") {
-    return {
-      ...current,
-      ...incoming,
-      summary: incoming.summary ?? current.summary,
-      riskLevel: incoming.riskLevel ?? current.riskLevel,
-      autoApplySkippedReason: incoming.autoApplySkippedReason ?? current.autoApplySkippedReason,
-      operations: mergePatchOperations(current.operations, incoming.operations),
-      metadata: { ...(current.metadata ?? {}), ...(incoming.metadata ?? {}) },
-    };
-  }
-
-  if (current.kind === "workflow" && incoming.kind === "workflow") {
-    return {
-      ...current,
-      ...incoming,
-      artifacts: incoming.artifacts?.length ? incoming.artifacts : current.artifacts,
-      patch: incoming.patch ?? current.patch,
-      nextAction: incoming.nextAction ?? current.nextAction,
-      metadata: { ...(current.metadata ?? {}), ...(incoming.metadata ?? {}) },
-    };
-  }
-
-  return incoming;
-}
-
-function sameTimelineEntry(left: AgentTimelineEntry, right: AgentTimelineEntry) {
-  if (left.kind === "patch" && right.kind === "patch") {
-    return left.patchId === right.patchId;
-  }
-  return left.id === right.id;
-}
-
-function upsertTimelineEntries(
-  current: AgentTimelineEntry[],
-  incoming: AgentTimelineEntry[],
-) {
-  const next = [...current];
-  for (const entry of incoming) {
-    const index = next.findIndex((candidate) => sameTimelineEntry(candidate, entry));
-    if (index >= 0) {
-      next[index] = mergeTimelineEntry(next[index], entry);
-    } else {
-      next.push(entry);
-    }
-  }
-  return sortEntries(next);
-}
-
 type ThreadInfo = { id: string; title: string | null; updated_at: string };
 
 export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
+  const [refreshedProject, setRefreshedProject] = useState<ProjectWorkspace | null>(null);
+  const activeProject = refreshedProject?.id === project.id ? refreshedProject : project;
   const [threadId, setThreadId] = useState<string | "new-chat" | null>(null);
   const [threads, setThreads] = useState<ThreadInfo[]>([]);
   const [entries, setEntries] = useState<AgentUiEntry[]>([]);
@@ -746,11 +142,13 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityState>({ label: "done" });
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   const [library, setLibrary] = useState<ProjectAssetLibrary | null>(null);
   const [isAssetDrawerOpen, setIsAssetDrawerOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const lastFetchedThreadId = useRef<string | "new-chat" | null>(null);
+  const lastFetchedVersion = useRef(0);
 
   const loadThreadsList = useCallback(async () => {
     try {
@@ -769,6 +167,21 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
       console.warn("Failed to load assets for summary:", err);
     }
   }, [project.id]);
+
+  const loadProject = useCallback(async () => {
+    try {
+      const nextProject = await fetchJson<ProjectWorkspace>(`/api/projects/${project.id}`);
+      setRefreshedProject(nextProject);
+    } catch (err) {
+      console.warn("Failed to refresh project mind:", err);
+    }
+  }, [project.id]);
+
+  const refreshProjectSurfaces = useCallback(() => {
+    setHistoryVersion((version) => version + 1);
+    void loadAssets();
+    void loadProject();
+  }, [loadAssets, loadProject]);
 
   // Load threads list and asset library on mount and when project changes
   useEffect(() => {
@@ -841,6 +254,9 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         const decoder = new TextDecoder();
         let buffer = "";
         let sawToolEvent = false;
+        let sawRuntimeV4TimelineEvent = false;
+        let sawRuntimeV4FinalResponse = false;
+        let sawRuntimeV4RunCompleted = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -875,6 +291,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               } else if (data.type === "v4_event") {
                 const event = runtimeV4EventFromPacket(data);
                 const eventType = stringValue(event.type);
+                sawRuntimeV4TimelineEvent ||= eventType !== "final_response" && eventType !== "run_completed";
                 const eventThreadId = stringValue(event.threadId) ?? stringValue(event.thread_id);
                 if (eventThreadId) {
                   setThreadId(eventThreadId);
@@ -888,6 +305,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 }
 
                 if (eventType === "final_response") {
+                  sawRuntimeV4FinalResponse = true;
                   const responseText = stringValue(event.response) ?? stringValue(event.message);
                   if (responseText) {
                     setEntries((current) =>
@@ -908,6 +326,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 }
 
                 if (eventType === "run_completed") {
+                  sawRuntimeV4RunCompleted = true;
                   setHistoryVersion((version) => version + 1);
                 }
 
@@ -928,6 +347,9 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                   )
                 );
               } else if (data.type === "message_delta" && data.text) {
+                if (sawRuntimeV4FinalResponse) {
+                  continue;
+                }
                 setActivity({ label: "thinking" });
                 setEntries((current) =>
                   current.map((entry) =>
@@ -983,35 +405,9 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 data.type === "tool_failed" ||
                 data.type === "approval_required"
               ) {
-                const toolCallId =
-                  typeof data.toolCallId === "string"
-                    ? data.toolCallId
-                    : [
-                        "runtime-v3-tool",
-                        stringValue(data.runId) ?? stringValue(data.threadId) ?? createdAt,
-                        stringValue(data.toolName) ?? stringValue(data.displayName) ?? data.type,
-                      ].join("-");
-                const status =
-                  data.type === "tool_completed"
-                    ? "completed"
-                    : data.type === "tool_failed"
-                      ? "failed"
-                      : data.type === "approval_required"
-                        ? "awaiting_approval"
-                        : "running";
-                const output =
-                  data.type === "approval_required"
-                    ? {
-                        kind: "approval_request",
-                        risk: data.risk,
-                        reason: data.reason,
-                        preview: data.preview,
-                      }
-                    : data.type === "tool_failed"
-                      ? { kind: "tool_error", message: data.error }
-                      : typeof data.output === "object" && data.output !== null
-                        ? data.output
-                        : { kind: "tool_progress", activity: status };
+                if (sawRuntimeV4TimelineEvent) {
+                  continue;
+                }
                 const richEvent = runtimeV4EventFromLegacyPacket(data);
                 const richEntries = richEvent ? timelineEntriesFromRuntimeV4Event(richEvent) : [];
 
@@ -1020,38 +416,20 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 if (richActivity) {
                   setActivity(richActivity);
                 } else {
-                  setActivity(
-                    status === "failed"
-                      ? { label: "tool failed", tone: "error" }
-                      : status === "awaiting_approval"
-                        ? { label: "approval needed", tone: "warning" }
-                        : status === "completed"
-                          ? { label: "done" }
-                          : { label: "working" },
-                  );
+                  setActivity({ label: "working" });
                 }
 
                 if (richEntries.length > 0) {
                   setEntries((current) => upsertTimelineEntries(current, richEntries));
-                } else {
-                  setEntries((current) =>
-                    sortEntries([
-                      ...current.filter((entry) => entry.kind !== "tool" || entry.id !== toolCallId),
-                      {
-                        id: toolCallId,
-                        kind: "tool",
-                        toolName: typeof data.displayName === "string" ? data.displayName : String(data.toolName ?? "Agent Tool"),
-                        command: null,
-                        status,
-                        requiresApproval: status === "awaiting_approval",
-                        output,
-                        errorMessage: typeof data.error === "string" ? data.error : null,
-                        createdAt: new Date().toISOString(),
-                      },
-                    ])
-                  );
                 }
               } else if (data.type === "run_completed") {
+                if (sawRuntimeV4RunCompleted) {
+                  continue;
+                }
+                if (data.threadId) {
+                  setThreadId(data.threadId);
+                  lastFetchedThreadId.current = data.threadId;
+                }
                 setActivity({ label: "done" });
                 setHistoryVersion((version) => version + 1);
               } else if (data.type === "run_failed") {
@@ -1131,9 +509,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
       setIsSending(false);
     }
   }
-
-  const [historyVersion, setHistoryVersion] = useState(0);
-  const lastFetchedVersion = useRef(0);
 
   // Load history whenever the selected threadId or historyVersion changes
   useEffect(() => {
@@ -1260,7 +635,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
           <div className="flex items-center gap-3 min-w-0">
             <Bot className="h-4 w-full max-w-4 text-[var(--primary)] shrink-0" />
             <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[var(--ink)] truncate">
-              {project.title} &bull; Strategic Agent
+              {activeProject.title} &bull; Strategic Agent
             </h2>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -1340,7 +715,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                             <PatchPreviewCard
                               entry={entry}
                               projectId={project.id}
-                              onRefresh={() => setHistoryVersion((v) => v + 1)}
+                              onRefresh={refreshProjectSurfaces}
                             />
                           </div>
                         </div>
@@ -1407,7 +782,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </div>
       </div>
 
-      <ProjectMindPanel project={project} />
+      <ProjectMindPanel project={activeProject} />
     </div>
   );
 }

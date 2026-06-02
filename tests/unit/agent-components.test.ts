@@ -551,6 +551,13 @@ describe("agent UI components", () => {
       if (url.includes("/assets")) {
         return { folders: [], looseAssets: [] };
       }
+      if (url.includes("threadId=thread-1")) {
+        return {
+          threadId: "thread-1",
+          messages: [{ id: "assistant-final", role: "assistant", content: "Done once." }],
+          toolCalls: [],
+        };
+      }
       return { threadId: null, messages: [], toolCalls: [] };
     });
 
@@ -613,10 +620,143 @@ describe("agent UI components", () => {
     expect(screen.getAllByText("Full production package").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Plan").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Script").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Shoot Pack").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Asset Prompts").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Publish Prep").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Shoot").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Assets").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Publish").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Full production package")).toHaveLength(1);
     expect(screen.getAllByText("Save full production package").length).toBeGreaterThan(0);
+  });
+
+  test("runtime v4 legacy mirrors do not duplicate final responses or history refreshes", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            `data: ${JSON.stringify({ type: "meta", threadId: "thread-1", runId: "run-1" })}`,
+            `data: ${JSON.stringify({
+              type: "v4_event",
+              event: {
+                type: "final_response",
+                threadId: "thread-1",
+                runId: "run-1",
+                response: "Done once.",
+              },
+            })}`,
+            `data: ${JSON.stringify({ type: "message_delta", text: "Done once." })}`,
+            `data: ${JSON.stringify({
+              type: "v4_event",
+              event: {
+                type: "run_completed",
+                threadId: "thread-1",
+                runId: "run-1",
+              },
+            })}`,
+            `data: ${JSON.stringify({ type: "run_completed", threadId: "thread-1", runId: "run-1" })}`,
+            "",
+          ].join("\n\n"),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+      ),
+    );
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Empty");
+    fireEvent.change(screen.getByLabelText("composer"), {
+      target: { value: "Finish the run" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      const historyRefreshes = fetchJson.mock.calls.filter(([url]) =>
+        typeof url === "string" && url.includes("threadId=thread-1")
+      );
+      expect(historyRefreshes).toHaveLength(1);
+    });
+    expect(screen.queryByText("Done once.Done once.")).not.toBeInTheDocument();
+  });
+
+  test("mixed runtime v4 streams keep legacy-only finalization", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      if (url.includes("threadId=thread-1")) {
+        return {
+          threadId: "thread-1",
+          messages: [{ id: "assistant-final", role: "assistant", content: "Legacy final." }],
+          toolCalls: [],
+        };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            `data: ${JSON.stringify({ type: "meta", threadId: "thread-1", runId: "run-1" })}`,
+            `data: ${JSON.stringify({
+              type: "v4_event",
+              event: {
+                type: "workflow_completed",
+                threadId: "thread-1",
+                runId: "run-1",
+                workflowName: "create_script_package",
+                message: "Script package ready.",
+                observation: {
+                  output: {
+                    artifacts: [
+                      {
+                        id: "artifact-script",
+                        type: "script_package",
+                        title: "Script package",
+                        payload: { script: "Open with the practical result." },
+                      },
+                    ],
+                  },
+                },
+              },
+            })}`,
+            `data: ${JSON.stringify({ type: "message_delta", text: "Legacy final." })}`,
+            `data: ${JSON.stringify({ type: "run_completed", threadId: "thread-1", runId: "run-1" })}`,
+            "",
+          ].join("\n\n"),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+      ),
+    );
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Empty");
+    fireEvent.change(screen.getByLabelText("composer"), {
+      target: { value: "Make a script package" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      const historyRefreshes = fetchJson.mock.calls.filter(([url]) =>
+        typeof url === "string" && url.includes("threadId=thread-1")
+      );
+      expect(historyRefreshes).toHaveLength(1);
+    });
+    expect(await screen.findByText("Legacy final.")).toBeInTheDocument();
   });
 
   test("legacy workflow-shaped stream packets render rich workflow cards", async () => {

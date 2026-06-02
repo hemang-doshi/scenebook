@@ -28,10 +28,11 @@ export function PatchPreviewCard({ entry, projectId, onRefresh }: PatchPreviewCa
   const [error, setError] = useState<string | null>(null);
   const patch = appliedPatch?.patchId === entry.patchId ? appliedPatch : entry;
 
-  const canApply = (patch.canApply ?? isApplyStatus(patch.status)) && Boolean(patch.patchId) && !isApplying;
+  const canApply = isPatchApplyEligible(patch, isApplying);
+  const needsApproval = patch.status === "awaiting_approval";
 
   async function applyPatch() {
-    if (!patch.patchId) {
+    if (!canApply) {
       return;
     }
 
@@ -94,6 +95,12 @@ export function PatchPreviewCard({ entry, projectId, onRefresh }: PatchPreviewCa
           </p>
         ) : null}
 
+        {needsApproval ? (
+          <p className="rounded-[var(--rounded-md)] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            Approval is needed before this patch can be applied. The approval flow is not available yet.
+          </p>
+        ) : null}
+
         {patch.operations.length ? (
           <div className="grid gap-2 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/45 p-3">
             {patch.operations.map((operation) => (
@@ -123,16 +130,15 @@ export function PatchPreviewCard({ entry, projectId, onRefresh }: PatchPreviewCa
           </p>
         ) : null}
 
-        {canApply || isApplying ? (
+        {canApply ? (
           <Button
             type="button"
             variant="primary"
-            disabled={isApplying}
             onClick={() => void applyPatch()}
             className="h-9 w-fit gap-2 px-4 text-xs font-semibold"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            {isApplying ? "Applying" : "Apply to workspace"}
+            Apply to workspace
           </Button>
         ) : null}
       </CardContent>
@@ -161,8 +167,12 @@ function mergeOperationResults(
   return merged.sort((left, right) => left.operationIndex - right.operationIndex);
 }
 
-function isApplyStatus(status: string) {
-  return ["planned", "awaiting_approval", "partial_failed", "failed"].includes(status);
+function isPatchApplyEligible(patch: PatchTimelineEntry, isApplying: boolean) {
+  return Boolean(patch.patchId)
+    && patch.status === "planned"
+    && patch.canApply === true
+    && patch.requiresApproval !== true
+    && !isApplying;
 }
 
 function statusBadgeClass(status: string) {

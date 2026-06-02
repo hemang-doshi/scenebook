@@ -1,8 +1,10 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { Check, Copy, FileText } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ArtifactTimelineEntry } from "@/components/agent/types";
 
@@ -11,16 +13,33 @@ type ArtifactPreviewCardProps = {
 };
 
 const fullPackageSections = [
-  { title: "Plan", keys: ["plan"] },
-  { title: "Script", keys: ["scriptPackage", "script_package", "script"] },
-  { title: "Shoot Pack", keys: ["shootPack", "shoot_pack"] },
-  { title: "Asset Prompts", keys: ["assetPromptPack", "asset_prompt_pack", "assetPrompts"] },
-  { title: "Publish Prep", keys: ["publishPrep", "publish_prep", "publishPackage"] },
+  { title: "Plan", keys: ["plan"], artifactType: "creative_brief" },
+  { title: "Script", keys: ["scriptPackage", "script_package", "script"], artifactType: "script_package" },
+  { title: "Shoot", keys: ["shootPack", "shoot_pack"], artifactType: "shoot_pack" },
+  { title: "Assets", keys: ["assetPromptPack", "asset_prompt_pack", "assetPrompts"], artifactType: "asset_prompt_pack" },
+  { title: "Publish", keys: ["publishPrep", "publish_prep", "publishPackage", "publish_package"], artifactType: "publish_package" },
 ];
 
-export function ArtifactPreviewCard({ entry }: ArtifactPreviewCardProps) {
-  const payload = asRecord(entry.payload);
+const artifactSections: Record<string, { title: string; keys?: string[] }[]> = {
+  script_package: [{ title: "Script" }],
+  shoot_pack: [{ title: "Shoot" }],
+  asset_prompt_pack: [{ title: "Assets" }],
+  publish_package: [{ title: "Publish" }],
+  content_review: [{ title: "Review" }],
+};
 
+const copyLabels: Record<string, string> = {
+  script: "script",
+  caption: "caption",
+  hashtags: "hashtags",
+  cinematicJsonPrompts: "cinematic JSON prompts",
+  imagePrompts: "image prompts",
+  brollPrompts: "B-roll prompts",
+  assetPrompts: "asset prompts",
+  thumbnailPrompt: "thumbnail prompt",
+};
+
+export function ArtifactPreviewCard({ entry }: ArtifactPreviewCardProps) {
   return (
     <Card className="border border-[var(--hairline)] bg-[var(--canvas)] shadow-none">
       <CardHeader className="flex-row items-start justify-between gap-3 p-5 pb-3">
@@ -38,17 +57,33 @@ export function ArtifactPreviewCard({ entry }: ArtifactPreviewCardProps) {
       </CardHeader>
 
       <CardContent className="grid gap-3 p-5 pt-0 text-sm text-[var(--ink)]">
-        {entry.artifactType === "full_production_package"
-          ? renderFullProductionPackage(payload)
-          : renderArtifactPayload(entry.artifactType, payload)}
+        <ArtifactPreviewContent entry={entry} />
       </CardContent>
     </Card>
   );
 }
 
+export function ArtifactPreviewContent({ entry }: ArtifactPreviewCardProps) {
+  const payload = asRecord(entry.payload);
+
+  return entry.artifactType === "full_production_package"
+    ? renderFullProductionPackage(payload)
+    : renderArtifactPayload(entry.artifactType, payload);
+}
+
 function renderFullProductionPackage(payload: Record<string, unknown>) {
   return (
     <div className="grid gap-3">
+      <div className="flex flex-wrap gap-1.5" aria-label="Production package sections">
+        {fullPackageSections.map((section) => (
+          <span
+            key={section.title}
+            className="rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--canvas)] px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[var(--ink)]/65"
+          >
+            {section.title}
+          </span>
+        ))}
+      </div>
       {fullPackageSections.map((section) => {
         const value = firstRecord(payload, section.keys);
         if (!value) {
@@ -61,7 +96,7 @@ function renderFullProductionPackage(payload: Record<string, unknown>) {
             className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/45 p-3"
           >
             <h4 className="text-xs font-bold text-[var(--ink)]">{section.title}</h4>
-            <div className="mt-2 grid gap-2">{renderRecordFields(value)}</div>
+            <div className="mt-2 grid gap-2">{renderRecordFields(value, section.artifactType)}</div>
           </section>
         );
       })}
@@ -70,36 +105,86 @@ function renderFullProductionPackage(payload: Record<string, unknown>) {
 }
 
 function renderArtifactPayload(artifactType: string, payload: Record<string, unknown>) {
-  const fields = preferredFields(artifactType, payload);
-  if (fields.length === 0) {
+  const sections = artifactSections[artifactType] ?? [{ title: "Details" }];
+  const renderedSections = sections
+    .map((section) => {
+      const value = section.keys ? firstRecord(payload, section.keys) : payload;
+      if (!value) {
+        return null;
+      }
+      const fields = preferredFields(artifactType, value);
+      if (fields.length === 0) {
+        return null;
+      }
+
+      return (
+        <section
+          key={section.title}
+          className="rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/45 p-3"
+        >
+          <h4 className="text-xs font-bold text-[var(--ink)]">{section.title}</h4>
+          <div className="mt-2 grid gap-2">
+            {fields.map(([key, fieldValue]) => (
+              <FieldValue key={key} fieldKey={key} label={humanize(key)} value={fieldValue} />
+            ))}
+          </div>
+        </section>
+      );
+    })
+    .filter(Boolean);
+
+  if (renderedSections.length === 0) {
     return null;
   }
 
-  return (
-    <div className="grid gap-2 rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--surface-soft)]/45 p-3">
-      {fields.map(([key, value]) => (
-        <FieldValue key={key} label={humanize(key)} value={value} />
-      ))}
-    </div>
-  );
+  return <div className="grid gap-3">{renderedSections}</div>;
 }
 
-function renderRecordFields(record: Record<string, unknown>) {
-  return preferredFields("default", record).map(([key, value]) => (
-    <FieldValue key={key} label={humanize(key)} value={value} />
+function renderRecordFields(record: Record<string, unknown>, artifactType = "default") {
+  return preferredFields(artifactType, record).map(([key, value]) => (
+    <FieldValue key={key} fieldKey={key} label={humanize(key)} value={value} />
   ));
 }
 
-function FieldValue({ label, value }: { label: string; value: unknown }) {
+function FieldValue({ fieldKey, label, value }: { fieldKey: string; label: string; value: unknown }) {
+  const [copied, setCopied] = useState(false);
+
   if (value === null || value === undefined || value === "") {
     return null;
   }
+
+  const copyLabel = copyLabels[fieldKey];
+  const copyText = copyLabel ? copyableValue(value) : null;
+  const handleCopy = async () => {
+    if (!copyText) return;
+    await navigator.clipboard.writeText(copyText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+  const labelRow = (
+    <div className="flex min-w-0 items-center justify-between gap-2">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink)]/50">{label}</p>
+      {copyText ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-7 shrink-0 gap-1 px-2 text-[10px] text-[var(--ink)]/70"
+          aria-label={`Copy ${copyLabel}`}
+          title={`Copy ${copyLabel}`}
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          <span>{copied ? "Copied" : "Copy"}</span>
+        </Button>
+      ) : null}
+    </div>
+  );
 
   if (Array.isArray(value)) {
     if (value.length === 0) return null;
     return (
       <div className="grid gap-1">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink)]/50">{label}</p>
+        {labelRow}
         <ul className="grid gap-1">
           {value.map((item, index) => (
             <li key={`${label}-${index}`} className="text-xs leading-relaxed text-[var(--ink)]/90">
@@ -114,10 +199,10 @@ function FieldValue({ label, value }: { label: string; value: unknown }) {
   if (isRecord(value)) {
     return (
       <div className="grid gap-1">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink)]/50">{label}</p>
+        {labelRow}
         <div className="grid gap-1 rounded-[var(--rounded-sm)] border border-[var(--hairline)] bg-[var(--canvas)] px-3 py-2">
           {Object.entries(value).map(([key, nested]) => (
-            <FieldValue key={key} label={humanize(key)} value={nested} />
+            <FieldValue key={key} fieldKey={key} label={humanize(key)} value={nested} />
           ))}
         </div>
       </div>
@@ -126,7 +211,7 @@ function FieldValue({ label, value }: { label: string; value: unknown }) {
 
   return (
     <div className="grid gap-1">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink)]/50">{label}</p>
+      {labelRow}
       <p className="text-xs leading-relaxed text-[var(--ink)]/90">{String(value)}</p>
     </div>
   );
@@ -148,6 +233,18 @@ function preferredFields(artifactType: string, payload: Record<string, unknown>)
     .map((key) => [key, payload[key]] as [string, unknown]);
   const extras = Object.entries(payload).filter(([key]) => !orderedKeys.includes(key));
   return [...ordered, ...extras].filter(([, value]) => value !== undefined && value !== null && value !== "");
+}
+
+function copyableValue(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const text = value.map(formatValue).filter(Boolean).join("\n");
+    return text || null;
+  }
+  if (isRecord(value)) {
+    return JSON.stringify(value, null, 2);
+  }
+  const text = String(value).trim();
+  return text || null;
 }
 
 function firstRecord(payload: Record<string, unknown>, keys: string[]) {

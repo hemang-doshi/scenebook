@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, test, vi } from "vitest";
 
 import { ArtifactPreviewCard } from "@/components/agent/artifact-preview-card";
 import { WorkflowCard } from "@/components/agent/workflow-card";
@@ -91,10 +91,55 @@ describe("workflow-aware agent UI cards", () => {
 
     expect(screen.getByRole("heading", { name: "Plan" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Script" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Shoot Pack" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Asset Prompts" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Publish Prep" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Shoot" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Assets" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Publish" })).toBeInTheDocument();
     expect(screen.getByText("Your balcony can handle composting.")).toBeInTheDocument();
     expect(screen.getByText("Small-space composting can start with one jar and one habit.")).toBeInTheDocument();
+  });
+
+  test("artifact preview copy buttons copy caption hashtags and prompts", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const entry: ArtifactTimelineEntry = {
+      id: "artifact-copy-actions",
+      kind: "artifact",
+      artifactType: "full_production_package",
+      title: "Full production package",
+      payload: {
+        scriptPackage: {
+          script: "Open with the jar, then show the balcony reset.",
+        },
+        assetPromptPack: {
+          imagePrompts: ["Sunlit balcony compost jar with paper browns."],
+          thumbnailPrompt: "Balcony compost starter kit on a bright table.",
+        },
+        publishPrep: {
+          caption: "Start composting with one jar and one weekly reset.",
+          hashtags: ["#composting", "#balconygarden"],
+        },
+      },
+      createdAt: "2026-06-02T09:00:00.000Z",
+    };
+
+    render(<ArtifactPreviewCard entry={entry} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy script" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("Open with the jar, then show the balcony reset."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy caption" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("Start composting with one jar and one weekly reset."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy hashtags" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("#composting\n#balconygarden"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy image prompts" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("Sunlit balcony compost jar with paper browns."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy thumbnail prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("Balcony compost starter kit on a bright table."));
   });
 });

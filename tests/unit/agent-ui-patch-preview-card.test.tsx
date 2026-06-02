@@ -13,6 +13,8 @@ const patchEntry: PatchTimelineEntry = {
   summary: "Persist the production plan, script, shoot pack, assets, and publish prep.",
   status: "planned",
   riskLevel: "low",
+  requiresApproval: false,
+  canApply: true,
   autoApplySkippedReason: "Patch has 9 operations; auto-apply limit is 8.",
   operations: [
     {
@@ -90,6 +92,92 @@ describe("PatchPreviewCard", () => {
     expect(screen.getByText("Saved script version.")).toBeInTheDocument();
     expect(screen.getByText("completed")).toBeInTheDocument();
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  test("apply is hidden when patch is awaiting approval and explains approval is needed", () => {
+    render(
+      <PatchPreviewCard
+        entry={{
+          ...patchEntry,
+          status: "awaiting_approval",
+          requiresApproval: true,
+          canApply: true,
+        }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /apply to workspace/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/approval is needed before this patch can be applied/i)).toBeInTheDocument();
+  });
+
+  test("apply is hidden when patch is completed", () => {
+    render(
+      <PatchPreviewCard
+        entry={{ ...patchEntry, status: "completed", canApply: true }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /apply to workspace/i })).not.toBeInTheDocument();
+  });
+
+  test("apply is hidden while patch is applying", () => {
+    render(
+      <PatchPreviewCard
+        entry={{ ...patchEntry, status: "applying", canApply: true }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /apply to workspace/i })).not.toBeInTheDocument();
+  });
+
+  test.each(["failed", "partial_failed"])("apply is hidden when patch is %s", (status) => {
+    render(
+      <PatchPreviewCard
+        entry={{ ...patchEntry, status, canApply: true }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /apply to workspace/i })).not.toBeInTheDocument();
+  });
+
+  test("apply is visible only for planned patches explicitly marked applicable", () => {
+    const { rerender } = render(
+      <PatchPreviewCard
+        entry={{ ...patchEntry, status: "planned", canApply: false }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /apply to workspace/i })).not.toBeInTheDocument();
+
+    rerender(
+      <PatchPreviewCard
+        entry={{ ...patchEntry, status: "planned", canApply: true }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /apply to workspace/i })).toBeInTheDocument();
+  });
+
+  test("apply is hidden when a planned applicable patch requires approval", () => {
+    render(
+      <PatchPreviewCard
+        entry={{
+          ...patchEntry,
+          status: "planned",
+          requiresApproval: true,
+          canApply: true,
+        }}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /apply to workspace/i })).not.toBeInTheDocument();
   });
 
   test("apply renders returned operations even when the local preview was empty", async () => {

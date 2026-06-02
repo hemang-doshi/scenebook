@@ -365,6 +365,10 @@ function mapPatchOperation(row: PersistedRow): AgentProjectPatchOperationEntry {
   };
 }
 
+function canApplyHydratedPatch(status: string, metadata: JsonObject) {
+  return status === "planned" && stringValue(metadata.plannedBy) === runtimeV4PlannedPatchMarker;
+}
+
 function previewStatusForPatchOperation(patchStatus: string) {
   return patchStatus === "planned" ? "planned" : patchStatus;
 }
@@ -453,7 +457,7 @@ function mapPatch(row: PersistedRow, operationsByPatchId: Map<string, AgentProje
       failedOperations,
     }),
     operations,
-    canApply: status === "planned" && stringValue(metadata.plannedBy) === runtimeV4PlannedPatchMarker,
+    canApply: canApplyHydratedPatch(status, metadata),
     patch,
     metadata,
     workflowName: stringValue(metadata.workflowName),
