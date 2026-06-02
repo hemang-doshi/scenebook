@@ -56,6 +56,14 @@ export class PolicyEngine {
     }
 
     if (isWorkspaceSideEffect(subject.sideEffect)) {
+      if (context.permissions && !context.permissions.canWriteProject) {
+        return {
+          status: "blocked",
+          recoverable: false,
+          reason: "Your account does not have permission to change this project.",
+        };
+      }
+
       const ownerId = await this.getProjectOwnerId(context.projectId, context);
 
       if (!ownerId || ownerId !== context.userId) {

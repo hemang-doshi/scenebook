@@ -1,6 +1,7 @@
 import type { ProjectPatch, ProjectPatchOperation } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { RuntimeV4Event } from "@/lib/agent/runtime-v4/events";
 import type { ToolObservation } from "@/lib/agent/runtime-v3/types";
+import type { AccountContext, PermissionSummary } from "@/lib/auth/account-context";
 import type { JsonValue } from "@/lib/types";
 
 export type PatchExecutionStatus =
@@ -24,6 +25,8 @@ export type PatchExecutionContext = {
   source?: string;
   rawInput?: string;
   selectedModels?: Record<string, string>;
+  account?: AccountContext;
+  permissions?: PermissionSummary;
   metadata?: Record<string, JsonValue>;
 };
 

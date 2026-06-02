@@ -10,6 +10,9 @@ import {
 import { projectPatchSchema, type ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import { ToolExecutor } from "@/lib/agent/runtime-v4/tools/executor";
 import { createRuntimeV4ToolRegistry } from "@/lib/agent/runtime-v4/tools/registry";
+import { loadAccountContext, type AccountContextSupabaseClient } from "@/lib/auth/account-context";
+import { ProjectOwnershipError, requireOwnedProject, type SupabaseOwnershipClient } from "@/lib/auth/ownership";
+import { AuthRequiredError, requireServerUser } from "@/lib/auth/server-user";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type SupabaseUser = {
@@ -152,25 +155,6 @@ function operationResponse(result: Awaited<ReturnType<PatchExecutor["apply"]>>) 
   }));
 }
 
-async function requireOwnedProject(input: {
-  supabase: ApplyPatchSupabaseClient;
-  projectId: string;
-  userId: string;
-}) {
-  const { data, error } = await input.supabase
-    .from("content_cards")
-    .select("id")
-    .eq("id", input.projectId)
-    .eq("owner_id", input.userId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return Boolean(data);
-}
-
 async function loadOwnedPatch(input: {
   supabase: ApplyPatchSupabaseClient;
   patchId: string;
@@ -226,24 +210,19 @@ export async function POST(
 ) {
   try {
     const supabase = (await createSupabaseServerClient()) as unknown as ApplyPatchSupabaseClient;
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
-    }
+    const user = await requireServerUser({ supabase });
 
     const { id: projectId, patchId } = await params;
-    const ownsProject = await requireOwnedProject({
-      supabase,
+    await requireOwnedProject({
+      supabase: supabase as unknown as SupabaseOwnershipClient,
       projectId,
       userId: user.id,
     });
-
-    if (!ownsProject) {
-      return NextResponse.json({ error: "Project not found." }, { status: 404 });
-    }
+    const account = await loadAccountContext({
+      supabase: supabase as unknown as AccountContextSupabaseClient,
+      projectId,
+      userId: user.id,
+    });
 
     const patchRow = await loadOwnedPatch({
       supabase,
@@ -279,11 +258,15 @@ export async function POST(
     });
     const result = await patchExecutor.apply({
       patch,
-      context: applyContext({
-        userId: user.id,
-        projectId,
-        row: patchRow,
-      }),
+      context: {
+        ...applyContext({
+          userId: user.id,
+          projectId,
+          row: patchRow,
+        }),
+        account,
+        permissions: account.permissions,
+      },
     });
 
     return NextResponse.json({
@@ -303,6 +286,10 @@ export async function POST(
         ? 400
         : caught instanceof SupabasePatchAuditError
           ? 500
+          : caught instanceof AuthRequiredError
+            ? caught.status
+          : caught instanceof ProjectOwnershipError
+            ? caught.status
           : 500;
 
     return NextResponse.json(

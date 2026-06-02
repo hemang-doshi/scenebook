@@ -1,4 +1,5 @@
 import type { JsonValue } from "@/lib/types";
+import type { PermissionSummary } from "@/lib/auth/account-context";
 import type {
   ToolApprovalPolicy,
   ToolAvailability,
@@ -27,6 +28,8 @@ export type PolicyCheckInput = {
   context: ToolExecutionContext;
   input?: unknown;
 };
+
+export type PolicyPermissionSummary = PermissionSummary;
 
 export type PolicyAllowedResult = {
   status: "allowed";

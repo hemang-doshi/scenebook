@@ -36,6 +36,8 @@ import {
   type AgentToolCallRecord,
 } from "@/lib/agent/types";
 import { getProjectWorkspace, updateCard } from "@/lib/data/repository";
+import { ProjectOwnershipError } from "@/lib/auth/ownership";
+import { AuthRequiredError, requireServerUser } from "@/lib/auth/server-user";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
@@ -104,6 +106,14 @@ function createAgentRuntimeSetupResponse() {
     },
     { status: 503 },
   );
+}
+
+function routeErrorStatus(caught: unknown) {
+  if (caught instanceof AuthRequiredError || caught instanceof ProjectOwnershipError) {
+    return caught.status;
+  }
+
+  return 400;
 }
 
 function isRecord(value: unknown): value is Record<string, any> {
@@ -297,13 +307,7 @@ export async function GET(
 ) {
   try {
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
-    }
+    const user = await requireServerUser({ supabase: supabase as any });
 
     const { id: projectId } = await params;
     const url = new URL(request.url);
@@ -343,7 +347,7 @@ export async function GET(
 
     return NextResponse.json(
       { error: caught instanceof Error ? caught.message : "Unable to load agent history." },
-      { status: 400 },
+      { status: routeErrorStatus(caught) },
     );
   }
 }
@@ -357,13 +361,7 @@ export async function POST(
 
   try {
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
-    }
+    const user = await requireServerUser({ supabase: supabase as any });
 
     const { id: projectId } = await params;
     const body = requestSchema.parse(await request.json());
@@ -869,7 +867,7 @@ export async function POST(
 
     return NextResponse.json(
       { error: caught instanceof Error ? caught.message : "Unable to complete agent run." },
-      { status: 400 },
+      { status: routeErrorStatus(caught) },
     );
   }
 }
@@ -879,13 +877,7 @@ export async function PATCH(
 ) {
   try {
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
-    }
+    const user = await requireServerUser({ supabase: supabase as any });
 
     const { toolCallId, status, output, action } = z
       .object({
@@ -953,7 +945,7 @@ export async function PATCH(
 
     return NextResponse.json(
       { error: caught instanceof Error ? caught.message : "Unable to update tool call." },
-      { status: 400 },
+      { status: routeErrorStatus(caught) },
     );
   }
 }

@@ -1,5 +1,6 @@
 import type { ZodType } from "zod";
 
+import type { AccountContext, PermissionSummary } from "@/lib/auth/account-context";
 import type { JsonValue } from "@/lib/types";
 
 export type ToolRiskLevel = "low" | "medium" | "high";
@@ -40,6 +41,8 @@ export type ToolExecutionContext = {
   source: "agent" | "test" | "system" | string;
   rawInput?: string;
   selectedModels?: Record<string, string>;
+  account?: AccountContext;
+  permissions?: PermissionSummary;
   metadata?: Record<string, JsonValue>;
 };
 
