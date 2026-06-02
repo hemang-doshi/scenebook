@@ -5,11 +5,16 @@ const supabaseMock = vi.hoisted(() => ({
   ownedProject: { id: "project-1", owner_id: "user-1" } as { id: string; owner_id: string } | null,
   upserts: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
+  serverIntegrationWrites: [] as string[],
+  verificationInputs: [] as Record<string, unknown>[],
   nangoConnectionVerified: true,
 }));
 
 vi.mock("@/lib/integrations/nango/client", () => ({
-  verifyNangoConnection: () => supabaseMock.nangoConnectionVerified,
+  verifyNangoConnectionOwnership: (input: Record<string, unknown>) => {
+    supabaseMock.verificationInputs.push(input);
+    return supabaseMock.nangoConnectionVerified;
+  },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,6 +34,28 @@ vi.mock("@/lib/supabase/server", () => ({
         };
       }
 
+      if (table === "integration_events") {
+        return {
+          insert: async (payload: Record<string, unknown>) => {
+            supabaseMock.inserts.push(payload);
+            return { error: null };
+          },
+        };
+      }
+
+      return {
+        upsert() {
+          supabaseMock.serverIntegrationWrites.push(table);
+          throw new Error("status route must use admin client for integration writes");
+        },
+      };
+    },
+  }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createSupabaseAdminClient: () => ({
+    from: (table: string) => {
       if (table === "integration_events") {
         return {
           insert: async (payload: Record<string, unknown>) => {
@@ -74,6 +101,8 @@ describe("Nango connection status route", () => {
     supabaseMock.ownedProject = { id: "project-1", owner_id: "user-1" };
     supabaseMock.upserts = [];
     supabaseMock.inserts = [];
+    supabaseMock.serverIntegrationWrites = [];
+    supabaseMock.verificationInputs = [];
     supabaseMock.nangoConnectionVerified = true;
   });
 
@@ -102,6 +131,14 @@ describe("Nango connection status route", () => {
       owner_id: "user-1",
       event_type: "connection_connected",
       status: "connected",
+    });
+    expect(supabaseMock.serverIntegrationWrites).toEqual([]);
+    expect(supabaseMock.verificationInputs[0]).toMatchObject({
+      nangoIntegrationId: "scene-google-drive",
+      connectionId: "nango-connection-1",
+      userId: "user-1",
+      provider: "google_drive",
+      projectId: "project-1",
     });
   });
 
@@ -134,6 +171,55 @@ describe("Nango connection status route", () => {
     expect(response.status).toBe(409);
     expect(supabaseMock.upserts).toEqual([]);
     expect(supabaseMock.inserts).toEqual([]);
+  });
+
+  test("status route rejects Nango connection owned by a different user tag", async () => {
+    supabaseMock.nangoConnectionVerified = false;
+    const { POST } = await import("@/app/api/integrations/[provider]/status/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/google_drive/status", {
+      method: "POST",
+      body: JSON.stringify({
+        connectionId: "different-user-connection",
+        providerConfigKey: "scene-google-drive",
+      }),
+    }), { params: Promise.resolve({ provider: "google_drive" }) });
+
+    expect(response.status).toBe(409);
+    expect(supabaseMock.upserts).toEqual([]);
+  });
+
+  test("status route rejects Nango connection with mismatched scenebook_provider tag", async () => {
+    supabaseMock.nangoConnectionVerified = false;
+    const { POST } = await import("@/app/api/integrations/[provider]/status/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/google_drive/status", {
+      method: "POST",
+      body: JSON.stringify({
+        connectionId: "wrong-provider-connection",
+        providerConfigKey: "scene-google-drive",
+      }),
+    }), { params: Promise.resolve({ provider: "google_drive" }) });
+
+    expect(response.status).toBe(409);
+    expect(supabaseMock.upserts).toEqual([]);
+  });
+
+  test("status route rejects mismatched project tag when projectId is supplied", async () => {
+    supabaseMock.nangoConnectionVerified = false;
+    const { POST } = await import("@/app/api/integrations/[provider]/status/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/google_drive/status", {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: "project-1",
+        connectionId: "wrong-project-connection",
+        providerConfigKey: "scene-google-drive",
+      }),
+    }), { params: Promise.resolve({ provider: "google_drive" }) });
+
+    expect(response.status).toBe(409);
+    expect(supabaseMock.upserts).toEqual([]);
   });
 
   test("status route rejects mismatched provider config key", async () => {

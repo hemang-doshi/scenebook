@@ -8,9 +8,10 @@ import {
   recordIntegrationEvent,
 } from "@/lib/integrations/connections/store";
 import type { IntegrationProvider } from "@/lib/integrations/connections/types";
-import { verifyNangoConnection } from "@/lib/integrations/nango/client";
+import { verifyNangoConnectionOwnership } from "@/lib/integrations/nango/client";
 import { NangoProviderConfigurationError } from "@/lib/integrations/nango/errors";
 import { getNangoProviderMapping } from "@/lib/integrations/nango/provider-map";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -40,6 +41,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const supabase = await createSupabaseServerClient();
     const user = await requireServerUser({ supabase: supabase as never });
+    const adminSupabase = createSupabaseAdminClient();
     const [storedConnection] = await listIntegrationConnections({
       supabase: supabase as never,
       ownerId: user.id,
@@ -48,7 +50,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     if (!storedConnection) {
       await recordIntegrationEvent({
-        supabase: supabase as never,
+        supabase: adminSupabase as never,
         ownerId: user.id,
         provider,
         eventType: "connection_health_checked",
@@ -64,15 +66,18 @@ export async function GET(_request: Request, context: RouteContext) {
 
     if (storedConnection.status === "connected") {
       const verified = storedConnection.connectionId
-        ? await verifyNangoConnection({
+        ? await verifyNangoConnectionOwnership({
           nangoIntegrationId: mapping.nangoIntegrationId,
           connectionId: storedConnection.connectionId,
+          userId: user.id,
+          provider,
+          projectId: storedConnection.projectId ?? undefined,
         })
         : false;
 
       if (!verified) {
         connection = await markIntegrationFailed({
-          supabase: supabase as never,
+          supabase: adminSupabase as never,
           ownerId: user.id,
           provider,
           metadata: {
@@ -84,7 +89,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     await recordIntegrationEvent({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       integrationConnectionId: connection.id,
       provider,

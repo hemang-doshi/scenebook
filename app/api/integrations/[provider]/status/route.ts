@@ -10,8 +10,9 @@ import {
 } from "@/lib/integrations/connections/store";
 import type { IntegrationProvider } from "@/lib/integrations/connections/types";
 import { NangoProviderConfigurationError } from "@/lib/integrations/nango/errors";
-import { verifyNangoConnection } from "@/lib/integrations/nango/client";
+import { verifyNangoConnectionOwnership } from "@/lib/integrations/nango/client";
 import { getNangoProviderMapping } from "@/lib/integrations/nango/provider-map";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -90,9 +91,12 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Nango integration id does not match provider." }, { status: 400 });
     }
 
-    const verified = await verifyNangoConnection({
+    const verified = await verifyNangoConnectionOwnership({
       nangoIntegrationId: mapping.nangoIntegrationId,
       connectionId,
+      userId: user.id,
+      provider,
+      projectId,
     });
 
     if (!verified) {
@@ -100,8 +104,9 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const scopes = Array.isArray(body.scopes) ? body.scopes.filter((scope): scope is string => typeof scope === "string") : [];
+    const adminSupabase = createSupabaseAdminClient();
     const connection = await markIntegrationConnected({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       projectId,
       provider,
@@ -117,7 +122,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     await recordIntegrationEvent({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       projectId,
       integrationConnectionId: connection.id,

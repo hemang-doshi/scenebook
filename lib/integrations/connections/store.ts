@@ -76,7 +76,7 @@ function mapConnection(row: IntegrationConnectionRow): IntegrationConnection {
     connectionId: row.connection_id,
     status: row.status,
     scopes: row.scopes ?? [],
-    metadata: row.metadata ?? {},
+    metadata: jsonObject(row.metadata),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

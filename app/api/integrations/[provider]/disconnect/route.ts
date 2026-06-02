@@ -13,6 +13,7 @@ import type { IntegrationProvider } from "@/lib/integrations/connections/types";
 import { revokeNangoConnection } from "@/lib/integrations/nango/client";
 import { NangoProviderConfigurationError } from "@/lib/integrations/nango/errors";
 import { getNangoProviderMapping } from "@/lib/integrations/nango/provider-map";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -87,8 +88,9 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
+    const adminSupabase = createSupabaseAdminClient();
     const connection = await revokeIntegrationConnection({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       projectId,
       provider,
@@ -99,7 +101,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     await recordIntegrationEvent({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       projectId,
       integrationConnectionId: connection.id,

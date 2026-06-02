@@ -19,6 +19,7 @@ const routeMock = vi.hoisted(() => ({
   updates: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
   revoked: [] as Record<string, unknown>[],
+  serverIntegrationWrites: [] as string[],
 }));
 
 vi.mock("@/lib/integrations/nango/client", () => ({
@@ -33,6 +34,25 @@ vi.mock("@/lib/supabase/server", () => ({
       getUser: async () => ({ data: { user: routeMock.authUser } }),
     },
     from: (table: string) => {
+      return {
+        select: () => ({
+          eq() {
+            return this;
+          },
+          order: async () => ({ data: routeMock.connections, error: null }),
+        }),
+        update() {
+          routeMock.serverIntegrationWrites.push(table);
+          throw new Error("disconnect route must use admin client for integration writes");
+        },
+      };
+    },
+  }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createSupabaseAdminClient: () => ({
+    from: (table: string) => {
       if (table === "integration_events") {
         return {
           insert: async (payload: Record<string, unknown>) => {
@@ -43,12 +63,6 @@ vi.mock("@/lib/supabase/server", () => ({
       }
 
       return {
-        select: () => ({
-          eq() {
-            return this;
-          },
-          order: async () => ({ data: routeMock.connections, error: null }),
-        }),
         update(payload: Record<string, unknown>) {
           routeMock.updates.push(payload);
           return {
@@ -101,6 +115,7 @@ describe("Nango disconnect route", () => {
     routeMock.updates = [];
     routeMock.inserts = [];
     routeMock.revoked = [];
+    routeMock.serverIntegrationWrites = [];
   });
 
   test("disconnect route requires auth", async () => {
@@ -141,5 +156,6 @@ describe("Nango disconnect route", () => {
       event_type: "connection_revoked",
       status: "revoked",
     });
+    expect(routeMock.serverIntegrationWrites).toEqual([]);
   });
 });

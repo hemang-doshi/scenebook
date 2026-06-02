@@ -38,7 +38,12 @@ describe("integration connection placeholders", () => {
       connection_id: "future-nango-id",
       status: "connected" as const,
       scopes: ["drive.file"],
-      metadata: { label: "Drive" },
+      metadata: {
+        label: "Drive",
+        access_token: "secret-access-token",
+        refreshToken: "secret-refresh-token",
+        api_key: "secret-api-key",
+      },
       created_at: "2026-06-02T10:00:00.000Z",
       updated_at: "2026-06-02T10:00:00.000Z",
     };
@@ -72,6 +77,9 @@ describe("integration connection placeholders", () => {
     expect(Object.keys(connections[0])).not.toContain("accessToken");
     expect(Object.keys(connections[0])).not.toContain("refreshToken");
     expect(Object.keys(connections[0])).not.toContain("apiKey");
+    expect(connections[0].metadata).not.toHaveProperty("access_token");
+    expect(connections[0].metadata).not.toHaveProperty("refreshToken");
+    expect(connections[0].metadata).not.toHaveProperty("api_key");
   });
 
   test("integration connection store strips forbidden token metadata fields", async () => {

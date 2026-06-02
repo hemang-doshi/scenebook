@@ -5,6 +5,7 @@ const supabaseMock = vi.hoisted(() => ({
   ownedProject: { id: "project-1", owner_id: "user-1" } as { id: string; owner_id: string } | null,
   upserts: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
+  serverIntegrationWrites: [] as string[],
 }));
 
 const nangoClientMock = vi.hoisted(() => ({
@@ -28,6 +29,19 @@ vi.mock("@/lib/supabase/server", () => ({
         };
       }
 
+      return {
+        upsert() {
+          supabaseMock.serverIntegrationWrites.push(table);
+          throw new Error("connect route must use admin client for integration writes");
+        },
+      };
+    },
+  }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createSupabaseAdminClient: () => ({
+    from: (table: string) => {
       if (table === "integration_events") {
         return {
           insert: async (payload: Record<string, unknown>) => {
@@ -80,6 +94,7 @@ describe("Nango connect route", () => {
     supabaseMock.ownedProject = { id: "project-1", owner_id: "user-1" };
     supabaseMock.upserts = [];
     supabaseMock.inserts = [];
+    supabaseMock.serverIntegrationWrites = [];
     nangoClientMock.createNangoConnectSession.mockResolvedValue({
       nangoIntegrationId: "scene-google-drive",
       connectSession: {
@@ -165,5 +180,6 @@ describe("Nango connect route", () => {
       event_type: "connect_session_created",
       status: "pending",
     });
+    expect(supabaseMock.serverIntegrationWrites).toEqual([]);
   });
 });

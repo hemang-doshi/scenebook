@@ -13,6 +13,7 @@ import { createNangoConnectSession } from "@/lib/integrations/nango/client";
 import { getNangoConfig } from "@/lib/integrations/nango/config";
 import { NangoConfigurationError, NangoProviderConfigurationError } from "@/lib/integrations/nango/errors";
 import { getNangoProviderMapping } from "@/lib/integrations/nango/provider-map";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -69,8 +70,9 @@ export async function POST(request: Request, context: RouteContext) {
 
     const mapping = getNangoProviderMapping(provider);
     const { connectSession } = await createNangoConnectSession({ provider, user, projectId });
+    const adminSupabase = createSupabaseAdminClient();
     const connection = await markIntegrationPending({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       projectId,
       provider,
@@ -82,7 +84,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     await recordIntegrationEvent({
-      supabase: supabase as never,
+      supabase: adminSupabase as never,
       ownerId: user.id,
       projectId,
       integrationConnectionId: connection.id,

@@ -57,10 +57,26 @@ Phase 11.5 tightens the connection bridge before any agent access:
 - Disconnect/revoke and health-check routes manage lifecycle state without exposing Nango secrets.
 - The connect button can fall back to the Nango connect link if the frontend SDK path fails.
 
+## Phase 11.6 DB Security Hardening
+
+Phase 11.6 hardens the database trust boundary so future agent tools do not trust forgeable connection rows:
+
+- Authenticated users can still read their own `integration_connections` and `integration_events`, but cannot directly insert, update, or delete connection state.
+- Integration writes are service-role managed after route-level authentication and project authorization have already passed.
+- `integration_events` are treated as append-only audit history from the user's perspective.
+- `project_id` remains optional attribution/context and uses `ON DELETE SET NULL`, so deleting a project does not delete a user-level account connection or its lifecycle history.
+- Provider values are constrained at the database layer to SceneBook's supported Nango-backed providers.
+- Connected rows require a non-null Nango `connection_id`.
+- Token-shaped metadata keys are blocked by database constraints and stripped defensively by the application store.
+- `integration_connections.updated_at` is maintained by a database trigger.
+- The redundant non-unique owner/provider index is removed because the unique owner/provider index already covers the lookup.
+
+Status and health verification now check Nango ownership tags, not just connection existence. The connection must carry the signed-in user's `end_user_id`, the expected `scenebook_provider`, and, when project attribution is supplied, the expected `scenebook_project_id`.
+
 ## Event Logging
 
 Connect session creation records `connect_session_created`. Successful status reconciliation records `connection_connected`. The webhook skeleton records lifecycle events when the payload contains enough SceneBook attribution, such as `tags.end_user_id` and `tags.scenebook_provider`.
 
 ## Why Agent Tools Wait
 
-Connecting an account is lower risk than letting an agent operate that account. External reads and writes need a separate approval/resume layer, live event hardening, and exact stored action execution. Those belong to later phases, starting with read-only integration tools and then explicit external action approval.
+Connecting an account is lower risk than letting an agent operate that account. Phase 11.6 makes the stored connection state harder to forge before any read-only integration tools are added. External reads and writes still need a separate approval/resume layer, live event hardening, and exact stored action execution. Those belong to later phases, starting with read-only integration tools and then explicit external action approval.
