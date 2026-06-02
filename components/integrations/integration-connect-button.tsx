@@ -15,6 +15,7 @@ import type {
 type ConnectResponse = {
   connectSession?: {
     token?: string;
+    connectLink?: string | null;
   };
   nango?: {
     apiUrl?: string;
@@ -43,6 +44,14 @@ export function IntegrationConnectButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function openConnectLink(connectLink: string | null | undefined) {
+    if (!connectLink) {
+      throw new Error("Nango did not return a connect session.");
+    }
+
+    window.open(connectLink, "_self", "noopener,noreferrer");
+  }
 
   async function markConnected(event: ConnectUIEvent) {
     if (event.type !== "connect") {
@@ -82,28 +91,34 @@ export function IntegrationConnectButton({
 
       const payload = (await response.json()) as ConnectResponse;
       const sessionToken = payload.connectSession?.token;
+      const connectLink = payload.connectSession?.connectLink;
 
       if (!sessionToken) {
-        throw new Error("Nango did not return a connect session.");
+        openConnectLink(connectLink);
+        return;
       }
 
-      const nango = new Nango();
-      const connectUI = nango.openConnectUI({
-        sessionToken,
-        apiURL: payload.nango?.apiUrl,
-        onEvent: async (event) => {
-          if (event.type === "connect") {
-            await markConnected(event);
-            connectUI.close();
-          }
+      try {
+        const nango = new Nango();
+        const connectUI = nango.openConnectUI({
+          sessionToken,
+          apiURL: payload.nango?.apiUrl,
+          onEvent: async (event) => {
+            if (event.type === "connect") {
+              await markConnected(event);
+              connectUI.close();
+            }
 
-          if (event.type === "error") {
-            setError(event.payload.errorMessage);
-          }
-        },
-      });
+            if (event.type === "error") {
+              setError(event.payload.errorMessage);
+            }
+          },
+        });
 
-      connectUI.open();
+        connectUI.open();
+      } catch {
+        openConnectLink(connectLink);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to start connection.");
     } finally {

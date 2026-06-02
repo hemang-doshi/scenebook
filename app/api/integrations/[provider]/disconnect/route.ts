@@ -5,12 +5,13 @@ import { ProjectOwnershipError } from "@/lib/auth/ownership";
 import { AuthRequiredError, requireServerUser } from "@/lib/auth/server-user";
 import { getIntegrationProvider } from "@/lib/integrations/connections/registry";
 import {
-  markIntegrationConnected,
+  listIntegrationConnections,
   recordIntegrationEvent,
+  revokeIntegrationConnection,
 } from "@/lib/integrations/connections/store";
 import type { IntegrationProvider } from "@/lib/integrations/connections/types";
+import { revokeNangoConnection } from "@/lib/integrations/nango/client";
 import { NangoProviderConfigurationError } from "@/lib/integrations/nango/errors";
-import { verifyNangoConnection } from "@/lib/integrations/nango/client";
 import { getNangoProviderMapping } from "@/lib/integrations/nango/provider-map";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -18,14 +19,13 @@ type RouteContext = {
   params: Promise<{ provider: string }>;
 };
 
-type StatusBody = {
-  connectionId?: unknown;
-  projectId?: unknown;
-  providerConfigKey?: unknown;
-  scopes?: unknown;
-  connectionLabel?: unknown;
-  providerAccountHint?: unknown;
-};
+async function readBody(request: Request) {
+  try {
+    return (await request.json()) as { projectId?: unknown };
+  } catch {
+    return {};
+  }
+}
 
 function jsonError(error: unknown) {
   if (error instanceof AuthRequiredError || error instanceof ProjectOwnershipError) {
@@ -36,15 +36,7 @@ function jsonError(error: unknown) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
 
-  return NextResponse.json({ error: "Unable to update integration connection status." }, { status: 500 });
-}
-
-async function readBody(request: Request): Promise<StatusBody> {
-  try {
-    return (await request.json()) as StatusBody;
-  } catch {
-    return {};
-  }
+  return NextResponse.json({ error: "Unable to disconnect integration." }, { status: 500 });
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -57,14 +49,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const body = await readBody(request);
-    const connectionId = typeof body.connectionId === "string" && body.connectionId.trim()
-      ? body.connectionId
-      : null;
-
-    if (!connectionId) {
-      return NextResponse.json({ error: "connectionId is required." }, { status: 400 });
-    }
-
     const projectId = typeof body.projectId === "string" && body.projectId.trim()
       ? body.projectId
       : undefined;
@@ -83,36 +67,34 @@ export async function POST(request: Request, context: RouteContext) {
       }
     }
 
-    const mapping = getNangoProviderMapping(provider);
-    const providerConfigKey = typeof body.providerConfigKey === "string" ? body.providerConfigKey : null;
-
-    if (providerConfigKey && providerConfigKey !== mapping.nangoIntegrationId) {
-      return NextResponse.json({ error: "Nango integration id does not match provider." }, { status: 400 });
-    }
-
-    const verified = await verifyNangoConnection({
-      nangoIntegrationId: mapping.nangoIntegrationId,
-      connectionId,
-    });
-
-    if (!verified) {
-      return NextResponse.json({ error: "Nango connection could not be verified." }, { status: 409 });
-    }
-
-    const scopes = Array.isArray(body.scopes) ? body.scopes.filter((scope): scope is string => typeof scope === "string") : [];
-    const connection = await markIntegrationConnected({
+    const [existingConnection] = await listIntegrationConnections({
       supabase: supabase as never,
       ownerId: user.id,
       projectId,
       provider,
-      connectionId,
-      scopes,
+    });
+
+    if (!existingConnection) {
+      return NextResponse.json({ provider, status: "not_connected" });
+    }
+
+    const mapping = getNangoProviderMapping(provider);
+
+    if (existingConnection.connectionId) {
+      await revokeNangoConnection({
+        nangoIntegrationId: mapping.nangoIntegrationId,
+        connectionId: existingConnection.connectionId,
+      });
+    }
+
+    const connection = await revokeIntegrationConnection({
+      supabase: supabase as never,
+      ownerId: user.id,
+      projectId,
+      provider,
       metadata: {
         nangoIntegrationId: mapping.nangoIntegrationId,
-        connectedVia: "settings",
-        connectionLabel: typeof body.connectionLabel === "string" ? body.connectionLabel : "",
-        providerAccountHint: typeof body.providerAccountHint === "string" ? body.providerAccountHint : "",
-        lastSyncedAt: null,
+        revokedVia: "settings",
       },
     });
 
@@ -122,11 +104,11 @@ export async function POST(request: Request, context: RouteContext) {
       projectId,
       integrationConnectionId: connection.id,
       provider,
-      eventType: "connection_connected",
-      status: "connected",
+      eventType: "connection_revoked",
+      status: "revoked",
       metadata: {
         nangoIntegrationId: mapping.nangoIntegrationId,
-        connectionId,
+        connectionId: existingConnection.connectionId ?? "",
       },
     });
 

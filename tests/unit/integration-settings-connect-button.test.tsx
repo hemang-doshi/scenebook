@@ -28,6 +28,7 @@ describe("IntegrationConnectButton", () => {
     routerMock.refresh.mockReset();
     nangoMock.openConnectUI.mockReset();
     vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("open", vi.fn());
   });
 
   test("settings page shows Connect when Nango configured", () => {
@@ -96,5 +97,39 @@ describe("IntegrationConnectButton", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/integrations/google_drive/status", expect.objectContaining({
       method: "POST",
     }));
+  });
+
+  test("connect button falls back to connectLink if SDK open fails", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const openMock = vi.mocked(open);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      connectSession: {
+        token: "session-token",
+        connectLink: "https://api.nango.dev/connect/session",
+      },
+      nango: { apiUrl: "https://api.nango.dev" },
+    }), { status: 200 }));
+    nangoMock.openConnectUI.mockImplementation(() => {
+      throw new Error("SDK unavailable");
+    });
+
+    render(
+      <IntegrationConnectButton
+        provider="google_drive"
+        displayName="Google Drive"
+        status="not_connected"
+        enabled
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Google Drive" }));
+
+    await waitFor(() => {
+      expect(openMock).toHaveBeenCalledWith(
+        "https://api.nango.dev/connect/session",
+        "_self",
+        "noopener,noreferrer",
+      );
+    });
   });
 });

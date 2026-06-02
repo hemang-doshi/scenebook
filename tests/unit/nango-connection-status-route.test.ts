@@ -5,6 +5,11 @@ const supabaseMock = vi.hoisted(() => ({
   ownedProject: { id: "project-1", owner_id: "user-1" } as { id: string; owner_id: string } | null,
   upserts: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
+  nangoConnectionVerified: true,
+}));
+
+vi.mock("@/lib/integrations/nango/client", () => ({
+  verifyNangoConnection: () => supabaseMock.nangoConnectionVerified,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -69,6 +74,7 @@ describe("Nango connection status route", () => {
     supabaseMock.ownedProject = { id: "project-1", owner_id: "user-1" };
     supabaseMock.upserts = [];
     supabaseMock.inserts = [];
+    supabaseMock.nangoConnectionVerified = true;
   });
 
   test("status route marks connected with Nango connection id", async () => {
@@ -111,5 +117,38 @@ describe("Nango connection status route", () => {
     }), { params: Promise.resolve({ provider: "google_drive" }) });
 
     expect(supabaseMock.upserts[0].owner_id).toBe("user-1");
+  });
+
+  test("status route does not mark connected without server-side Nango verification", async () => {
+    supabaseMock.nangoConnectionVerified = false;
+    const { POST } = await import("@/app/api/integrations/[provider]/status/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/google_drive/status", {
+      method: "POST",
+      body: JSON.stringify({
+        connectionId: "nango-connection-1",
+        providerConfigKey: "scene-google-drive",
+      }),
+    }), { params: Promise.resolve({ provider: "google_drive" }) });
+
+    expect(response.status).toBe(409);
+    expect(supabaseMock.upserts).toEqual([]);
+    expect(supabaseMock.inserts).toEqual([]);
+  });
+
+  test("status route rejects mismatched provider config key", async () => {
+    const { POST } = await import("@/app/api/integrations/[provider]/status/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/google_drive/status", {
+      method: "POST",
+      body: JSON.stringify({
+        connectionId: "nango-connection-1",
+        providerConfigKey: "wrong-provider-config",
+      }),
+    }), { params: Promise.resolve({ provider: "google_drive" }) });
+
+    expect(response.status).toBe(400);
+    expect(supabaseMock.upserts).toEqual([]);
+    expect(supabaseMock.inserts).toEqual([]);
   });
 });

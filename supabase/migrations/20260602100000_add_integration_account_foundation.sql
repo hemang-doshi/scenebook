@@ -70,6 +70,9 @@ create index if not exists idx_integration_connections_owner_provider
 create unique index if not exists idx_integration_connections_owner_provider_unique
   on public.integration_connections(owner_id, provider);
 
+comment on index public.idx_integration_connections_owner_provider_unique is
+  'Integration account connections are user-level per provider; project_id is attribution/context, not connection identity.';
+
 create index if not exists idx_integration_connections_project
   on public.integration_connections(project_id, created_at desc);
 

@@ -4,6 +4,11 @@ const adminMock = vi.hoisted(() => ({
   upserts: [] as Record<string, unknown>[],
   updates: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
+  webhookValid: true,
+}));
+
+vi.mock("@/lib/integrations/nango/client", () => ({
+  verifyNangoWebhookRequest: () => adminMock.webhookValid,
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -78,9 +83,54 @@ describe("Nango webhook route", () => {
     adminMock.upserts = [];
     adminMock.updates = [];
     adminMock.inserts = [];
+    adminMock.webhookValid = true;
   });
 
-  test("webhook route records lifecycle event when enough attribution is present", async () => {
+  test("webhook returns 503 when Nango is not configured", async () => {
+    const { POST } = await import("@/app/api/integrations/nango/webhook/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/nango/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "auth",
+        tags: {
+          end_user_id: "user-1",
+          scenebook_provider: "google_drive",
+        },
+      }),
+    }));
+
+    expect(response.status).toBe(503);
+    expect(adminMock.upserts).toEqual([]);
+    expect(adminMock.inserts).toEqual([]);
+  });
+
+  test("invalid webhook signature returns 401 without writing", async () => {
+    process.env.NANGO_SECRET_KEY = "server-secret";
+    adminMock.webhookValid = false;
+    const { POST } = await import("@/app/api/integrations/nango/webhook/route");
+
+    const response = await POST(new Request("http://localhost/api/integrations/nango/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "auth",
+        success: true,
+        connectionId: "nango-connection-1",
+        providerConfigKey: "scene-google-drive",
+        tags: {
+          end_user_id: "user-1",
+          scenebook_provider: "google_drive",
+        },
+      }),
+    }));
+
+    expect(response.status).toBe(401);
+    expect(adminMock.upserts).toEqual([]);
+    expect(adminMock.inserts).toEqual([]);
+  });
+
+  test("valid webhook route records lifecycle event when enough attribution is present", async () => {
+    process.env.NANGO_SECRET_KEY = "server-secret";
     const { POST } = await import("@/app/api/integrations/nango/webhook/route");
 
     const response = await POST(new Request("http://localhost/api/integrations/nango/webhook", {
@@ -113,6 +163,7 @@ describe("Nango webhook route", () => {
   });
 
   test("webhook route accepts unattributed events without recording", async () => {
+    process.env.NANGO_SECRET_KEY = "server-secret";
     const { POST } = await import("@/app/api/integrations/nango/webhook/route");
 
     const response = await POST(new Request("http://localhost/api/integrations/nango/webhook", {

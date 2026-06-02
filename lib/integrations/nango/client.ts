@@ -57,3 +57,26 @@ export function verifyNangoWebhookRequest(body: string, headers: Headers) {
 
   return nango.verifyIncomingWebhookRequest(body, headerRecord);
 }
+
+export async function verifyNangoConnection(input: {
+  nangoIntegrationId: string;
+  connectionId: string;
+}) {
+  const nango = createNangoClient();
+
+  try {
+    await nango.getConnection(input.nangoIntegrationId, input.connectionId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function revokeNangoConnection(input: {
+  nangoIntegrationId: string;
+  connectionId: string;
+}) {
+  const nango = createNangoClient();
+
+  await nango.deleteConnection(input.nangoIntegrationId, input.connectionId);
+}

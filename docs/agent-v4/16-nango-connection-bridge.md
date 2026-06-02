@@ -46,6 +46,17 @@ SceneBook stores the Nango `connection_id`, status, scopes, and token-free metad
 
 The store strips token-shaped metadata fields such as access tokens, refresh tokens, API keys, client secrets, and ID tokens.
 
+`integration_connections` are user-level per provider. The unique connection identity is `owner_id, provider`; `project_id` is optional attribution/context for the flow that created or updated the row, not a separate per-project connection identity. Future project-specific integration settings should live in a separate table so the account connection remains distinct from project configuration.
+
+## Phase 11.5 Hardening
+
+Phase 11.5 tightens the connection bridge before any agent access:
+
+- Nango webhooks fail closed unless webhook verification is configured and valid.
+- The status route verifies a browser-reported Nango connection server-side before writing `connected`.
+- Disconnect/revoke and health-check routes manage lifecycle state without exposing Nango secrets.
+- The connect button can fall back to the Nango connect link if the frontend SDK path fails.
+
 ## Event Logging
 
 Connect session creation records `connect_session_created`. Successful status reconciliation records `connection_connected`. The webhook skeleton records lifecycle events when the payload contains enough SceneBook attribution, such as `tags.end_user_id` and `tags.scenebook_provider`.

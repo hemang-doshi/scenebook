@@ -128,7 +128,11 @@ async function updateConnectionFromWebhook(input: {
 export async function POST(request: Request) {
   const rawBody = await request.text();
 
-  if (isNangoConfigured() && !verifyNangoWebhookRequest(rawBody, request.headers)) {
+  if (!isNangoConfigured()) {
+    return NextResponse.json({ error: "Nango webhook verification is not configured." }, { status: 503 });
+  }
+
+  if (!verifyNangoWebhookRequest(rawBody, request.headers)) {
     return NextResponse.json({ error: "Invalid Nango webhook signature." }, { status: 401 });
   }
 
