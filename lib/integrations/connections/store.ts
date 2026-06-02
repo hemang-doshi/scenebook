@@ -54,6 +54,18 @@ type IntegrationEventStoreClient = {
 
 const connectionColumns =
   "id, owner_id, project_id, provider, connection_id, status, scopes, metadata, created_at, updated_at";
+const forbiddenMetadataKeys = new Set([
+  "access_token",
+  "accessToken",
+  "refresh_token",
+  "refreshToken",
+  "api_key",
+  "apiKey",
+  "client_secret",
+  "clientSecret",
+  "id_token",
+  "idToken",
+]);
 
 function mapConnection(row: IntegrationConnectionRow): IntegrationConnection {
   return {
@@ -87,7 +99,13 @@ function jsonObject(value: unknown): Record<string, JsonValue> {
     return {};
   }
 
-  return JSON.parse(JSON.stringify(value)) as Record<string, JsonValue>;
+  const object = JSON.parse(JSON.stringify(value)) as Record<string, JsonValue>;
+
+  for (const key of forbiddenMetadataKeys) {
+    delete object[key];
+  }
+
+  return object;
 }
 
 function nullable(value: string | undefined) {

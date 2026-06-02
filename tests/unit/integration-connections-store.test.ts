@@ -29,7 +29,7 @@ describe("integration connection placeholders", () => {
     expect(listPlaceholderIntegrationProviders()).toEqual(listIntegrationProviders());
   });
 
-  test("integration connection store never stores token fields", async () => {
+  test("integration connection store never exposes token fields", async () => {
     const row = {
       id: "connection-1",
       owner_id: "user-1",
@@ -72,6 +72,54 @@ describe("integration connection placeholders", () => {
     expect(Object.keys(connections[0])).not.toContain("accessToken");
     expect(Object.keys(connections[0])).not.toContain("refreshToken");
     expect(Object.keys(connections[0])).not.toContain("apiKey");
+  });
+
+  test("integration connection store strips forbidden token metadata fields", async () => {
+    const upserted: Record<string, unknown>[] = [];
+    const supabase = {
+      from: () => ({
+        upsert(payload: Record<string, unknown>) {
+          upserted.push(payload);
+          return {
+            select: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "connection-1",
+                  owner_id: payload.owner_id,
+                  project_id: payload.project_id,
+                  provider: payload.provider,
+                  connection_id: payload.connection_id,
+                  status: payload.status,
+                  scopes: payload.scopes,
+                  metadata: payload.metadata,
+                  created_at: "2026-06-02T10:00:00.000Z",
+                  updated_at: "2026-06-02T10:00:00.000Z",
+                },
+                error: null,
+              }),
+            }),
+          };
+        },
+      }),
+    };
+
+    await markIntegrationPending({
+      supabase: supabase as never,
+      ownerId: "user-1",
+      provider: "google_drive",
+      metadata: {
+        nangoIntegrationId: "scene-google-drive",
+        access_token: "secret-access-token",
+        refreshToken: "secret-refresh-token",
+        api_key: "secret-api-key",
+        client_secret: "secret-client",
+        idToken: "secret-id-token",
+      },
+    });
+
+    expect(upserted[0].metadata).toEqual({
+      nangoIntegrationId: "scene-google-drive",
+    });
   });
 
   test("integration store can upsert pending connection without token fields", async () => {

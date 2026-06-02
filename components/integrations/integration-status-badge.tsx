@@ -3,7 +3,7 @@ import type { IntegrationConnectionStatus } from "@/lib/integrations/connections
 import { cn } from "@/lib/utils";
 
 const labels: Record<IntegrationConnectionStatus | "placeholder", string> = {
-  not_connected: "coming soon",
+  not_connected: "not connected",
   pending: "pending",
   connected: "connected",
   failed: "failed",

@@ -5,6 +5,8 @@ import {
   listIntegrationConnections,
   type IntegrationConnectionStoreClient,
 } from "@/lib/integrations/connections/store";
+import { isNangoConfigured } from "@/lib/integrations/nango/config";
+import { isNangoProviderConfigured } from "@/lib/integrations/nango/provider-map";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function SettingsIntegrationsPage() {
@@ -15,6 +17,7 @@ export default async function SettingsIntegrationsPage() {
     supabase: supabase as unknown as IntegrationConnectionStoreClient,
     ownerId: user.id,
   });
+  const nangoConfigured = isNangoConfigured();
 
   return (
     <main className="min-h-screen bg-[var(--canvas)] px-4 py-8 md:px-8">
@@ -27,7 +30,7 @@ export default async function SettingsIntegrationsPage() {
             Integrations
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
-            External account connections are prepared here, but live connection management waits for the Nango bridge phase.
+            Connect external accounts through Nango. SceneBook stores status and connection ids, while credentials stay outside the app database.
           </p>
         </header>
 
@@ -40,6 +43,7 @@ export default async function SettingsIntegrationsPage() {
                 key={provider.provider}
                 provider={provider}
                 status={connection?.status ?? "not_connected"}
+                connectEnabled={nangoConfigured && isNangoProviderConfigured(provider.provider)}
               />
             );
           })}

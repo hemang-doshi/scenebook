@@ -1,6 +1,6 @@
 import { AtSign, CalendarDays, Cloud, FileText, PlaySquare } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { IntegrationConnectButton } from "@/components/integrations/integration-connect-button";
 import { IntegrationStatusBadge } from "@/components/integrations/integration-status-badge";
 import type {
   IntegrationConnectionStatus,
@@ -18,9 +18,11 @@ const icons = {
 export function IntegrationCard({
   provider,
   status = "not_connected",
+  connectEnabled = false,
 }: {
   provider: IntegrationProviderDefinition;
   status?: IntegrationConnectionStatus;
+  connectEnabled?: boolean;
 }) {
   const Icon = icons[provider.provider];
 
@@ -41,17 +43,16 @@ export function IntegrationCard({
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-[var(--hairline)] pt-4">
         <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-          Connection management will be enabled in the Nango bridge phase.
+          {connectEnabled
+            ? "Credentials stay in Nango while SceneBook tracks connection status."
+            : "Configure Nango environment values to enable connection management."}
         </p>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled
-          className="h-8 shrink-0 px-3 text-[10px]"
-          aria-label={`${provider.displayName} connection unavailable until the Nango bridge phase`}
-        >
-          Connect
-        </Button>
+        <IntegrationConnectButton
+          provider={provider.provider}
+          displayName={provider.displayName}
+          status={status}
+          enabled={connectEnabled}
+        />
       </div>
     </article>
   );
