@@ -99,8 +99,8 @@
   --workspace-rail-collapsed: 56px;
   --workspace-rail-expanded: 248px;
   --sb-ambient-page:
-    radial-gradient(circle at 17% -3%, rgba(255,104,71,.20), transparent 26rem),
-    radial-gradient(circle at 90% 3%, rgba(105,167,255,.16), transparent 28rem),
+    radial-gradient(circle at 17% -6%, rgba(255,104,71,.08), transparent 24rem),
+    radial-gradient(circle at 90% -8%, rgba(105,167,255,.06), transparent 26rem),
     linear-gradient(180deg, #07080b 0%, #0b0d12 38%, #07080b 100%);
   --sb-gradient-thumbnail: linear-gradient(135deg, rgba(255,104,71,.74), rgba(105,167,255,.54));
   --sb-gradient-panel: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
@@ -165,6 +165,10 @@ html {
 body {
   min-height: 100vh;
   background: var(--sb-ambient-page);
+  background-color: var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% 100vh;
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--body);
   font-feature-settings: "kern";
