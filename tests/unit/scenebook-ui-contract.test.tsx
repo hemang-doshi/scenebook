@@ -221,11 +221,11 @@ describe("SceneBook UI contract", () => {
     }
   });
 
-  test("global ambient background stays as a subtle top-edge glow", () => {
+  test("global ambient background matches the source-derived SceneBook ambience", () => {
     const source = fs.readFileSync("app/globals.css", "utf8");
 
-    expect(source).toContain("radial-gradient(circle at 18% -14%, rgba(255,104,71,.10), transparent 18rem)");
-    expect(source).toContain("radial-gradient(circle at 82% -16%, rgba(105,167,255,.08), transparent 20rem)");
-    expect(source).toContain("linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 16%, var(--bg) 34%)");
+    expect(source).toContain("radial-gradient(circle at 17% -3%, rgba(255,104,71,.20), transparent 26rem)");
+    expect(source).toContain("radial-gradient(circle at 90% 3%, rgba(105,167,255,.16), transparent 28rem)");
+    expect(source).toContain("linear-gradient(180deg, #07080b 0%, #0b0d12 38%, #07080b 100%)");
   });
 });
