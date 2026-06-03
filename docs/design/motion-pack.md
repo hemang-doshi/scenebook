@@ -118,6 +118,13 @@ When `workflow_package` arrives:
 4. Section expansion uses `540ms` maximum-height reveal.
 5. “Plan patch” CTA receives normal button hover only.
 
+### Shell and streaming motion rules
+
+- Elastic left rail width transition uses `270ms ease`.
+- Floating island expand/collapse uses `270ms ease`, opacity + size change, no spring.
+- Chat token streaming must not animate every token; the message container grows naturally and autoscrolls only when the user is bottom-pinned.
+- `prefers-reduced-motion` keeps all state changes instant.
+
 ### Planned Patch Review
 
 Patch review should feel more deliberate:

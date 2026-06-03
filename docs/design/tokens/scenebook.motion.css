@@ -8,6 +8,8 @@
   --sb-motion-receipt: 540ms;   /* Derived: 3 × source fast */
   --sb-motion-feedback-hold: 1400ms; /* Source: copy button reset timeout */
   --sb-ease: ease;
+  --workspace-rail-motion: 270ms ease;
+  --floating-island-motion: 270ms ease;
 }
 
 .sb-motion-hover-lift {

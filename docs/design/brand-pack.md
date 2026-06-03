@@ -30,6 +30,8 @@ The source already defines the correct vibe. Preserve it.
 6. **Motion is restrained.** Base timing is `180ms ease`; movement is small and purposeful.
 7. **Gradients are controlled.** Use them for ambience, media, thumbnails, progress, and hero/product surfaces — not as generic decoration.
 8. **Typography is confident but not noisy.** Huge tight headings; quiet readable UI; mono labels for runtime receipts.
+9. **Shell orientation is nav-led.** No breadcrumbs; centered nav and active project labels provide wayfinding.
+10. **Project context floats where needed.** Use an elastic left rail for global actions and floating islands for in-workspace context.
 
 ---
 
@@ -133,13 +135,13 @@ Full machine-readable tokens are in:
 Desktop:
 
 ```text
-Rail / Center Workspace / Context Drawer
+Elastic Left Rail / Center Workspace / Floating Context Islands
 ```
 
 Tablet:
 
 ```text
-Rail / Center Workspace
+Elastic Left Rail / Center Workspace
 ```
 
 Mobile:
@@ -161,6 +163,15 @@ Single column + drawers
 ### Information architecture decision
 
 Move script, shot list, generation, tasks, and packaging into the agent workspace. Keep Analytics separate. Keep Project Overview as the hub.
+
+### Shell rules
+
+- Shell has no breadcrumbs; orientation comes from centered nav and active project labels.
+- Global actions live in an elastic left rail: `56px` collapsed, `248px` expanded.
+- Project context lives in floating islands, not permanent right columns, inside the agent workspace.
+- Chat transcript must never hard-refresh after a run completes.
+- streaming Markdown renders live as blocks and preserves readable contrast on light and dark surfaces.
+- Light mode is a user option; dark mode remains the default brand mode.
 
 ---
 

@@ -1,89 +1,91 @@
 # SceneBook Design Migration Plan
 
+Use `docs/design/screen-map.md` as the concrete file map for later implementation phases.
+
 ## D0 - Brand Pack Ingestion
 
-- Objective: install the canonical design source, public marks, screen map, migration plan, and root design summary.
-- In-scope files: `docs/design/*`, `public/brand/*`, `DESIGN.md`.
-- Out-of-scope items: app UI, global tokens, runtime code, package files, Supabase.
-- Acceptance criteria: design docs and logos exist; app/runtime/package/Supabase files are unchanged.
-- Suggested commit: `design: ingest scenebook brand system`
+- Objective: install the canonical SceneBook design source of truth as docs, assets, and extracted token files.
+- In-scope files: `docs/design/*`, `public/brand/*` canonical logo assets.
+- Out-of-scope items: app UI, global tokens, runtime code, package files, lockfiles, Supabase migrations, and implementation behavior.
+- Acceptance criteria: all required design docs, source HTML, token files, and logo assets exist or are confirmed identical to the brand source; no application runtime files are modified.
+- Suggested commit message: `design: ingest scenebook brand system`
 
 ## D1 - Dark-First Token Migration
 
-- Objective: move global CSS to exact SceneBook colors, radii, shadows, typography, motion tokens, and compatibility aliases.
-- In-scope files: `app/globals.css`, `app/layout.tsx`.
-- Out-of-scope items: screen-specific redesign, runtime logic, data models.
-- Acceptance criteria: exact brand token values are active; legacy aliases map to the new system; reduced motion is respected.
-- Suggested commit: `design: migrate scenebook tokens`
+- Objective: migrate the app to the exact dark-first SceneBook token values from `docs/design/tokens`.
+- In-scope files: `app/globals.css`, `app/layout.tsx`, token compatibility aliases required by existing components.
+- Out-of-scope items: component redesign, route layout changes, runtime behavior, data models, and integrations.
+- Acceptance criteria: global tokens use canonical colors, radii, shadows, typography, and motion values; reduced-motion behavior is preserved.
+- Suggested commit message: `design: migrate scenebook tokens`
 
 ## D2 - Primitive Component Redesign
 
-- Objective: restyle buttons, badges, cards, panels, inputs, textareas, selects, tabs, and receipt primitives.
-- In-scope files: `components/ui/*`.
-- Out-of-scope items: route-level layout and backend APIs.
-- Acceptance criteria: controls use SceneBook pill/card geometry, semantic states, dark focus rings, and light-surface variants.
-- Suggested commit: `design: restyle scenebook primitives`
+- Objective: restyle primitive controls and low-level UI surfaces using the migrated token system.
+- In-scope files: shared primitive components, buttons, inputs, badges, cards, panels, tabs, menus, and status treatments.
+- Out-of-scope items: route-level redesign, agent runtime changes, and new product capabilities.
+- Acceptance criteria: primitives match SceneBook geometry, states, focus treatments, and density without breaking existing call sites.
+- Suggested commit message: `design: redesign scenebook primitives`
 
 ## D3 - App Shell Redesign
 
-- Objective: replace the light top nav/marquee with dark cockpit shell, compact rail, blurred topbar, and responsive drawers.
-- In-scope files: `components/workspace-shell.tsx`, `app/(workspace)/layout.tsx`.
-- Out-of-scope items: changing URLs or auth behavior.
-- Acceptance criteria: desktop is rail/center/context, tablet is two-pane, mobile is single column with drawer navigation.
-- Suggested commit: `design: redesign app shell`
+- Objective: redesign the global app shell into the dark-first SceneBook workspace frame.
+- In-scope files: app shell routes/layouts, navigation frame, workspace wrappers, and shell-level responsive behavior.
+- Out-of-scope items: feature-specific cards, data fetching, auth flow changes, and route renames.
+- Acceptance criteria: shell supports desktop, tablet, and mobile layouts; navigation remains stable; no runtime contracts change.
+- Suggested commit message: `design: redesign app shell`
 
 ## D4 - Project Overview Hub
 
-- Objective: make `/home` and `/projects/:id` into production hubs that surface stage, ProjectMind, next action, recent outputs, assets, and analytics.
-- In-scope files: `components/workspace/home-page-client.tsx`, `app/(workspace)/projects/[id]/page.tsx`, related workspace cards.
-- Out-of-scope items: editor timeline theming and external publishing behavior.
-- Acceptance criteria: agent path is primary; project properties remain editable; overview matches dark-first brand.
-- Suggested commit: `design: redesign project overview hub`
+- Objective: redesign project overview surfaces as production hubs for project state, next action, recent outputs, and assets.
+- In-scope files: project dashboard and overview route components.
+- Out-of-scope items: agent chat workspace redesign, editor theming, and external tool behavior.
+- Acceptance criteria: overview uses canonical tokens and primitives; project editing behavior remains intact.
+- Suggested commit message: `design: redesign project overview hub`
 
 ## D5 - Agent Workspace Redesign
 
-- Objective: make `/projects/:id/chat` the primary creation surface with a centered empty state, docked active chat, timeline rail, model routing, and contextual drawer.
-- In-scope files: `components/agent/agent-chat-island.tsx`, `agent-composer.tsx`, `chat-message.tsx`, `model-accordion.tsx`, `empty-agent-state.tsx`.
-- Out-of-scope items: changing runtime stream shape.
-- Acceptance criteria: workflow, patch, artifact, memory, input, error, and recovery states render as branded objects.
-- Suggested commit: `design: redesign agent workspace`
+- Objective: redesign the project chat and agent workspace as the main creation cockpit.
+- In-scope files: `app/(workspace)/projects/[id]/chat/page.tsx`, `components/workspace/project-chat-route-client.tsx`, `components/agent/*` workspace presentation components.
+- Out-of-scope items: runtime-v4 event shape, model routing behavior, server actions, and persistence logic.
+- Acceptance criteria: chat, workflow packages, ProjectMind, tool calls, artifacts, and recovery states render as cohesive branded objects.
+- Suggested commit message: `design: redesign agent workspace`
 
 ## D6 - Patch Review / Trust Layer
 
-- Objective: make planned ProjectPatch output inspectable and deliberate.
-- In-scope files: `components/agent/patch-preview-card.tsx`, `approval-card.tsx`, patch UI tests.
-- Out-of-scope items: client-side patch execution and backend patch schema changes.
-- Acceptance criteria: review shows risk, operations, affected objects, apply/edit/reject/branch actions, and JSON inspection.
-- Suggested commit: `design: redesign patch review`
+- Objective: redesign patch review so proposed changes are inspectable, deliberate, and trustworthy.
+- In-scope files: `components/agent/patch-preview-card.tsx`, patch review presentation components, related focused tests.
+- Out-of-scope items: ProjectPatch schema changes, client-side patch execution, server apply behavior, and database migrations.
+- Acceptance criteria: review shows affected objects, operations, risk, JSON inspection, and approve/edit/reject paths without changing patch mechanics.
+- Suggested commit message: `design: redesign patch review trust layer`
 
 ## D7 - Asset Drawer / Editor Bridge
 
-- Objective: expose asset provenance and editor import state without fully retheming the editor.
-- In-scope files: `components/agent/asset-drawer.tsx`, `components/editor/TopBar.tsx`, editor handoff affordances.
-- Out-of-scope items: full editor canvas/timeline theme migration.
-- Acceptance criteria: assets show source/provenance, scene/beat grouping, and import-to-editor action.
-- Suggested commit: `design: add editor bridge affordances`
+- Objective: redesign asset organization and editor handoff affordances.
+- In-scope files: asset drawer/presentation components, artifact preview handoff states, editor bridge affordances.
+- Out-of-scope items: full editor redesign, timeline/canvas rewrite, and media generation backend changes.
+- Acceptance criteria: assets show provenance, status, grouping, and editor bridge state while preserving existing editor behavior.
+- Suggested commit message: `design: redesign asset drawer editor bridge`
 
 ## D8 - Integrations UI Restyle
 
-- Objective: align integrations settings with the dark trust-oriented system.
-- In-scope files: `app/settings/integrations/page.tsx`, `components/integrations/*`.
-- Out-of-scope items: new providers, Nango API changes, external side effects.
-- Acceptance criteria: connection states are legible, disabled states explain configuration, and credentials boundary remains clear.
-- Suggested commit: `design: restyle integrations settings`
+- Objective: restyle integrations settings with clear connection state and trust boundaries.
+- In-scope files: `app/settings/integrations/page.tsx`, `components/integrations/integration-card.tsx`, `components/integrations/integration-connect-button.tsx`, `components/integrations/integration-status-badge.tsx`.
+- Out-of-scope items: new integrations, Nango API changes, credential storage changes, and external side effects.
+- Acceptance criteria: connection status, disabled states, and connect actions are legible and aligned to the canonical design system.
+- Suggested commit message: `design: restyle integrations settings`
 
 ## D9 - Auth / Settings / Utility Screens
 
-- Objective: apply the brand shell to sign-in, sign-up, password reset, global settings, and utility pages.
-- In-scope files: `app/sign-in/page.tsx`, `app/sign-up/page.tsx`, `app/forgot-password/page.tsx`, `app/reset-password/page.tsx`, settings pages.
-- Out-of-scope items: auth provider changes.
-- Acceptance criteria: forms keep existing behavior and match the new visual language.
-- Suggested commit: `design: restyle auth and settings`
+- Objective: bring auth, settings, and utility screens into the dark-first design language.
+- In-scope files: auth routes, global settings routes, utility screens, and their presentation components.
+- Out-of-scope items: Supabase auth behavior, account model changes, and integrations provider behavior.
+- Acceptance criteria: existing flows continue to work while visual treatment matches the SceneBook system.
+- Suggested commit message: `design: restyle auth settings utility screens`
 
 ## D10 - Visual QA And Regression Pass
 
-- Objective: verify responsive layout, accessibility, runtime mapping, patch review, and visual consistency.
-- In-scope files: focused unit tests, Playwright tests, QA docs.
-- Out-of-scope items: feature expansion.
-- Acceptance criteria: lint, typecheck, targeted unit tests, and responsive Playwright smoke checks pass or unrelated failures are clearly reported.
-- Suggested commit: `test: add scenebook design regression checks`
+- Objective: verify the redesign for responsive layout, accessibility, runtime mapping, trust surfaces, and visual consistency.
+- In-scope files: focused unit tests, visual QA docs, Playwright smoke checks, and regression fixtures.
+- Out-of-scope items: feature expansion and design system value changes.
+- Acceptance criteria: lint, typecheck, focused unit tests, and responsive visual checks pass or unrelated failures are clearly documented.
+- Suggested commit message: `test: add scenebook design regression coverage`

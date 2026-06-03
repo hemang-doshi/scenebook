@@ -183,9 +183,17 @@ Use massive display type for positioning and calm mono labels for runtime clarit
 
 1. **App background** — radial ambience over midnight shell.
 2. **Product frame** — bordered, rounded, shadowed dark glass panel.
-3. **Workspace shell** — 3-pane cockpit: rail, canvas, inspector.
+3. **Workspace shell** — centered nav, elastic left rail, and floating context islands instead of permanent right columns.
 4. **Cards** — subtle border, translucent fill, restrained shadow only when floating.
 5. **White/bone panels** — used for source-of-truth clarity, docs, review, export, and final surfaces.
+
+### Shell implementation rules
+
+- Shell has no breadcrumbs; wayfinding comes from the centered primary nav and active project label.
+- The global workspace rail is left-mounted and elastic: `56px` collapsed, `248px` expanded.
+- ProjectMind and similar contextual tools should render as floating islands inside the agent workspace, not as layout-consuming sidebars.
+- Streaming Markdown must render live and keep readable contrast on both light cards and dark surfaces.
+- Light mode is supported as a local user preference; dark remains the default product mood.
 
 ### Radius system
 
