@@ -220,4 +220,12 @@ describe("SceneBook UI contract", () => {
       expect(source).not.toMatch(/\b(?:text|bg|border)-pink-/);
     }
   });
+
+  test("global ambient background stays as a subtle top-edge glow", () => {
+    const source = fs.readFileSync("app/globals.css", "utf8");
+
+    expect(source).toContain("radial-gradient(circle at 18% -14%, rgba(255,104,71,.10), transparent 18rem)");
+    expect(source).toContain("radial-gradient(circle at 82% -16%, rgba(105,167,255,.08), transparent 20rem)");
+    expect(source).toContain("linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 16%, var(--bg) 34%)");
+  });
 });
