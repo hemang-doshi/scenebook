@@ -20,7 +20,9 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Panel } from "@/components/ui/panel";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -124,7 +126,9 @@ export function WorkspaceShell({
       className="relative flex min-h-screen flex-col bg-transparent text-[var(--ink)] font-sans"
       style={
         {
-          "--workspace-rail-width": isActionRailExpanded ? "248px" : "56px",
+          "--workspace-rail-width": isActionRailExpanded
+            ? "var(--workspace-rail-expanded)"
+            : "var(--workspace-rail-collapsed)",
         } as React.CSSProperties
       }
     >
@@ -136,11 +140,22 @@ export function WorkspaceShell({
             <span className="font-display">SceneBook</span>
           </Link>
           {visibleProject ? (
-            <div className="hidden min-w-0 md:block">
-              <p className="truncate text-[10px] font-mono uppercase tracking-[.08em] text-[var(--muted)]">
-                Active project
-              </p>
-              <p className="truncate text-sm font-semibold text-[var(--ink)]">{visibleProject.title}</p>
+            <div
+              aria-label="Active project context"
+              data-active-project-context="true"
+              className="hidden min-w-0 items-center gap-2 md:flex"
+            >
+              <Badge variant="creative" className="shrink-0">
+                Project
+              </Badge>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                  {visibleProject.title}
+                </p>
+              </div>
+              <Badge variant="muted" className="shrink-0">
+                {statusLabels[visibleProject.status]}
+              </Badge>
             </div>
           ) : null}
         </div>
@@ -159,6 +174,7 @@ export function WorkspaceShell({
               <Link
                 key={item.href}
                 href={item.href}
+                data-state={active ? "active" : "inactive"}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-2 text-[11px] font-mono uppercase tracking-[.07em] transition-colors",
                   active
@@ -175,20 +191,39 @@ export function WorkspaceShell({
 
         <div className="flex items-center justify-end gap-2">
           <ThemeToggle />
-          <button
+          <Button
             type="button"
-            className="rounded-[var(--radius-md)] p-2 text-[var(--ink)] transition-colors hover:bg-[rgba(255,255,255,.055)] md:hidden"
+            variant="ghost"
+            className="h-10 w-10 px-0 py-0 md:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle navigation"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          </Button>
         </div>
       </header>
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 top-[72px] z-30 flex flex-col border-t border-[var(--line)] bg-[rgba(7,8,11,.96)] p-6 backdrop-blur-[18px] animate-[ed-fadeIn_0.15s_ease-out] md:hidden">
-          <nav className="flex flex-col gap-4 mb-8">
+          {visibleProject ? (
+            <Panel
+              aria-label="Mobile active project context"
+              variant="floating"
+              className="mb-6 flex flex-col gap-3 p-4 shadow-none"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Badge variant="creative" className="shrink-0">
+                  Project
+                </Badge>
+                <Badge variant="muted" className="shrink-0">
+                  {statusLabels[visibleProject.status]}
+                </Badge>
+              </div>
+              <p className="truncate text-base font-semibold text-[var(--ink)]">{visibleProject.title}</p>
+            </Panel>
+          ) : null}
+
+          <nav className="mb-8 flex flex-col gap-4">
             {items.map((item) => {
               const active =
                 pathname === item.href ||
@@ -198,6 +233,7 @@ export function WorkspaceShell({
                 <Link
                   key={`${item.href}-mobile`}
                   href={item.href}
+                  data-state={active ? "active" : "inactive"}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center gap-3 border-b border-[var(--line)] py-3 text-lg font-semibold tracking-normal",
@@ -286,46 +322,46 @@ export function WorkspaceShell({
           </Button>
 
           {isActionRailExpanded ? (
-            <div className="mt-3 flex flex-1 flex-col rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(11,13,18,.96)] p-5 backdrop-blur-[18px]">
-            <div className="flex items-center gap-3 border-b border-[var(--line)] pb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,.04)]">
-                <UserCircle2 className="h-5 w-5 text-[var(--ink)]" />
+            <Panel variant="floating" className="mt-3 flex min-h-0 flex-1 flex-col p-4 shadow-none">
+              <div className="flex items-center gap-3 border-b border-[var(--line)] pb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,.04)]">
+                  <UserCircle2 className="h-5 w-5 text-[var(--ink)]" />
+                </div>
+                <div className="min-w-0">
+                  <Badge variant="runtime">Account</Badge>
+                  <p className="truncate text-sm font-semibold text-[var(--ink)]">{accountEmail ?? "Signed in"}</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-mono uppercase tracking-[.08em] text-[var(--blue-2)]">Account</p>
-                <p className="truncate text-sm font-semibold text-[var(--ink)]">{accountEmail ?? "Signed in"}</p>
-              </div>
-            </div>
 
-            <div className="mt-4 flex flex-col gap-2">
-              <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] px-3 py-2">
-                <span className="text-[10px] font-mono uppercase tracking-[.08em] text-[var(--muted)]">
-                  Theme
-                </span>
-                <ThemeToggle />
+              <div className="mt-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] px-3 py-2">
+                  <span className="text-[10px] font-mono uppercase tracking-[.08em] text-[var(--muted)]">
+                    Theme
+                  </span>
+                  <ThemeToggle />
+                </div>
+                <Link href="/home?create=1">
+                  <Button variant="secondary" className="w-full justify-start text-xs">New project</Button>
+                </Link>
+                <Link href="/settings">
+                  <Button variant="secondary" className="w-full justify-start text-xs">Settings</Button>
+                </Link>
+                <Link href="/settings?tab=integrations">
+                  <Button variant="secondary" className="w-full justify-start text-xs">Integrations</Button>
+                </Link>
               </div>
-              <Link href="/home?create=1">
-                <Button variant="secondary" className="w-full justify-start text-xs">New project</Button>
-              </Link>
-              <Link href="/settings">
-                <Button variant="secondary" className="w-full justify-start text-xs">Settings</Button>
-              </Link>
-              <Link href="/settings?tab=integrations">
-                <Button variant="secondary" className="w-full justify-start text-xs">Integrations</Button>
-              </Link>
-            </div>
 
-            <div className="mt-auto pt-5">
-              <Button
-                variant="secondary"
-                className="w-full justify-start text-xs"
-                disabled={isSigningOut}
-                onClick={handleSignOut}
-              >
-                {isSigningOut ? "Signing out..." : "Sign out"}
-              </Button>
-            </div>
-            </div>
+              <div className="mt-auto pt-5">
+                <Button
+                  variant="secondary"
+                  className="w-full justify-start text-xs"
+                  disabled={isSigningOut}
+                  onClick={handleSignOut}
+                >
+                  {isSigningOut ? "Signing out..." : "Sign out"}
+                </Button>
+              </div>
+            </Panel>
           ) : null}
         </div>
       </aside>

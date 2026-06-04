@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { WorkspaceShell } from "@/components/workspace-shell";
@@ -72,11 +72,14 @@ describe("WorkspaceShell", () => {
   });
 
   test("moves account actions into an elastic left rail", async () => {
-    render(
+    const { container } = render(
       <WorkspaceShell>
         <div>Workspace</div>
       </WorkspaceShell>,
     );
+
+    const shell = container.firstElementChild as HTMLElement;
+    expect(shell.style.getPropertyValue("--workspace-rail-width")).toBe("var(--workspace-rail-collapsed)");
 
     const rail = screen.getByRole("complementary", { name: /workspace actions/i });
     expect(rail).toHaveAttribute("data-side", "left");
@@ -92,6 +95,38 @@ describe("WorkspaceShell", () => {
     expect(screen.getByRole("link", { name: "New project" })).toHaveAttribute("href", "/home?create=1");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(rail).toHaveAttribute("data-state", "expanded");
+    expect(shell.style.getPropertyValue("--workspace-rail-width")).toBe("var(--workspace-rail-expanded)");
+  });
+
+  test("renders active project context with semantic badges", async () => {
+    navigationMock.pathname = "/projects/project-1/chat";
+
+    render(
+      <WorkspaceShell>
+        <div>Workspace</div>
+      </WorkspaceShell>,
+    );
+
+    const projectContext = await screen.findByLabelText("Active project context");
+    expect(fetchJson).toHaveBeenCalledWith("/api/projects/project-1/summary");
+    expect(within(projectContext).getByText("Project")).toHaveClass("border-[var(--coral)]");
+    expect(within(projectContext).getByText("Goa Reel")).toBeInTheDocument();
+    expect(within(projectContext).getByText("Idea")).toHaveClass("border-[var(--line)]");
+  });
+
+  test("renders a mobile menu trigger and drawer navigation", () => {
+    render(
+      <WorkspaceShell>
+        <div>Workspace</div>
+      </WorkspaceShell>,
+    );
+
+    const trigger = screen.getByRole("button", { name: /toggle navigation/i });
+    expect(trigger).toHaveClass("md:hidden");
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("link", { name: "New project" })).toHaveAttribute("href", "/home?create=1");
   });
 
   test("signs out from the drawer", async () => {
