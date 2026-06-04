@@ -2,7 +2,6 @@
 "use client";
 
 import Link from "next/link";
-import type { ComponentProps } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -24,7 +23,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/panel";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,8 +67,6 @@ type ActivityEntry =
       createdAt: string;
     };
 
-type BadgeVariant = ComponentProps<typeof Badge>["variant"];
-
 const formats: ContentFormat[] = ["reel", "short", "tiktok", "carousel", "post", "vlog"];
 const platforms: ContentPlatform[] = ["instagram", "youtube", "tiktok", "linkedin", "x"];
 const statuses: ContentStatus[] = ["idea", "scripted", "ready_to_shoot", "shot", "editing", "posted", "analyzed", "archived"];
@@ -82,20 +78,6 @@ function formatDate(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function statusBadgeVariant(status: ContentStatus): BadgeVariant {
-  if (status === "idea" || status === "scripted") return "creative";
-  if (status === "ready_to_shoot" || status === "shot") return "warning";
-  if (status === "editing") return "runtime";
-  if (status === "posted" || status === "analyzed") return "applied";
-  return "muted";
-}
-
-function formatBadgeVariant(format: ContentFormat): BadgeVariant {
-  if (format === "reel" || format === "short" || format === "tiktok") return "runtime";
-  if (format === "carousel" || format === "post") return "creative";
-  return "model";
 }
 
 function createActivityEntries(history: AgentHistoryResponse): ActivityEntry[] {
@@ -227,9 +209,6 @@ export default function ProjectHubPage() {
     ...(project.shootPack.props || []),
   ];
   const checklistDone = doneCount(allChecklistItems);
-  const scriptFieldsReady = [project.scriptLab.hook, project.scriptLab.script, project.scriptLab.caption, project.scriptLab.cta].filter((value) =>
-    value.trim(),
-  ).length;
   const nextAction =
     project.status === "idea" || project.status === "scripted"
       ? {
@@ -238,7 +217,7 @@ export default function ProjectHubPage() {
         }
       : project.status === "ready_to_shoot" || project.status === "shot"
         ? {
-            title: "Open the Project Hub",
+            title: "Hub",
             detail: "Confirm shoot readiness and assets before moving into the editor.",
           }
         : project.status === "editing"
@@ -408,19 +387,11 @@ export default function ProjectHubPage() {
         <div className="sb-gradient-thumbnail h-24 w-full opacity-85" />
         <div className="space-y-6 p-6 md:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="runtime">Project Hub</Badge>
-                <Badge variant={statusBadgeVariant(project.status)}>{statusLabels[project.status]}</Badge>
-                <Badge variant={formatBadgeVariant(project.format)}>{project.format.toUpperCase()}</Badge>
-                <Badge variant="muted">{project.platform.toUpperCase()}</Badge>
-              </div>
-              <div>
-                <h1 className="font-display text-3xl font-bold tracking-normal text-[var(--ink)] md:text-4xl">
-                  {project.title}
-                </h1>
-                <p className="mt-2 text-sm text-[var(--muted)]">Updated {formatDate(project.updatedAt)}</p>
-              </div>
+            <div>
+              <h1 className="font-display text-3xl font-bold tracking-normal text-[var(--ink)] md:text-4xl">
+                {project.title}
+              </h1>
+              <p className="mt-2 text-sm text-[var(--muted)]">Updated {formatDate(project.updatedAt)}</p>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -512,31 +483,6 @@ export default function ProjectHubPage() {
                 </Button>
               </Link>
           </Panel>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="p-5">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Script status</p>
-              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">{scriptFieldsReady}/4</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">Hook, script, caption, and CTA fields filled.</p>
-            </Card>
-            <Card className="p-5">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Shoot checklist readiness</p>
-              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">{checklistDone}/{allChecklistItems.length}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">Production tasks checked off.</p>
-            </Card>
-            <Card className="p-5">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Asset readiness</p>
-              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">{assetCount}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">Generated and attached assets available.</p>
-            </Card>
-            <Card className="p-5">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Editor readiness</p>
-              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">
-                {scriptFieldsReady >= 2 && assetCount > 0 ? "Ready" : "Prep needed"}
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">Editor stays secondary until the package is stronger.</p>
-            </Card>
-          </div>
 
           <Panel className="space-y-5 p-6">
             <div className="flex items-center justify-between gap-4">
@@ -634,6 +580,9 @@ export default function ProjectHubPage() {
             </div>
           </Panel>
 
+        </div>
+
+        <aside className="space-y-6" role="complementary" aria-label="Project operations">
           <Panel className="space-y-5 p-6" role="region" aria-label="Shoot checklist readiness">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -650,7 +599,7 @@ export default function ProjectHubPage() {
 
               <div className="space-y-2">
                 {(project.shootPack.aRoll || []).map((task) => (
-                  <div key={task.id} className="group flex items-center justify-between gap-3 rounded-[var(--radius-md)] px-2 py-1 transition-colors hover:bg-[color-mix(in_srgb,var(--panel-2)_60%,transparent)]">
+                  <div key={task.id} className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] px-2 py-1 transition-colors hover:bg-[color-mix(in_srgb,var(--panel-2)_60%,transparent)]">
                     <label className="flex flex-1 cursor-pointer items-center gap-2.5 text-xs">
                       <input
                         type="checkbox"
@@ -666,7 +615,7 @@ export default function ProjectHubPage() {
                       type="button"
                       aria-label={`Delete ${task.label}`}
                       onClick={() => deleteTask(task.id, "aRoll")}
-                      className="rounded p-0.5 text-[var(--muted)] opacity-100 transition-colors hover:text-[var(--danger)] md:opacity-0 md:group-hover:opacity-100"
+                      className="rounded p-1 text-[var(--muted)] transition-colors hover:text-[var(--danger)]"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -703,9 +652,7 @@ export default function ProjectHubPage() {
               </div>
             </div>
           </Panel>
-        </div>
 
-        <div className="space-y-6">
           <Panel variant="floating" className="space-y-4 p-6 shadow-none">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-[var(--blue-2)]" />
@@ -799,7 +746,7 @@ export default function ProjectHubPage() {
               </div>
             ) : null}
           </Panel>
-        </div>
+        </aside>
       </div>
     </div>
   );

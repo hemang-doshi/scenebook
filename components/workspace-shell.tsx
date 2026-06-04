@@ -27,7 +27,6 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { fetchJson } from "@/lib/fetcher";
-import { statusLabels } from "@/lib/domain/content";
 
 export function WorkspaceShell({
   children,
@@ -43,7 +42,7 @@ export function WorkspaceShell({
   const [currentProject, setCurrentProject] = useState<{
     id: string;
     title: string;
-    status: keyof typeof statusLabels;
+    status: string;
   } | null>(null);
 
   const cardIdMatch = pathname.match(/^\/(cards|studio|projects|editor)\/([^/]+)/);
@@ -90,7 +89,7 @@ export function WorkspaceShell({
     }
 
     let active = true;
-    fetchJson<{ id: string; title: string; status: keyof typeof statusLabels }>(
+    fetchJson<{ id: string; title: string; status: string }>(
       `/api/projects/${activeCardId}/summary`,
     )
       .then((project) => {
@@ -145,17 +144,14 @@ export function WorkspaceShell({
               data-active-project-context="true"
               className="hidden min-w-0 items-center gap-2 md:flex"
             >
-              <Badge variant="creative" className="shrink-0">
-                Project
-              </Badge>
+              <span aria-hidden="true" className="shrink-0 font-mono text-sm text-[var(--muted-2)]">
+                /
+              </span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[var(--ink)]">
                   {visibleProject.title}
                 </p>
               </div>
-              <Badge variant="muted" className="shrink-0">
-                {statusLabels[visibleProject.status]}
-              </Badge>
             </div>
           ) : null}
         </div>
@@ -212,14 +208,11 @@ export function WorkspaceShell({
               className="mb-6 flex flex-col gap-3 p-4 shadow-none"
             >
               <div className="flex min-w-0 items-center gap-2">
-                <Badge variant="creative" className="shrink-0">
-                  Project
-                </Badge>
-                <Badge variant="muted" className="shrink-0">
-                  {statusLabels[visibleProject.status]}
-                </Badge>
+                <span aria-hidden="true" className="shrink-0 font-mono text-sm text-[var(--muted-2)]">
+                  /
+                </span>
+                <p className="truncate text-base font-semibold text-[var(--ink)]">{visibleProject.title}</p>
               </div>
-              <p className="truncate text-base font-semibold text-[var(--ink)]">{visibleProject.title}</p>
             </Panel>
           ) : null}
 

@@ -146,7 +146,7 @@ describe("ProjectHubPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Goa creator workflow" })).toBeInTheDocument();
     const hero = screen.getByRole("region", { name: /project hub hero/i });
-    expect(within(hero).getByText("Project Hub")).toBeInTheDocument();
+    expect(within(hero).queryByText("Project Hub")).not.toBeInTheDocument();
     expect(screen.getByText("Next recommended action")).toBeInTheDocument();
     expect(within(hero).getByRole("link", { name: /^agent$/i })).toHaveAttribute(
       "href",
@@ -156,15 +156,30 @@ describe("ProjectHubPage", () => {
     expect(within(hero).getByRole("link", { name: /view analytics/i })).toHaveAttribute("href", "/analytics");
   });
 
-  test("uses semantic SceneBook badges for stage, format, and platform", async () => {
+  test("keeps project metadata editable without duplicating navbar-style hero pills", async () => {
     render(<ProjectHubPage />);
 
     await screen.findByRole("heading", { name: "Goa creator workflow" });
     const hero = screen.getByRole("region", { name: /project hub hero/i });
 
-    expect(within(hero).getAllByText("Idea")[0]).toHaveClass("border-[var(--coral)]");
-    expect(within(hero).getAllByText("REEL")[0]).toHaveClass("border-[var(--blue)]");
-    expect(within(hero).getAllByText("INSTAGRAM")[0]).toHaveClass("border-[var(--line)]");
+    expect(within(hero).queryByText("Project Hub")).not.toBeInTheDocument();
+    expect(within(hero).getByRole("button", { name: "Idea" })).toBeInTheDocument();
+    expect(within(hero).getByRole("button", { name: "REEL" })).toBeInTheDocument();
+    expect(within(hero).getByRole("button", { name: "INSTAGRAM" })).toBeInTheDocument();
+  });
+
+  test("removes redundant readiness cards and places checklist before recent agent output", async () => {
+    render(<ProjectHubPage />);
+
+    await screen.findByRole("heading", { name: "Goa creator workflow" });
+
+    expect(screen.queryByText("Script status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Asset readiness")).not.toBeInTheDocument();
+    expect(screen.queryByText("Editor readiness")).not.toBeInTheDocument();
+
+    const sideColumn = screen.getByRole("complementary", { name: /project operations/i });
+    const headings = within(sideColumn).getAllByRole("heading").map((heading) => heading.textContent);
+    expect(headings.indexOf("Shoot checklist readiness")).toBeLessThan(headings.indexOf("Recent Agent Output"));
   });
 
   test("keeps project property editing PATCH behavior", async () => {

@@ -98,7 +98,7 @@ describe("WorkspaceShell", () => {
     expect(shell.style.getPropertyValue("--workspace-rail-width")).toBe("var(--workspace-rail-expanded)");
   });
 
-  test("renders active project context with semantic badges", async () => {
+  test("renders active project context without duplicate nav pills", async () => {
     navigationMock.pathname = "/projects/project-1/chat";
 
     render(
@@ -109,9 +109,10 @@ describe("WorkspaceShell", () => {
 
     const projectContext = await screen.findByLabelText("Active project context");
     expect(fetchJson).toHaveBeenCalledWith("/api/projects/project-1/summary");
-    expect(within(projectContext).getByText("Project")).toHaveClass("border-[var(--coral)]");
     expect(within(projectContext).getByText("Goa Reel")).toBeInTheDocument();
-    expect(within(projectContext).getByText("Idea")).toHaveClass("border-[var(--line)]");
+    expect(within(projectContext).getByText("/")).toHaveClass("font-mono");
+    expect(within(projectContext).queryByText("Project")).not.toBeInTheDocument();
+    expect(within(projectContext).queryByText("Idea")).not.toBeInTheDocument();
   });
 
   test("renders a mobile menu trigger and drawer navigation", () => {
