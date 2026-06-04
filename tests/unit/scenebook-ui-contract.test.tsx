@@ -7,7 +7,12 @@ import { activityForRuntimeV4Event } from "@/components/agent/runtime-v4-event-a
 import { AssetDrawer } from "@/components/agent/asset-drawer";
 import { PatchPreviewCard } from "@/components/agent/patch-preview-card";
 import { ProjectMindPanel } from "@/components/agent/project-mind-panel";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Panel } from "@/components/ui/panel";
+import { Textarea } from "@/components/ui/textarea";
 import type { PatchTimelineEntry } from "@/components/agent/types";
 import type { ProjectWorkspace } from "@/lib/data/repository";
 
@@ -112,6 +117,137 @@ describe("SceneBook UI contract", () => {
     expect(button).toHaveClass("rounded-[var(--radius-pill)]");
     expect(button).toHaveClass("bg-[var(--white)]");
     expect(button).toHaveClass("text-[var(--black)]");
+  });
+
+  test("semantic runtime buttons use blue cockpit tokens without gradients", () => {
+    render(<Button variant="runtime">Run agent</Button>);
+
+    const button = screen.getByRole("button", { name: "Run agent" });
+    expect(button).toHaveClass("border-[var(--blue)]");
+    expect(button).toHaveClass("bg-[color-mix(in_srgb,var(--blue)_16%,transparent)]");
+    expect(button).toHaveClass("text-[var(--blue-2)]");
+    expect(button.className).not.toContain("gradient");
+  });
+
+  test("light-surface button variants keep review actions legible", () => {
+    render(
+      <div>
+        <Button variant="coral">Apply to workspace</Button>
+        <Button variant="ghostLight">Inspect JSON</Button>
+      </div>,
+    );
+
+    const apply = screen.getByRole("button", { name: "Apply to workspace" });
+    expect(apply).toHaveClass("bg-[var(--coral)]");
+    expect(apply).toHaveClass("text-[var(--black)]");
+
+    const inspect = screen.getByRole("button", { name: "Inspect JSON" });
+    expect(inspect).toHaveClass("text-[var(--light-ink)]");
+    expect(inspect).toHaveClass("hover:border-[color-mix(in_srgb,var(--black)_12%,transparent)]");
+  });
+
+  test("status badges expose semantic pill variants for creative and applied states", () => {
+    render(
+      <div>
+        <Badge variant="creative">Creative</Badge>
+        <Badge variant="applied">Applied</Badge>
+      </div>,
+    );
+
+    const creative = screen.getByText("Creative");
+    expect(creative).toHaveClass("rounded-[var(--radius-pill)]");
+    expect(creative).toHaveClass("font-mono");
+    expect(creative).toHaveClass("uppercase");
+    expect(creative).toHaveClass("border-[var(--coral)]");
+    expect(creative).toHaveClass("bg-[color-mix(in_srgb,var(--coral)_14%,transparent)]");
+    expect(creative).toHaveClass("text-[var(--coral-2)]");
+
+    const applied = screen.getByText("Applied");
+    expect(applied).toHaveClass("border-[var(--lime)]");
+    expect(applied).toHaveClass("bg-[color-mix(in_srgb,var(--lime)_12%,transparent)]");
+    expect(applied).toHaveClass("text-[var(--lime)]");
+  });
+
+  test("inputs use dark translucent fields with token placeholder and blue focus-visible ring", () => {
+    render(<Input placeholder="Describe the scene" disabled />);
+
+    const input = screen.getByPlaceholderText("Describe the scene");
+    expect(input).toHaveClass("bg-[color-mix(in_srgb,var(--panel-2)_72%,transparent)]");
+    expect(input).toHaveClass("border-[var(--line)]");
+    expect(input).toHaveClass("text-[var(--ink)]");
+    expect(input).toHaveClass("placeholder:text-[var(--muted-2)]");
+    expect(input).toHaveClass("focus-visible:ring-2");
+    expect(input).toHaveClass("focus-visible:ring-[var(--blue)]/30");
+    expect(input).toHaveClass("disabled:cursor-not-allowed");
+  });
+
+  test("textareas share the SceneBook dark field and accessible focus contract", () => {
+    render(<Textarea placeholder="Shot notes" disabled />);
+
+    const textarea = screen.getByPlaceholderText("Shot notes");
+    expect(textarea).toHaveClass("bg-[color-mix(in_srgb,var(--panel-2)_72%,transparent)]");
+    expect(textarea).toHaveClass("placeholder:text-[var(--muted-2)]");
+    expect(textarea).toHaveClass("focus-visible:border-[var(--blue)]");
+    expect(textarea).toHaveClass("focus-visible:ring-[var(--blue)]/30");
+    expect(textarea).toHaveClass("disabled:bg-[color-mix(in_srgb,var(--panel-3)_48%,transparent)]");
+  });
+
+  test("review cards use light clarity surfaces with token radius and review shadow", () => {
+    render(
+      <Card variant="review">
+        <CardTitle>Review package</CardTitle>
+        <CardDescription>Inspect the planned patch before applying it.</CardDescription>
+      </Card>,
+    );
+
+    const card = screen.getByText("Review package").closest("div");
+    expect(card).toHaveClass("rounded-[var(--radius-lg)]");
+    expect(card).toHaveClass("border-[var(--line)]");
+    expect(card).toHaveClass("bg-[var(--bone)]");
+    expect(card).toHaveClass("text-[var(--light-ink)]");
+    expect(card).toHaveClass("shadow-[var(--shadow-soft)]");
+
+    expect(screen.getByText("Review package")).toHaveClass("text-current");
+    expect(screen.getByText("Inspect the planned patch before applying it.")).toHaveClass("text-current");
+  });
+
+  test("floating and review surfaces allow callers to remove elevation", () => {
+    render(
+      <div>
+        <Card variant="review" className="shadow-none">
+          Review override
+        </Card>
+        <Panel variant="floating" className="shadow-none">
+          Floating override
+        </Panel>
+      </div>,
+    );
+
+    const card = screen.getByText("Review override");
+    expect(card).toHaveClass("shadow-none");
+    expect(card).not.toHaveClass("shadow-[var(--shadow-soft)]");
+
+    const panel = screen.getByText("Floating override");
+    expect(panel).toHaveClass("shadow-none");
+    expect(panel).not.toHaveClass("shadow-[var(--shadow-soft)]");
+  });
+
+  test("panels expose default and danger SceneBook cockpit surfaces", () => {
+    render(
+      <div>
+        <Panel>Default panel</Panel>
+        <Panel variant="danger">Danger panel</Panel>
+      </div>,
+    );
+
+    const defaultPanel = screen.getByText("Default panel");
+    expect(defaultPanel).toHaveClass("rounded-[var(--radius-lg)]");
+    expect(defaultPanel).toHaveClass("bg-[color-mix(in_srgb,var(--panel)_86%,transparent)]");
+    expect(defaultPanel).not.toHaveClass("shadow-[var(--shadow-soft)]");
+
+    const dangerPanel = screen.getByText("Danger panel");
+    expect(dangerPanel).toHaveClass("border-[var(--danger)]");
+    expect(dangerPanel).toHaveClass("bg-[color-mix(in_srgb,var(--danger)_10%,var(--panel))]");
   });
 
   test("runtime activity distinguishes missing input from approval required", () => {

@@ -6,15 +6,25 @@ const variants = {
   primary:
     "border border-[var(--white)] bg-[var(--white)] text-[var(--black)] hover:border-[var(--white)] hover:bg-[var(--ink-soft)]",
   coral:
-    "border border-[var(--coral)] bg-[var(--coral)] text-[#120a07] hover:border-[var(--coral-2)] hover:bg-[var(--coral-2)]",
+    "border border-[var(--coral)] bg-[var(--coral)] text-[var(--black)] hover:border-[var(--coral-2)] hover:bg-[var(--coral-2)]",
   secondary:
-    "border border-[var(--line-strong)] bg-[rgba(255,255,255,.055)] text-[var(--ink)] hover:border-[rgba(255,255,255,.32)] hover:bg-[rgba(255,255,255,.09)]",
+    "border border-[var(--line-strong)] bg-[color-mix(in_srgb,var(--panel-2)_72%,transparent)] text-[var(--ink)] hover:border-[var(--line-strong)] hover:bg-[color-mix(in_srgb,var(--white)_8%,transparent)]",
   dark:
-    "border border-[#090b10] bg-[#090b10] text-[var(--white)] hover:border-[var(--black)] hover:bg-[var(--black)]",
+    "border border-[var(--black)] bg-[var(--black)] text-[var(--white)] hover:border-[var(--line-strong)] hover:bg-[var(--panel-3)]",
   ghost:
-    "border border-transparent bg-transparent text-[var(--ink)] hover:border-[var(--line)] hover:bg-[rgba(255,255,255,.055)]",
+    "border border-transparent bg-transparent text-[var(--ink)] hover:border-[var(--line)] hover:bg-[color-mix(in_srgb,var(--white)_6%,transparent)]",
   ghostLight:
-    "border border-transparent bg-transparent text-[var(--light-ink)] hover:border-[rgba(17,19,24,.12)] hover:bg-[rgba(17,19,24,.055)]",
+    "border border-transparent bg-transparent text-[var(--light-ink)] hover:border-[color-mix(in_srgb,var(--black)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--black)_6%,transparent)]",
+  danger:
+    "border border-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_22%,transparent)]",
+  success:
+    "border border-[var(--success)] bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-[var(--success)] hover:bg-[color-mix(in_srgb,var(--success)_20%,transparent)]",
+  warning:
+    "border border-[var(--amber)] bg-[color-mix(in_srgb,var(--amber)_14%,transparent)] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_22%,transparent)]",
+  runtime:
+    "border border-[var(--blue)] bg-[color-mix(in_srgb,var(--blue)_16%,transparent)] text-[var(--blue-2)] hover:bg-[color-mix(in_srgb,var(--blue)_24%,transparent)]",
+  model:
+    "border border-[var(--violet)] bg-[color-mix(in_srgb,var(--violet)_14%,transparent)] text-[var(--violet)] hover:bg-[color-mix(in_srgb,var(--violet)_22%,transparent)]",
 };
 
 export function Button({
