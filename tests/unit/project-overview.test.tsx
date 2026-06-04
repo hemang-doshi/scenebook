@@ -148,7 +148,7 @@ describe("ProjectHubPage", () => {
     const hero = screen.getByRole("region", { name: /project hub hero/i });
     expect(within(hero).getByText("Project Hub")).toBeInTheDocument();
     expect(screen.getByText("Next recommended action")).toBeInTheDocument();
-    expect(within(hero).getByRole("link", { name: /continue with agent/i })).toHaveAttribute(
+    expect(within(hero).getByRole("link", { name: /^agent$/i })).toHaveAttribute(
       "href",
       "/projects/project-1/chat",
     );

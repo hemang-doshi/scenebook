@@ -427,7 +427,7 @@ export default function ProjectHubPage() {
               <Link href={`/projects/${project.id}/chat`}>
                 <Button variant="primary" className="h-10 px-4 text-xs">
                   <Bot className="mr-1.5 h-3.5 w-3.5" />
-                  Continue with Agent
+                  Agent
                 </Button>
               </Link>
               <Link href={`/editor/${project.id}`}>
@@ -508,7 +508,7 @@ export default function ProjectHubPage() {
               <Link href={`/projects/${project.id}/chat`}>
                 <Button variant="runtime" className="h-10 px-4 text-xs">
                   <Bot className="mr-1.5 h-3.5 w-3.5" />
-                  Continue in Agent
+                  Agent
                 </Button>
               </Link>
           </Panel>
@@ -718,7 +718,7 @@ export default function ProjectHubPage() {
             </p>
             <Link href={`/projects/${project.id}/chat`}>
               <Button variant="runtime" className="w-full h-9 text-[11px]">
-                <Bot className="mr-1.5 h-3.5 w-3.5" /> Continue in Agent
+                <Bot className="mr-1.5 h-3.5 w-3.5" /> Agent
               </Button>
             </Link>
           </Panel>

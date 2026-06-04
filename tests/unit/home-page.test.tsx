@@ -76,7 +76,7 @@ describe("HomePageClient", () => {
 
     const card = within(projectCard as HTMLElement);
     expect(card.getByText("Next action")).toBeInTheDocument();
-    expect(card.getByRole("link", { name: /continue with agent/i })).toHaveAttribute(
+    expect(card.getByRole("link", { name: /^agent$/i })).toHaveAttribute(
       "href",
       "/projects/project-idea/chat",
     );
@@ -93,11 +93,30 @@ describe("HomePageClient", () => {
     render(<HomePageClient initialCreateOpen={false} projects={projects} />);
 
     expect(screen.getByRole("region", { name: /expanded gallery/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /expanded gallery view/i })).toHaveClass("h-9");
+    expect(screen.getByRole("button", { name: /compact table view/i })).toHaveClass("h-9");
+    expect(screen.queryByText("Expanded gallery")).not.toBeInTheDocument();
+    expect(screen.queryByText("Compact table")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /compact table/i }));
+    fireEvent.click(screen.getByRole("button", { name: /compact table view/i }));
 
     expect(screen.getByRole("table", { name: /production table/i })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /expanded gallery/i })).not.toBeInTheDocument();
+  });
+
+  test("expanded gallery lays out cards as a multi-column aligned grid", () => {
+    render(<HomePageClient initialCreateOpen={false} projects={projects} />);
+
+    const gallery = screen.getByRole("region", { name: /expanded gallery/i });
+    expect(gallery).toHaveClass("lg:grid-cols-2");
+
+    const projectCard = within(gallery).getByText("Goa creator workflow").closest("article");
+    expect(projectCard).not.toBeNull();
+
+    expect(projectCard).toHaveClass("h-full");
+    expect(within(projectCard as HTMLElement).getByTestId("project-card-actions")).toHaveClass("grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem]");
+    expect(within(projectCard as HTMLElement).getByRole("button", { name: /^agent$/i }).querySelector("svg")).toBeInTheDocument();
+    expect(within(projectCard as HTMLElement).getByRole("button", { name: /^hub$/i }).querySelector("svg")).toBeInTheDocument();
   });
 
   test("lets project status change from the home project surface", async () => {
@@ -120,6 +139,26 @@ describe("HomePageClient", () => {
       }),
     );
     expect(card.getByRole("button", { name: "Scripted" })).toBeInTheDocument();
+  });
+
+  test("lets projects be deleted from the home project surface", async () => {
+    fetchJson.mockResolvedValue({});
+    render(<HomePageClient initialCreateOpen={false} projects={projects} />);
+
+    const gallery = screen.getByRole("region", { name: /expanded gallery/i });
+    const projectCard = within(gallery).getByText("Goa creator workflow").closest("article");
+    expect(projectCard).not.toBeNull();
+
+    fireEvent.click(within(projectCard as HTMLElement).getByRole("button", { name: /delete goa creator workflow/i }));
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      "/api/projects/project-idea",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "archived" }),
+      }),
+    );
+    expect(screen.queryByText("Goa creator workflow")).not.toBeInTheDocument();
   });
 
   test("uses semantic SceneBook badges for project status, format, and platform", () => {

@@ -14,6 +14,7 @@ import {
   PlusCircle,
   Rows3,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 import { PageHeading } from "@/components/page-heading";
@@ -59,6 +60,7 @@ function formatBadgeVariant(format: ContentFormat): BadgeVariant {
 
 function nextActionFor(project: ProjectSummary): {
   label: string;
+  buttonLabel: string;
   detail: string;
   href: string;
   buttonVariant: ButtonVariant;
@@ -66,7 +68,8 @@ function nextActionFor(project: ProjectSummary): {
 } {
   if (project.status === "idea" || project.status === "scripted") {
     return {
-      label: "Continue with Agent",
+      label: "Agent",
+      buttonLabel: "Agent",
       detail: "Shape the brief, script, and shoot package.",
       href: `/projects/${project.id}/chat`,
       buttonVariant: "runtime",
@@ -77,6 +80,7 @@ function nextActionFor(project: ProjectSummary): {
   if (project.status === "editing") {
     return {
       label: "Open Editor",
+      buttonLabel: "Editor",
       detail: "Cut the reel once the package is ready.",
       href: `/editor/${project.id}`,
       buttonVariant: "primary",
@@ -87,6 +91,7 @@ function nextActionFor(project: ProjectSummary): {
   if (project.status === "posted" || project.status === "analyzed") {
     return {
       label: "View Analytics",
+      buttonLabel: "Analytics",
       detail: "Review what worked and capture the next learning.",
       href: "/analytics",
       buttonVariant: "secondary",
@@ -95,7 +100,8 @@ function nextActionFor(project: ProjectSummary): {
   }
 
   return {
-    label: "Open Hub",
+    label: "Hub",
+    buttonLabel: "Hub",
     detail: "Check shoot readiness and production details.",
     href: `/projects/${project.id}`,
     buttonVariant: "secondary",
@@ -193,6 +199,22 @@ export function HomePageClient({
         await fetchJson(`/api/projects/${projectId}`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
+        });
+      } catch {
+        setLocalProjects(previousProjects);
+      }
+    });
+  }
+
+  function handleDeleteProject(projectId: string) {
+    const previousProjects = localProjects;
+    setLocalProjects((currentProjects) => currentProjects.filter((project) => project.id !== projectId));
+
+    startTransition(async () => {
+      try {
+        await fetchJson(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "archived" }),
         });
       } catch {
         setLocalProjects(previousProjects);
@@ -321,44 +343,44 @@ export function HomePageClient({
                 <button
                   type="button"
                   onClick={() => setViewMode("gallery")}
+                  aria-label="Expanded gallery view"
                   aria-pressed={viewMode === "gallery"}
                   className={[
-                    "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-pill)] px-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-pill)] transition-colors",
                     viewMode === "gallery"
                       ? "bg-[var(--white)] text-[var(--black)]"
                       : "text-[var(--muted)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
                   <LayoutGrid className="h-3.5 w-3.5" />
-                  Expanded gallery
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("table")}
+                  aria-label="Compact table view"
                   aria-pressed={viewMode === "table"}
                   className={[
-                    "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-pill)] px-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-pill)] transition-colors",
                     viewMode === "table"
                       ? "bg-[var(--white)] text-[var(--black)]"
                       : "text-[var(--muted)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
                   <Rows3 className="h-3.5 w-3.5" />
-                  Compact table
                 </button>
               </div>
             </div>
           </div>
 
           {viewMode === "gallery" ? (
-            <div className="grid gap-4" role="region" aria-label="Expanded gallery">
+            <div className="grid gap-4 lg:grid-cols-2" role="region" aria-label="Expanded gallery">
               {activeProjects.map((project) => {
                 const action = nextActionFor(project);
 
                 return (
-                  <article key={project.id}>
-                    <Card className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_220px_240px] lg:items-center">
-                      <div className="min-w-0 space-y-3">
+                  <article key={project.id} className="h-full">
+                    <Card className="flex h-full flex-col gap-5 p-5">
+                      <div className="min-w-0 flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant={statusBadgeVariant(project.status)}>{statusLabels[project.status]}</Badge>
                           <Badge variant={formatBadgeVariant(project.format)}>{project.format.toUpperCase()}</Badge>
@@ -382,7 +404,8 @@ export function HomePageClient({
                         </div>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="mt-auto grid gap-3 border-t border-[var(--line)] pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-end">
+                        <div className="space-y-2">
                         <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Stage</p>
                         <CustomSelect
                           value={project.status}
@@ -390,20 +413,31 @@ export function HomePageClient({
                           options={statuses.map((status) => ({ value: status, label: statusLabels[status] }))}
                           triggerClassName="h-9 text-xs"
                         />
-                      </div>
+                        </div>
 
-                      <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2" data-testid="project-card-actions">
                         <Link href={action.href} className="min-w-0">
                           <Button variant={action.buttonVariant} className="h-9 w-full px-3 text-xs">
                             <ActionIcon icon={action.icon} />
-                            {action.label}
+                            {action.buttonLabel}
                           </Button>
                         </Link>
                         <Link href={`/projects/${project.id}`} className="min-w-0">
                           <Button variant="secondary" className="h-9 w-full px-3 text-xs">
-                            Open Hub
+                            <Clapperboard className="mr-1.5 h-3.5 w-3.5" />
+                            Hub
                           </Button>
                         </Link>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          aria-label={`Delete ${project.title}`}
+                          onClick={() => handleDeleteProject(project.id)}
+                          className="h-9 w-9 px-0 py-0 text-[var(--muted)] hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                       </div>
                     </Card>
                   </article>
@@ -453,14 +487,25 @@ export function HomePageClient({
                             <div className="flex justify-end gap-2">
                               <Link href={action.href}>
                                 <Button variant={action.buttonVariant} className="h-8 px-3 text-xs">
-                                  {action.label}
+                                  <ActionIcon icon={action.icon} />
+                                  {action.buttonLabel}
                                 </Button>
                               </Link>
                               <Link href={`/projects/${project.id}`}>
                                 <Button variant="secondary" className="h-8 px-3 text-xs">
+                                  <Clapperboard className="mr-1.5 h-3.5 w-3.5" />
                                   Hub
                                 </Button>
                               </Link>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                aria-label={`Delete ${project.title}`}
+                                onClick={() => handleDeleteProject(project.id)}
+                                className="h-8 w-8 px-0 py-0 text-[var(--muted)] hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </td>
                         </tr>
