@@ -2,33 +2,39 @@
 "use client";
 
 import Link from "next/link";
+import type { ComponentProps } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ArrowRight,
+  BarChart3,
   Bot,
+  CheckCircle,
+  Clapperboard,
+  Clock,
   Film,
   FolderOpen,
-  Loader2,
-  Calendar,
   Layers,
+  Loader2,
   Monitor,
-  CheckCircle,
-  Clock,
   Plus,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/panel";
+import { Textarea } from "@/components/ui/textarea";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { CreatorProgress } from "@/components/workspace/creator-progress";
 import { useProjectWorkspace } from "@/components/workspace/hooks";
 import type { ProjectAssetLibrary } from "@/lib/assets/asset-folders";
-import { fetchJson } from "@/lib/fetcher";
 import { statusLabels } from "@/lib/domain/content";
+import { fetchJson } from "@/lib/fetcher";
 import type { ContentFormat, ContentPlatform, ContentStatus, ScriptLab } from "@/lib/types";
-import { CustomSelect } from "@/components/ui/custom-select";
 
 type AgentHistoryResponse = {
   threadId: string | null;
@@ -63,27 +69,11 @@ type ActivityEntry =
       createdAt: string;
     };
 
+type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+
 const formats: ContentFormat[] = ["reel", "short", "tiktok", "carousel", "post", "vlog"];
 const platforms: ContentPlatform[] = ["instagram", "youtube", "tiktok", "linkedin", "x"];
 const statuses: ContentStatus[] = ["idea", "scripted", "ready_to_shoot", "shot", "editing", "posted", "analyzed", "archived"];
-
-function InstagramIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-    </svg>
-  );
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -92,6 +82,20 @@ function formatDate(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function statusBadgeVariant(status: ContentStatus): BadgeVariant {
+  if (status === "idea" || status === "scripted") return "creative";
+  if (status === "ready_to_shoot" || status === "shot") return "warning";
+  if (status === "editing") return "runtime";
+  if (status === "posted" || status === "analyzed") return "applied";
+  return "muted";
+}
+
+function formatBadgeVariant(format: ContentFormat): BadgeVariant {
+  if (format === "reel" || format === "short" || format === "tiktok") return "runtime";
+  if (format === "carousel" || format === "post") return "creative";
+  return "model";
 }
 
 function createActivityEntries(history: AgentHistoryResponse): ActivityEntry[] {
@@ -106,13 +110,17 @@ function createActivityEntries(history: AgentHistoryResponse): ActivityEntry[] {
     id: toolCall.id,
     type: "tool" as const,
     label: toolCall.command ? `/${toolCall.command}` : toolCall.tool_name,
-    detail: `${toolCall.tool_name} · ${toolCall.status.toLowerCase()}`,
+    detail: `${toolCall.tool_name} | ${toolCall.status.toLowerCase()}`,
     createdAt: toolCall.created_at ?? new Date().toISOString(),
   }));
 
   return [...messages, ...tools]
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, 5);
+}
+
+function doneCount(items: Array<{ done: boolean }>) {
+  return items.filter((item) => item.done).length;
 }
 
 export default function ProjectHubPage() {
@@ -123,7 +131,6 @@ export default function ProjectHubPage() {
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
 
-  // Local input states for inline Script Lab editing
   const [hookVal, setHookVal] = useState("");
   const [scriptVal, setScriptVal] = useState("");
   const [captionVal, setCaptionVal] = useState("");
@@ -131,7 +138,6 @@ export default function ProjectHubPage() {
   const [isSavingScript, setIsSavingScript] = useState(false);
   const [saveMessage, setSaveMessage] = useState("All changes saved");
 
-  // Local checklist input states
   const [newRollTask, setNewRollTask] = useState("");
 
   useEffect(() => {
@@ -206,24 +212,45 @@ export default function ProjectHubPage() {
   }
 
   if (error || !project) {
-    return <Panel className="max-w-4xl mx-auto mt-8">{error ?? "Unable to load project."}</Panel>;
+    return <Panel className="mx-auto mt-8 max-w-4xl">{error ?? "Unable to load project."}</Panel>;
   }
 
   const generatedAssets = assetLibrary
-    ? [...assetLibrary.looseAssets, ...assetLibrary.folders.flatMap((f) => f.assets)].slice(0, 4)
+    ? [...assetLibrary.looseAssets, ...assetLibrary.folders.flatMap((folder) => folder.assets)].slice(0, 4)
     : project.assets.slice(0, 4);
 
-  const publishingState = project.analyticsJournal.permalink
-    ? "Published"
-    : project.analyticsJournal.instagramContainerId
-      ? "Processing on Instagram"
-      : project.analyticsJournal.instagramAccountId
-        ? "Ready to publish"
-        : "Not connected";
-
   const lastActivity = activity[0];
+  const allChecklistItems = [
+    ...(project.shootPack.aRoll || []),
+    ...(project.shootPack.bRoll || []),
+    ...(project.shootPack.screenCaptures || []),
+    ...(project.shootPack.props || []),
+  ];
+  const checklistDone = doneCount(allChecklistItems);
+  const scriptFieldsReady = [project.scriptLab.hook, project.scriptLab.script, project.scriptLab.caption, project.scriptLab.cta].filter((value) =>
+    value.trim(),
+  ).length;
+  const nextAction =
+    project.status === "idea" || project.status === "scripted"
+      ? {
+          title: "Continue with Agent",
+          detail: "Let SceneBook turn this brief into a production package before editing.",
+        }
+      : project.status === "ready_to_shoot" || project.status === "shot"
+        ? {
+            title: "Open the Project Hub",
+            detail: "Confirm shoot readiness and assets before moving into the editor.",
+          }
+        : project.status === "editing"
+          ? {
+              title: "Open Editor",
+              detail: "Cut the reel with the latest script and asset context.",
+            }
+          : {
+              title: "Review Analytics",
+              detail: "Capture the learning loop and plan the next iteration.",
+            };
 
-  // Property update helper
   async function handlePropertyChange(field: "status" | "format" | "platform", value: string) {
     if (!project) return;
     const nextProject = {
@@ -246,7 +273,6 @@ export default function ProjectHubPage() {
     }
   }
 
-  // Script field save helper (triggered on blur)
   async function handleScriptBlur(field: keyof ScriptLab, value: string) {
     if (!project) return;
     if ((project.scriptLab[field] || "") === value) return;
@@ -282,7 +308,6 @@ export default function ProjectHubPage() {
     }
   }
 
-  // Toggle checkbox helper
   async function toggleTask(taskId: string, type: "aRoll" | "bRoll") {
     if (!project) return;
     const currentList = project.shootPack[type] || [];
@@ -314,7 +339,6 @@ export default function ProjectHubPage() {
     }
   }
 
-  // Add checkbox task helper
   async function addTask(type: "aRoll" | "bRoll", label: string) {
     if (!project || !label.trim()) return;
     const currentList = project.shootPack[type] || [];
@@ -349,7 +373,6 @@ export default function ProjectHubPage() {
     }
   }
 
-  // Delete checkbox task helper
   async function deleteTask(taskId: string, type: "aRoll" | "bRoll") {
     if (!project) return;
     const currentList = project.shootPack[type] || [];
@@ -381,268 +404,332 @@ export default function ProjectHubPage() {
 
   return (
     <div className="mx-auto max-w-[var(--container)] space-y-8 px-4 py-6 pb-20 md:px-6">
-      
-      {/* Project overview hero */}
-      <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] shadow-[var(--shadow-soft)]">
-        <div className="sb-gradient-thumbnail h-40 w-full opacity-85" />
-        
-        <div className="relative px-6 md:px-8 -mt-10 mb-4 z-10">
-          <div className="flex h-16 w-16 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--bg)] text-[var(--coral)] shadow-[var(--shadow-soft)]">
-            <Film className="h-7 w-7" />
-          </div>
-        </div>
+      <Panel className="overflow-hidden p-0" role="region" aria-label="Project Hub hero">
+        <div className="sb-gradient-thumbnail h-24 w-full opacity-85" />
+        <div className="space-y-6 p-6 md:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="runtime">Project Hub</Badge>
+                <Badge variant={statusBadgeVariant(project.status)}>{statusLabels[project.status]}</Badge>
+                <Badge variant={formatBadgeVariant(project.format)}>{project.format.toUpperCase()}</Badge>
+                <Badge variant="muted">{project.platform.toUpperCase()}</Badge>
+              </div>
+              <div>
+                <h1 className="font-display text-3xl font-bold tracking-normal text-[var(--ink)] md:text-4xl">
+                  {project.title}
+                </h1>
+                <p className="mt-2 text-sm text-[var(--muted)]">Updated {formatDate(project.updatedAt)}</p>
+              </div>
+            </div>
 
-        <div className="px-6 md:px-8 pb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-          <div className="space-y-2">
-            <h1 className="font-display text-3xl font-bold tracking-normal text-[var(--ink)]">{project.title}</h1>
-            <p className="text-xs text-[var(--muted)]">Project Collaboration Page</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <Link href={`/projects/${project.id}/chat`}>
-              <Button variant="primary" className="h-9 px-4 text-xs">
-                Open Agent
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Button>
-            </Link>
-            <Link href={`/editor/${project.id}`}>
-              <Button variant="secondary" className="h-9 px-4 text-xs">
-                Open Editor
-              </Button>
-            </Link>
-            <Link href="/analytics">
-              <Button variant="secondary" className="h-9 px-4 text-xs">
-                View Analytics
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Database property fields inline */}
-        <div className="grid grid-cols-2 gap-4 border-t border-[var(--line)] bg-[rgba(255,255,255,.035)] px-6 py-5 text-xs md:grid-cols-4 md:px-8">
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5 text-[var(--muted)] font-mono uppercase tracking-wider text-[10px]">
-              <Layers className="h-3.5 w-3.5" /> Status
-            </span>
-            <CustomSelect
-              value={project.status}
-              onChange={(val) => handlePropertyChange("status", val)}
-              options={statuses.map((s) => ({ value: s, label: statusLabels[s] }))}
-              triggerClassName="h-7 text-xs bg-[var(--canvas)] border-[var(--hairline)]"
-            />
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/projects/${project.id}/chat`}>
+                <Button variant="primary" className="h-10 px-4 text-xs">
+                  <Bot className="mr-1.5 h-3.5 w-3.5" />
+                  Continue with Agent
+                </Button>
+              </Link>
+              <Link href={`/editor/${project.id}`}>
+                <Button variant="secondary" className="h-10 px-4 text-xs">
+                  <Film className="mr-1.5 h-3.5 w-3.5" />
+                  Open Editor
+                </Button>
+              </Link>
+              <Link href="/analytics">
+                <Button variant="secondary" className="h-10 px-4 text-xs">
+                  <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+                  View Analytics
+                </Button>
+              </Link>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5 text-[var(--muted)] font-mono uppercase tracking-wider text-[10px]">
-              <Monitor className="h-3.5 w-3.5" /> Platform
-            </span>
-            <CustomSelect
-              value={project.platform}
-              onChange={(val) => handlePropertyChange("platform", val)}
-              options={platforms.map((p) => ({ value: p, label: p.toUpperCase() }))}
-              triggerClassName="h-7 text-xs bg-[var(--canvas)] border-[var(--hairline)]"
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-4 border-t border-[var(--line)] pt-5 text-xs md:grid-cols-4">
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                <Layers className="h-3.5 w-3.5" /> Status
+              </span>
+              <CustomSelect
+                value={project.status}
+                onChange={(val) => handlePropertyChange("status", val)}
+                options={statuses.map((status) => ({ value: status, label: statusLabels[status] }))}
+                triggerClassName="h-8 text-xs bg-[var(--canvas)] border-[var(--hairline)]"
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5 text-[var(--muted)] font-mono uppercase tracking-wider text-[10px]">
-              <Film className="h-3.5 w-3.5" /> Format
-            </span>
-            <CustomSelect
-              value={project.format}
-              onChange={(val) => handlePropertyChange("format", val)}
-              options={formats.map((f) => ({ value: f, label: f.toUpperCase() }))}
-              triggerClassName="h-7 text-xs bg-[var(--canvas)] border-[var(--hairline)]"
-            />
-          </div>
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                <Monitor className="h-3.5 w-3.5" /> Platform
+              </span>
+              <CustomSelect
+                value={project.platform}
+                onChange={(val) => handlePropertyChange("platform", val)}
+                options={platforms.map((platform) => ({ value: platform, label: platform.toUpperCase() }))}
+                triggerClassName="h-8 text-xs bg-[var(--canvas)] border-[var(--hairline)]"
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5 text-[var(--muted)] font-mono uppercase tracking-wider text-[10px]">
-              <Calendar className="h-3.5 w-3.5" /> Last Updated
-            </span>
-            <div className="h-7 flex items-center pl-2 font-mono text-[var(--ink)] bg-transparent">
-              {formatDate(project.updatedAt)}
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                <Film className="h-3.5 w-3.5" /> Format
+              </span>
+              <CustomSelect
+                value={project.format}
+                onChange={(val) => handlePropertyChange("format", val)}
+                options={formats.map((format) => ({ value: format, label: format.toUpperCase() }))}
+                triggerClassName="h-8 text-xs bg-[var(--canvas)] border-[var(--hairline)]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                <Clock className="h-3.5 w-3.5" /> Stage signal
+              </span>
+              <div className="flex h-8 items-center font-mono text-[var(--ink)]">{project.readiness.label}</div>
             </div>
           </div>
         </div>
-      </div>
+      </Panel>
 
-      {/* Progress pipeline */}
       <CreatorProgress currentStatus={project.status} cardId={project.id} />
 
-      {/* Main split block */}
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
-        
-        {/* Left Column: Script Lab & Checklist */}
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
-          
-          {/* Document Section: Interactive Script Lab */}
-          <Panel className="border border-[var(--hairline)] bg-[var(--canvas)] p-6 space-y-6 relative">
-            <div className="absolute top-6 right-6 flex items-center gap-1.5 text-[10px] font-mono text-[var(--muted)]">
-              {isSavingScript && <Loader2 className="h-3 w-3 animate-spin text-[var(--ink)]" />}
-              <span>{saveMessage}</span>
+          <Panel variant="floating" className="space-y-4 p-6 shadow-none">
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-1 h-5 w-5 text-[var(--blue-2)]" />
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Next recommended action</p>
+                <h2 className="mt-1 font-display text-2xl font-bold text-[var(--ink)]">{nextAction.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{nextAction.detail}</p>
+              </div>
             </div>
-            
-            <div className="border-l-3 border-[var(--primary)] pl-3">
-              <h2 className="text-base font-bold text-[var(--ink)]">Script Lab</h2>
-              <p className="text-xs text-[var(--muted)] mt-0.5">Click directly into any block to edit. Changes save automatically.</p>
+              <Link href={`/projects/${project.id}/chat`}>
+                <Button variant="runtime" className="h-10 px-4 text-xs">
+                  <Bot className="mr-1.5 h-3.5 w-3.5" />
+                  Continue in Agent
+                </Button>
+              </Link>
+          </Panel>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="p-5">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Script status</p>
+              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">{scriptFieldsReady}/4</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Hook, script, caption, and CTA fields filled.</p>
+            </Card>
+            <Card className="p-5">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Shoot checklist readiness</p>
+              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">{checklistDone}/{allChecklistItems.length}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Production tasks checked off.</p>
+            </Card>
+            <Card className="p-5">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Asset readiness</p>
+              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">{assetCount}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Generated and attached assets available.</p>
+            </Card>
+            <Card className="p-5">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Editor readiness</p>
+              <p className="mt-2 font-display text-2xl font-bold text-[var(--ink)]">
+                {scriptFieldsReady >= 2 && assetCount > 0 ? "Ready" : "Prep needed"}
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Editor stays secondary until the package is stronger.</p>
+            </Card>
+          </div>
+
+          <Panel className="space-y-5 p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-xl font-bold text-[var(--ink)]">ProjectMind / Brief</h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">The working creative memory for this reel.</p>
+              </div>
+              <Badge variant="creative">Brief</Badge>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-[var(--radius-md)] border border-[var(--line)] p-4">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Hook</p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">{project.scriptLab.hook || "No hook captured yet."}</p>
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-[var(--line)] p-4">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Angle</p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">{project.scriptLab.angle || "No angle captured yet."}</p>
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-[var(--line)] p-4 md:col-span-2">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Current goal</p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
+                  {project.scriptLab.cta || project.scriptLab.notes || "Use the Agent to clarify the production goal."}
+                </p>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel className="space-y-6 p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-xl font-bold text-[var(--ink)]">Editable Workbench</h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">Script changes autosave on blur.</p>
+              </div>
+              <div className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--muted)]">
+                {isSavingScript ? <Loader2 className="h-3 w-3 animate-spin text-[var(--ink)]" /> : null}
+                <span>{saveMessage}</span>
+              </div>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">Hook</label>
-                <input
+                <label htmlFor="script-hook" className="block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                  Hook
+                </label>
+                <Input
+                  id="script-hook"
                   value={hookVal}
-                  onChange={(e) => setHookVal(e.target.value)}
-                  onBlur={(e) => handleScriptBlur("hook", e.target.value)}
+                  onChange={(event) => setHookVal(event.target.value)}
+                  onBlur={(event) => handleScriptBlur("hook", event.target.value)}
                   placeholder="Draft a catchy hook line..."
-                  className="w-full bg-[var(--surface-soft)] border border-[var(--hairline)] hover:border-[var(--ink)] focus:border-[var(--ink)] rounded-md px-3 py-2 text-xs text-[var(--ink)] focus:outline-none transition-colors"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">Script Content</label>
-                <textarea
+                <label htmlFor="script-body" className="block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                  Script Content
+                </label>
+                <Textarea
+                  id="script-body"
                   value={scriptVal}
-                  onChange={(e) => setScriptVal(e.target.value)}
-                  onBlur={(e) => handleScriptBlur("script", e.target.value)}
+                  onChange={(event) => setScriptVal(event.target.value)}
+                  onBlur={(event) => handleScriptBlur("script", event.target.value)}
                   placeholder="Write the full voiceover script..."
-                  className="w-full min-h-[160px] bg-[var(--surface-soft)] border border-[var(--hairline)] hover:border-[var(--ink)] focus:border-[var(--ink)] rounded-md px-3 py-2 text-xs text-[var(--ink)] focus:outline-none transition-colors resize-none leading-relaxed"
+                  className="min-h-[160px]"
                 />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">Caption copy</label>
-                  <textarea
+                  <label htmlFor="script-caption" className="block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                    Caption copy
+                  </label>
+                  <Textarea
+                    id="script-caption"
                     value={captionVal}
-                    onChange={(e) => setCaptionVal(e.target.value)}
-                    onBlur={(e) => handleScriptBlur("caption", e.target.value)}
+                    onChange={(event) => setCaptionVal(event.target.value)}
+                    onBlur={(event) => handleScriptBlur("caption", event.target.value)}
                     placeholder="Instagram caption copy with hashtags..."
-                    className="w-full min-h-[90px] bg-[var(--surface-soft)] border border-[var(--hairline)] hover:border-[var(--ink)] focus:border-[var(--ink)] rounded-md px-3 py-2 text-xs text-[var(--ink)] focus:outline-none transition-colors resize-none leading-relaxed"
+                    className="min-h-[96px]"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">Call to Action (CTA)</label>
-                  <input
+                  <label htmlFor="script-cta" className="block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                    Call to Action (CTA)
+                  </label>
+                  <Input
+                    id="script-cta"
                     value={ctaVal}
-                    onChange={(e) => setCtaVal(e.target.value)}
-                    onBlur={(e) => handleScriptBlur("cta", e.target.value)}
+                    onChange={(event) => setCtaVal(event.target.value)}
+                    onBlur={(event) => handleScriptBlur("cta", event.target.value)}
                     placeholder="Comment below or tap link..."
-                    className="w-full bg-[var(--surface-soft)] border border-[var(--hairline)] hover:border-[var(--ink)] focus:border-[var(--ink)] rounded-md px-3 py-2 text-xs text-[var(--ink)] focus:outline-none transition-colors"
                   />
                 </div>
               </div>
             </div>
           </Panel>
 
-          {/* Interactive Checklist Block */}
-          <Panel className="border border-[var(--hairline)] bg-[var(--canvas)] p-6 space-y-6">
-            <div className="border-l-3 border-[var(--block-coral)] pl-3">
-              <h2 className="text-base font-bold text-[var(--ink)]">Shoot checklist</h2>
-              <p className="text-xs text-[var(--muted)] mt-0.5">Toggle checkboxes to check off tasks. Add items inline.</p>
+          <Panel className="space-y-5 p-6" role="region" aria-label="Shoot checklist readiness">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-xl font-bold text-[var(--ink)]">Shoot checklist readiness</h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">Toggle, add, and remove A-roll tasks inline.</p>
+              </div>
+              <Badge variant="warning">{checklistDone}/{allChecklistItems.length} done</Badge>
             </div>
 
-            <div className="space-y-6">
-              {/* A-Roll Checklist */}
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
-                  <CheckCircle className="h-3.5 w-3.5" /> A-Roll Deliverables
-                </h4>
-                
-                <div className="space-y-2">
-                  {(project.shootPack.aRoll || []).map((task) => (
-                    <div key={task.id} className="flex items-center justify-between gap-3 group px-2 py-1 rounded hover:bg-[var(--surface-soft)]/60 transition-colors">
-                      <label className="flex items-center gap-2.5 cursor-pointer text-xs flex-1">
-                        <input
-                          type="checkbox"
-                          checked={task.done}
-                          onChange={() => toggleTask(task.id, "aRoll")}
-                          className="h-3.5 w-3.5 rounded border-[var(--hairline)] accent-[var(--primary)] cursor-pointer"
-                        />
-                        <span className={task.done ? "line-through text-[var(--muted)]" : "text-[var(--ink)] font-medium"}>
-                          {task.label}
-                        </span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => deleteTask(task.id, "aRoll")}
-                        className="text-[var(--muted)] hover:text-[var(--danger)] opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  
-                  {/* Inline Add Task Input */}
-                  <div className="flex gap-2 items-center pl-2 pt-1">
-                    <input
-                      value={newRollTask}
-                      onChange={(e) => setNewRollTask(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newRollTask.trim()) {
-                          addTask("aRoll", newRollTask);
-                          setNewRollTask("");
-                        }
-                      }}
-                      placeholder="+ Add inline task (press Enter)"
-                      className="text-xs bg-transparent border-0 border-b border-transparent hover:border-[var(--hairline)] focus:border-[var(--ink)] focus:outline-none py-1 w-full max-w-sm transition-colors text-[var(--ink)] placeholder:text-[var(--muted)]/60"
-                    />
-                    {newRollTask.trim() && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          addTask("aRoll", newRollTask);
-                          setNewRollTask("");
-                        }}
-                        className="h-7 px-2 text-[10px] flex items-center"
-                      >
-                        <Plus className="h-3 w-3 mr-1" /> Add
-                      </Button>
-                    )}
+            <div className="space-y-3">
+              <h3 className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                <CheckCircle className="h-3.5 w-3.5" /> A-Roll Deliverables
+              </h3>
+
+              <div className="space-y-2">
+                {(project.shootPack.aRoll || []).map((task) => (
+                  <div key={task.id} className="group flex items-center justify-between gap-3 rounded-[var(--radius-md)] px-2 py-1 transition-colors hover:bg-[color-mix(in_srgb,var(--panel-2)_60%,transparent)]">
+                    <label className="flex flex-1 cursor-pointer items-center gap-2.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={task.done}
+                        onChange={() => toggleTask(task.id, "aRoll")}
+                        className="h-3.5 w-3.5 cursor-pointer rounded border-[var(--hairline)] accent-[var(--blue)]"
+                      />
+                      <span className={task.done ? "text-[var(--muted)] line-through" : "font-medium text-[var(--ink)]"}>
+                        {task.label}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${task.label}`}
+                      onClick={() => deleteTask(task.id, "aRoll")}
+                      className="rounded p-0.5 text-[var(--muted)] opacity-100 transition-colors hover:text-[var(--danger)] md:opacity-0 md:group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
+                ))}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Input
+                    value={newRollTask}
+                    onChange={(event) => setNewRollTask(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && newRollTask.trim()) {
+                        addTask("aRoll", newRollTask);
+                        setNewRollTask("");
+                      }
+                    }}
+                    placeholder="+ Add inline task (press Enter)"
+                    className="h-9 text-xs"
+                  />
+                  {newRollTask.trim() ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        addTask("aRoll", newRollTask);
+                        setNewRollTask("");
+                      }}
+                      className="h-9 px-3 text-[10px]"
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> Add
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>
           </Panel>
         </div>
 
-        {/* Right Column: Assets, Activities, Actions */}
         <div className="space-y-6">
-          
-          {/* Agent Activity Summary */}
-          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
+          <Panel variant="floating" className="space-y-4 p-6 shadow-none">
             <div className="flex items-center gap-2">
-              <Bot className="h-4 w-4 text-[var(--ink)]" />
-              <h3 className="font-bold text-sm text-[var(--ink)]">Agent Reflection</h3>
+              <Bot className="h-4 w-4 text-[var(--blue-2)]" />
+              <h2 className="font-display text-xl font-bold text-[var(--ink)]">Recent Agent Output</h2>
             </div>
-            
-            <p className="text-xs text-[var(--muted)] leading-relaxed">
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
               {lastActivity
                 ? `${lastActivity.label}: ${lastActivity.detail}`
-                : "No active threads yet. Launch the Chat Agent to generate prompt briefs, outlines, or subtitle clips."}
+                : "No active threads yet. Launch the Agent to generate briefs, outlines, or production packages."}
             </p>
-            
-            <div className="pt-2">
-              <Link href={`/projects/${project.id}/chat`}>
-                <Button variant="secondary" className="w-full h-8 text-[11px] font-mono flex items-center justify-center gap-1.5">
-                  <Bot className="h-3.5 w-3.5" /> Continue in Agent
-                </Button>
-              </Link>
-            </div>
+            <Link href={`/projects/${project.id}/chat`}>
+              <Button variant="runtime" className="w-full h-9 text-[11px]">
+                <Bot className="mr-1.5 h-3.5 w-3.5" /> Continue in Agent
+              </Button>
+            </Link>
           </Panel>
 
-          {/* Database-style Asset Gallery */}
-          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
-            <div className="flex items-center justify-between border-b border-[var(--hairline)] pb-3">
+          <Panel className="space-y-4 p-6">
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] pb-3">
               <div className="flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-[var(--ink)]" />
-                <h3 className="font-bold text-sm text-[var(--ink)]">Asset Library</h3>
+                <h2 className="font-display text-xl font-bold text-[var(--ink)]">Assets Preview</h2>
               </div>
-              <Badge className="bg-[var(--surface-soft)] border border-[var(--hairline)] text-[var(--ink)] text-[10px]">
-                {assetCount} assets
-              </Badge>
+              <Badge variant="muted">{assetCount} assets</Badge>
             </div>
 
             {isLoadingAssets ? (
@@ -654,89 +741,63 @@ export default function ProjectHubPage() {
             ) : generatedAssets.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
                 {generatedAssets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="group border border-[var(--hairline)] rounded-lg overflow-hidden bg-[var(--surface-soft)]/20 hover:border-[var(--ink)] transition-colors flex flex-col justify-between"
-                  >
-                    {/* Media thumbnail preview */}
-                    <div className="aspect-video bg-[var(--surface-soft)] border-b border-[var(--hairline)] flex items-center justify-center overflow-hidden">
+                  <div key={asset.id} className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--line)]">
+                    <div className="flex aspect-video items-center justify-center overflow-hidden bg-[color-mix(in_srgb,var(--panel-2)_72%,transparent)]">
                       {asset.url && asset.type === "image" ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={asset.url} alt={asset.title} className="object-cover w-full h-full" />
+                        <img src={asset.url} alt={asset.title} className="h-full w-full object-cover" />
                       ) : (
-                        <div className="text-[10px] font-mono text-[var(--muted)] capitalize">{asset.type}</div>
+                        <div className="font-mono text-[10px] uppercase text-[var(--muted)]">{asset.type}</div>
                       )}
                     </div>
-                    <div className="p-2 space-y-1">
-                      <p className="text-[10px] font-semibold text-[var(--ink)] truncate" title={asset.title}>
+                    <div className="space-y-1 p-2">
+                      <p className="truncate text-[10px] font-semibold text-[var(--ink)]" title={asset.title}>
                         {asset.title}
                       </p>
-                      <p className="text-[8px] text-[var(--muted)] font-mono uppercase tracking-wider">{asset.source || "Generated"}</p>
+                      <p className="font-mono text-[8px] uppercase tracking-wider text-[var(--muted)]">
+                        {asset.source || "Generated"}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[var(--muted)] py-4 text-center border border-dashed border-[var(--hairline)] rounded-lg">
-                No assets generated. Run `/form-json-prompt` inside the Chat Agent to produce media.
+              <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--line)] py-4 text-center text-xs text-[var(--muted)]">
+                No assets generated. Run the Agent to produce media prompts and source files.
               </p>
             )}
-
-            <div className="pt-2">
-              <Link href={`/projects/${project.id}/chat`}>
-                <Button variant="secondary" className="w-full h-8 text-[11px] font-mono">
-                  Manage Assets
-                </Button>
-              </Link>
-            </div>
           </Panel>
 
-          {/* Delivery & Instagram Publishing */}
-          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
-            <div className="flex items-center gap-2 border-b border-[var(--hairline)] pb-3">
-              <InstagramIcon className="h-4 w-4 text-[var(--ink)]" />
-              <h3 className="font-bold text-sm text-[var(--ink)]">Instagram Delivery</h3>
+          <Panel className="space-y-4 p-6">
+            <div className="flex items-center gap-2 border-b border-[var(--line)] pb-3">
+              <Clapperboard className="h-4 w-4 text-[var(--ink)]" />
+              <h2 className="font-display text-xl font-bold text-[var(--ink)]">Editor Readiness</h2>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[var(--muted)]">Status</span>
-                <span className="font-mono text-[var(--ink)] font-bold">{publishingState}</span>
-              </div>
-              {project.analyticsJournal.permalink ? (
-                <a
-                  href={project.analyticsJournal.permalink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline font-semibold"
-                >
-                  View live post
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </a>
-              ) : (
-                <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-                  Post to Instagram is currently not connected. Bind social profiles in Settings to distribute reels directly.
-                </p>
-              )}
-            </div>
-          </Panel>
-
-          {/* Learnings / Feedback loop */}
-          <Panel className="space-y-4 border border-[var(--hairline)] bg-[var(--panel)]/80 p-6 shadow-[var(--shadow-soft)]">
-            <div className="flex items-center gap-2 border-b border-[var(--hairline)] pb-3">
-              <Clock className="h-4 w-4 text-[var(--ink)]" />
-              <h3 className="font-bold text-sm text-[var(--ink)]">Learnings reflection</h3>
-            </div>
-            
-            <p className="text-xs text-[var(--muted)] leading-relaxed">
-              {project.analyticsJournal.reflection.trim() || "No reflection captured yet. When the reel is live, run `/analyze` in the Agent to audit metrics."}
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              Editor remains available, but SceneBook should package the brief, script, shoot checklist, and assets first.
             </p>
-            {project.analyticsJournal.followUpIdea.trim() && (
-              <div className="rounded-md border border-[var(--hairline)] bg-[var(--surface-soft)] p-3 space-y-1">
-                <span className="text-[9px] font-mono uppercase text-[var(--muted)] tracking-wider block">Follow-up Idea</span>
-                <p className="text-xs text-[var(--ink)] leading-relaxed">{project.analyticsJournal.followUpIdea}</p>
+            <Link href={`/editor/${project.id}`}>
+              <Button variant="secondary" className="w-full h-9 text-[11px]">
+                Open Editor
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </Panel>
+
+          <Panel className="space-y-4 p-6">
+            <div className="flex items-center gap-2 border-b border-[var(--line)] pb-3">
+              <BarChart3 className="h-4 w-4 text-[var(--ink)]" />
+              <h2 className="font-display text-xl font-bold text-[var(--ink)]">Learning Loop</h2>
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              {project.analyticsJournal.reflection.trim() || "No reflection captured yet. When the reel is live, use analytics to choose the next iteration."}
+            </p>
+            {project.analyticsJournal.followUpIdea.trim() ? (
+              <div className="space-y-1 rounded-[var(--radius-md)] border border-[var(--line)] p-3">
+                <span className="block font-mono text-[9px] uppercase tracking-wider text-[var(--muted)]">Follow-up Idea</span>
+                <p className="text-xs leading-relaxed text-[var(--ink)]">{project.analyticsJournal.followUpIdea}</p>
               </div>
-            )}
+            ) : null}
           </Panel>
         </div>
       </div>

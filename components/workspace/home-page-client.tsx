@@ -2,26 +2,38 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition, useEffect } from "react";
+import type { ComponentProps } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, MessageSquare, PlusCircle, LayoutGrid, List, Kanban } from "lucide-react";
+import {
+  BarChart3,
+  Clapperboard,
+  Film,
+  LayoutGrid,
+  MessageSquare,
+  PlusCircle,
+  Rows3,
+  Sparkles,
+} from "lucide-react";
 
 import { PageHeading } from "@/components/page-heading";
-import { Panel } from "@/components/ui/panel";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Panel } from "@/components/ui/panel";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { fetchJson } from "@/lib/fetcher";
 import { statusLabels } from "@/lib/domain/content";
 import type { ProjectSummary } from "@/lib/data/repository";
 import type { ContentFormat, ContentPlatform, ContentStatus } from "@/lib/types";
-import { platformColors, formatColors, statusColors } from "@/lib/theme-utils";
-import { cn } from "@/lib/utils";
 
 const formats: ContentFormat[] = ["reel", "short", "tiktok", "carousel", "post", "vlog"];
 const platforms: ContentPlatform[] = ["instagram", "youtube", "tiktok", "linkedin", "x"];
-const boardStatuses: ContentStatus[] = ["idea", "scripted", "ready_to_shoot", "shot", "editing", "posted", "analyzed"];
+const statuses: ContentStatus[] = ["idea", "scripted", "ready_to_shoot", "shot", "editing", "posted", "analyzed", "archived"];
+
+type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+type ButtonVariant = ComponentProps<typeof Button>["variant"];
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -29,6 +41,73 @@ function formatDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function statusBadgeVariant(status: ContentStatus): BadgeVariant {
+  if (status === "idea" || status === "scripted") return "creative";
+  if (status === "ready_to_shoot" || status === "shot") return "warning";
+  if (status === "editing") return "runtime";
+  if (status === "posted" || status === "analyzed") return "applied";
+  return "muted";
+}
+
+function formatBadgeVariant(format: ContentFormat): BadgeVariant {
+  if (format === "reel" || format === "short" || format === "tiktok") return "runtime";
+  if (format === "carousel" || format === "post") return "creative";
+  return "model";
+}
+
+function nextActionFor(project: ProjectSummary): {
+  label: string;
+  detail: string;
+  href: string;
+  buttonVariant: ButtonVariant;
+  icon: "agent" | "hub" | "editor" | "analytics";
+} {
+  if (project.status === "idea" || project.status === "scripted") {
+    return {
+      label: "Continue with Agent",
+      detail: "Shape the brief, script, and shoot package.",
+      href: `/projects/${project.id}/chat`,
+      buttonVariant: "runtime",
+      icon: "agent",
+    };
+  }
+
+  if (project.status === "editing") {
+    return {
+      label: "Open Editor",
+      detail: "Cut the reel once the package is ready.",
+      href: `/editor/${project.id}`,
+      buttonVariant: "primary",
+      icon: "editor",
+    };
+  }
+
+  if (project.status === "posted" || project.status === "analyzed") {
+    return {
+      label: "View Analytics",
+      detail: "Review what worked and capture the next learning.",
+      href: "/analytics",
+      buttonVariant: "secondary",
+      icon: "analytics",
+    };
+  }
+
+  return {
+    label: "Open Hub",
+    detail: "Check shoot readiness and production details.",
+    href: `/projects/${project.id}`,
+    buttonVariant: "secondary",
+    icon: "hub",
+  };
+}
+
+function ActionIcon({ icon }: { icon: ReturnType<typeof nextActionFor>["icon"] }) {
+  if (icon === "agent") return <MessageSquare className="mr-1.5 h-3.5 w-3.5" />;
+  if (icon === "editor") return <Film className="mr-1.5 h-3.5 w-3.5" />;
+  if (icon === "analytics") return <BarChart3 className="mr-1.5 h-3.5 w-3.5" />;
+  return <Clapperboard className="mr-1.5 h-3.5 w-3.5" />;
 }
 
 export function HomePageClient({
@@ -42,16 +121,24 @@ export function HomePageClient({
   const [isPending, startTransition] = useTransition();
   const [isCreateOpen, setIsCreateOpen] = useState(initialCreateOpen);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [format, setFormat] = useState<ContentFormat>("short");
+  const [platform, setPlatform] = useState<ContentPlatform>("youtube");
+  const [viewMode, setViewMode] = useState<"gallery" | "table">("gallery");
+  const [localProjects, setLocalProjects] = useState(projects);
 
   useEffect(() => {
     setIsCreateOpen(initialCreateOpen);
   }, [initialCreateOpen]);
-  const [title, setTitle] = useState("");
-  const [format, setFormat] = useState<ContentFormat>("short");
-  const [platform, setPlatform] = useState<ContentPlatform>("youtube");
-  const [activeView, setActiveView] = useState<"table" | "board" | "gallery">("table");
 
-  const readyToShootCount = projects.filter((project) => project.status === "ready_to_shoot").length;
+  useEffect(() => {
+    setLocalProjects(projects);
+  }, [projects]);
+
+  const readyToShootCount = localProjects.filter((project) => project.status === "ready_to_shoot").length;
+  const editingCount = localProjects.filter((project) => project.status === "editing").length;
+  const learningCount = localProjects.filter((project) => project.status === "posted" || project.status === "analyzed").length;
+  const activeProjects = localProjects.filter((project) => project.status !== "archived");
 
   function openCreateForm() {
     setIsCreateOpen(true);
@@ -88,13 +175,38 @@ export function HomePageClient({
     });
   }
 
+  function handleProjectStatusChange(projectId: string, status: ContentStatus) {
+    const previousProjects = localProjects;
+    setLocalProjects((currentProjects) =>
+      currentProjects.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              status,
+            }
+          : project,
+      ),
+    );
+
+    startTransition(async () => {
+      try {
+        await fetchJson(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        });
+      } catch {
+        setLocalProjects(previousProjects);
+      }
+    });
+  }
+
   return (
     <div className="mx-auto max-w-[var(--container)] space-y-8 px-4 py-8 md:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeading
-          eyebrow="Project Hub"
-          title="Projects"
-          description="A customizable Notion-style database of your projects. Track and manage your production pipeline."
+          eyebrow="Production Command Center"
+          title="Your reels in motion"
+          description="Plan, package, edit, and learn from every short-form project."
         />
         <Button variant="primary" className="h-10 px-4 text-xs font-semibold" onClick={openCreateForm}>
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -106,9 +218,9 @@ export function HomePageClient({
         <Panel className="space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-mono tracking-widest text-[var(--muted)] uppercase mb-1">New Project</p>
+              <p className="mb-1 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">New Project</p>
               <h2 className="font-display text-xl font-bold text-[var(--ink)]">Lightweight project setup</h2>
-              <p className="text-sm text-[var(--muted)] mt-1">
+              <p className="mt-1 text-sm text-[var(--muted)]">
                 Start with the essentials, then continue inside the full project workspace.
               </p>
             </div>
@@ -119,7 +231,7 @@ export function HomePageClient({
 
           <div className="grid gap-6 md:grid-cols-3">
             <div>
-              <label htmlFor="project-title" className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+              <label htmlFor="project-title" className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[var(--ink)]">
                 Project title
               </label>
               <Input
@@ -130,7 +242,7 @@ export function HomePageClient({
               />
             </div>
             <div>
-              <label htmlFor="project-format" className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+              <label htmlFor="project-format" className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[var(--ink)]">
                 Format
               </label>
               <CustomSelect
@@ -141,7 +253,7 @@ export function HomePageClient({
               />
             </div>
             <div>
-              <label htmlFor="project-platform" className="block text-xs font-semibold text-[var(--ink)] uppercase tracking-wider mb-2">
+              <label htmlFor="project-platform" className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[var(--ink)]">
                 Platform
               </label>
               <CustomSelect
@@ -155,7 +267,7 @@ export function HomePageClient({
 
           {createError ? <p className="text-xs text-[var(--danger)]">{createError}</p> : null}
 
-          <div className="flex justify-end pt-2 border-t border-[var(--hairline)]">
+          <div className="flex justify-end border-t border-[var(--hairline)] pt-2">
             <Button
               variant="primary"
               className="h-10 px-5 text-xs font-semibold"
@@ -169,325 +281,198 @@ export function HomePageClient({
         </Panel>
       ) : null}
 
-      <div className="space-y-4">
-        {/* Notion-style database view tabs */}
-        <div className="flex items-center gap-1 border-b border-[var(--line)]">
-          <button
-            type="button"
-            onClick={() => setActiveView("table")}
-            className={cn(
-              "px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2",
-              activeView === "table"
-                ? "border-[var(--coral)] text-[var(--coral-2)] font-bold"
-                : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
-            )}
-          >
-            <List className="h-3.5 w-3.5" />
-            Table
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveView("board")}
-            className={cn(
-              "px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2",
-              activeView === "board"
-                ? "border-[var(--coral)] text-[var(--coral-2)] font-bold"
-                : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
-            )}
-          >
-            <Kanban className="h-3.5 w-3.5" />
-            Board
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveView("gallery")}
-            className={cn(
-              "px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2",
-              activeView === "gallery"
-                ? "border-[var(--coral)] text-[var(--coral-2)] font-bold"
-                : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
-            )}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Gallery
-          </button>
-        </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <Panel variant="floating" className="p-4 shadow-none">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Total projects</p>
+          <p className="mt-2 font-display text-3xl font-bold text-[var(--ink)]">{localProjects.length}</p>
+        </Panel>
+        <Panel variant="floating" className="p-4 shadow-none">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Ready to shoot</p>
+          <p className="mt-2 font-display text-3xl font-bold text-[var(--ink)]">{readyToShootCount}</p>
+        </Panel>
+        <Panel variant="floating" className="p-4 shadow-none">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">In editing</p>
+          <p className="mt-2 font-display text-3xl font-bold text-[var(--ink)]">{editingCount}</p>
+        </Panel>
+        <Panel variant="floating" className="p-4 shadow-none">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Posted/analyzed</p>
+          <p className="mt-2 font-display text-3xl font-bold text-[var(--ink)]">{learningCount}</p>
+        </Panel>
+      </div>
 
-        {projects.length === 0 ? (
-          <Panel className="py-16 text-center text-sm text-[var(--muted)]">
-            No projects yet. Create the first one to open the project workspace flow.
-          </Panel>
-        ) : (
-          <>
-            {/* TABLE VIEW */}
-            {activeView === "table" && (
-              <Panel className="overflow-hidden border border-[var(--line)] p-0">
-                <div className="flex items-center justify-between border-b border-[var(--line)] p-6">
-                  <div>
-                    <h2 className="text-base font-bold text-[var(--ink)]">{projects.length} Projects</h2>
-                  </div>
-                  <Badge className="bg-[var(--surface-soft)] text-[var(--ink)] border border-[var(--hairline)]">
-                    {readyToShootCount} ready to shoot
-                  </Badge>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm border-collapse">
-                    <thead>
-                      <tr className="border-b border-[var(--line)] bg-[rgba(255,255,255,.035)]">
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Project</th>
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Status</th>
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Format</th>
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Platform</th>
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Assets</th>
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Updated</th>
-                        <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)] text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {projects.map((project) => (
-                        <tr key={project.id} className="border-b border-[var(--line)] transition-colors last:border-b-0 hover:bg-[rgba(255,255,255,.045)]">
-                          <td className="px-6 py-4">
+      {localProjects.length === 0 ? (
+        <Panel className="py-16 text-center text-sm text-[var(--muted)]">
+          No projects yet. Create the first one to open the project workspace flow.
+        </Panel>
+      ) : (
+        <section className="space-y-4" aria-label="Active productions">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl font-bold text-[var(--ink)]">Active productions</h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">Every reel with its current stage and next move.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Badge variant="muted">{activeProjects.length} active</Badge>
+              <div
+                className="inline-flex rounded-[var(--radius-pill)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--panel-2)_64%,transparent)] p-1"
+                role="group"
+                aria-label="Project view"
+              >
+                <button
+                  type="button"
+                  onClick={() => setViewMode("gallery")}
+                  aria-pressed={viewMode === "gallery"}
+                  className={[
+                    "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-pill)] px-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                    viewMode === "gallery"
+                      ? "bg-[var(--white)] text-[var(--black)]"
+                      : "text-[var(--muted)] hover:text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Expanded gallery
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  aria-pressed={viewMode === "table"}
+                  className={[
+                    "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-pill)] px-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                    viewMode === "table"
+                      ? "bg-[var(--white)] text-[var(--black)]"
+                      : "text-[var(--muted)] hover:text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  <Rows3 className="h-3.5 w-3.5" />
+                  Compact table
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {viewMode === "gallery" ? (
+            <div className="grid gap-4" role="region" aria-label="Expanded gallery">
+              {activeProjects.map((project) => {
+                const action = nextActionFor(project);
+
+                return (
+                  <article key={project.id}>
+                    <Card className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_220px_240px] lg:items-center">
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={statusBadgeVariant(project.status)}>{statusLabels[project.status]}</Badge>
+                          <Badge variant={formatBadgeVariant(project.format)}>{project.format.toUpperCase()}</Badge>
+                          <Badge variant="muted">{project.platform.toUpperCase()}</Badge>
+                        </div>
+                        <div>
+                          <h3 className="font-display text-xl font-bold text-[var(--ink)]">{project.title}</h3>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {project.assetCount} assets | Updated {formatDate(project.updatedAt)}
+                          </p>
+                        </div>
+                        <div className="max-w-2xl rounded-[var(--radius-md)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--panel-2)_42%,transparent)] p-3">
+                          <div className="flex items-start gap-2">
+                            <Sparkles className="mt-0.5 h-4 w-4 text-[var(--blue-2)]" />
                             <div>
-                              <p className="font-semibold text-[var(--ink)]">{project.title}</p>
-                              <p className="text-xs text-[var(--muted)] mt-0.5">Project workspace</p>
+                              <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Next action</p>
+                              <p className="mt-1 text-sm font-semibold text-[var(--ink)]">{action.label}</p>
+                              <p className="mt-0.5 text-xs text-[var(--muted)]">{action.detail}</p>
                             </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Stage</p>
+                        <CustomSelect
+                          value={project.status}
+                          onChange={(value) => handleProjectStatusChange(project.id, value as ContentStatus)}
+                          options={statuses.map((status) => ({ value: status, label: statusLabels[status] }))}
+                          triggerClassName="h-9 text-xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+                        <Link href={action.href} className="min-w-0">
+                          <Button variant={action.buttonVariant} className="h-9 w-full px-3 text-xs">
+                            <ActionIcon icon={action.icon} />
+                            {action.label}
+                          </Button>
+                        </Link>
+                        <Link href={`/projects/${project.id}`} className="min-w-0">
+                          <Button variant="secondary" className="h-9 w-full px-3 text-xs">
+                            Open Hub
+                          </Button>
+                        </Link>
+                      </div>
+                    </Card>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <Panel className="overflow-visible p-0">
+              <div className="overflow-x-auto">
+                <table className="min-w-full table-fixed text-left text-sm" aria-label="Production table">
+                  <thead>
+                    <tr className="border-b border-[var(--line)]">
+                      <th className="w-[34%] px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Project</th>
+                      <th className="w-[18%] px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Stage</th>
+                      <th className="w-[14%] px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Format</th>
+                      <th className="w-[14%] px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Platform</th>
+                      <th className="w-[20%] px-5 py-3 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeProjects.map((project) => {
+                      const action = nextActionFor(project);
+
+                      return (
+                        <tr key={project.id} className="border-b border-[var(--line)] last:border-b-0">
+                          <td className="px-5 py-4">
+                            <p className="truncate font-semibold text-[var(--ink)]">{project.title}</p>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              {project.assetCount} assets | Updated {formatDate(project.updatedAt)}
+                            </p>
                           </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className="px-2 py-0.5 rounded-[var(--rounded-sm)] text-[11px] font-semibold font-mono tracking-wider border"
-                              style={{
-                                backgroundColor: statusColors[project.status]?.bg ?? "#f0eeec",
-                                color: statusColors[project.status]?.text ?? "#5d5b54",
-                                borderColor: statusColors[project.status]?.border ?? "var(--hairline)",
-                              }}
-                            >
-                              {statusLabels[project.status]?.toUpperCase()}
-                            </span>
+                          <td className="px-5 py-4">
+                            <CustomSelect
+                              value={project.status}
+                              onChange={(value) => handleProjectStatusChange(project.id, value as ContentStatus)}
+                              options={statuses.map((status) => ({ value: status, label: statusLabels[status] }))}
+                              triggerClassName="h-9 text-xs"
+                            />
                           </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className="px-2 py-0.5 rounded-[var(--rounded-sm)] text-[11px] font-semibold font-mono tracking-wider border"
-                              style={{
-                                backgroundColor: formatColors[project.format]?.bg ?? "#f0eeec",
-                                color: formatColors[project.format]?.text ?? "#5d5b54",
-                                borderColor: formatColors[project.format]?.border ?? "var(--hairline)",
-                              }}
-                            >
-                              {project.format.toUpperCase()}
-                            </span>
+                          <td className="px-5 py-4">
+                            <Badge variant={formatBadgeVariant(project.format)}>{project.format.toUpperCase()}</Badge>
                           </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className="px-2 py-0.5 rounded-[var(--rounded-sm)] text-[11px] font-semibold font-mono tracking-wider border"
-                              style={{
-                                backgroundColor: platformColors[project.platform]?.bg ?? "#f0eeec",
-                                color: platformColors[project.platform]?.text ?? "#5d5b54",
-                                borderColor: platformColors[project.platform]?.border ?? "var(--hairline)",
-                              }}
-                            >
-                              {project.platform.toUpperCase()}
-                            </span>
+                          <td className="px-5 py-4">
+                            <Badge variant="muted">{project.platform.toUpperCase()}</Badge>
                           </td>
-                          <td className="px-6 py-4 text-[var(--ink)]">{project.assetCount}</td>
-                          <td className="px-6 py-4 text-[var(--muted)]">{formatDate(project.updatedAt)}</td>
-                          <td className="px-6 py-4">
+                          <td className="px-5 py-4">
                             <div className="flex justify-end gap-2">
+                              <Link href={action.href}>
+                                <Button variant={action.buttonVariant} className="h-8 px-3 text-xs">
+                                  {action.label}
+                                </Button>
+                              </Link>
                               <Link href={`/projects/${project.id}`}>
                                 <Button variant="secondary" className="h-8 px-3 text-xs">
-                                  Workspace
-                                </Button>
-                              </Link>
-                              <Link href={`/projects/${project.id}/chat`}>
-                                <Button variant="secondary" className="h-8 px-3 text-xs">
-                                  <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-                                  Chat
-                                </Button>
-                              </Link>
-                              <Link href={`/editor/${project.id}`}>
-                                <Button variant="primary" className="h-8 px-3 text-xs">
-                                  Editor
-                                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                                  Hub
                                 </Button>
                               </Link>
                             </div>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Panel>
-            )}
-
-            {/* BOARD VIEW */}
-            {activeView === "board" && (
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin h-[500px]">
-                {boardStatuses.map((status) => {
-                  const statusCards = projects.filter((p) => p.status === status);
-                  return (
-                    <div
-                      key={status}
-                      className="flex flex-col w-[280px] min-w-[280px] rounded-lg border border-[var(--hairline)] bg-[var(--surface-soft)]/50 p-3 h-full overflow-hidden"
-                    >
-                      <div className="flex items-center justify-between border-b border-[var(--hairline)] pb-2 mb-3">
-                        <span
-                          className="px-2 py-0.5 rounded-[var(--rounded-sm)] text-[10px] font-semibold font-mono tracking-wider border uppercase"
-                          style={{
-                            backgroundColor: statusColors[status]?.bg ?? "#f0eeec",
-                            color: statusColors[status]?.text ?? "#5d5b54",
-                            borderColor: statusColors[status]?.border ?? "var(--hairline)",
-                          }}
-                        >
-                          {statusLabels[status]}
-                        </span>
-                        <span className="text-xs text-[var(--muted)] font-mono">{statusCards.length}</span>
-                      </div>
-                      <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
-                        {statusCards.map((project) => (
-                          <div
-                            key={project.id}
-                            className="bg-[var(--canvas)] border border-[var(--hairline)] rounded-lg p-4 shadow-sm space-y-3 hover:border-[var(--ink)] transition-colors"
-                          >
-                            <div className="border-l-2 pl-2" style={{ borderColor: platformColors[project.platform]?.text ?? "var(--primary)" }}>
-                              <h4 className="text-sm font-semibold text-[var(--ink)] leading-snug">{project.title}</h4>
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              <span
-                                className="px-1.5 py-0.2 rounded-[var(--rounded-sm)] text-[9px] font-semibold font-mono border"
-                                style={{
-                                  backgroundColor: platformColors[project.platform]?.bg ?? "#f0eeec",
-                                  color: platformColors[project.platform]?.text ?? "#5d5b54",
-                                  borderColor: platformColors[project.platform]?.border ?? "var(--hairline)",
-                                }}
-                              >
-                                {project.platform.toUpperCase()}
-                              </span>
-                              <span
-                                className="px-1.5 py-0.2 rounded-[var(--rounded-sm)] text-[9px] font-semibold font-mono border"
-                                style={{
-                                  backgroundColor: formatColors[project.format]?.bg ?? "#f0eeec",
-                                  color: formatColors[project.format]?.text ?? "#5d5b54",
-                                  borderColor: formatColors[project.format]?.border ?? "var(--hairline)",
-                                }}
-                              >
-                                {project.format.toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] text-[var(--muted)] font-mono">
-                              <span>Assets: {project.assetCount}</span>
-                              <span>{formatDate(project.updatedAt)}</span>
-                            </div>
-                            <div className="pt-2 border-t border-[var(--hairline)] flex gap-1.5">
-                              <Link href={`/projects/${project.id}`} className="flex-1">
-                                <Button variant="secondary" className="w-full h-7 px-2 text-[10px]">
-                                  Workspace
-                                </Button>
-                              </Link>
-                              <Link href={`/editor/${project.id}`} className="flex-1">
-                                <Button variant="primary" className="w-full h-7 px-2 text-[10px]">
-                                  Editor
-                                </Button>
-                              </Link>
-                            </div>
-                          </div>
-                        ))}
-                        {statusCards.length === 0 && (
-                          <div className="text-center py-8 text-xs text-[var(--muted)] border border-dashed border-[var(--hairline)] rounded-lg">
-                            No projects here
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            )}
-
-            {/* GALLERY VIEW */}
-            {activeView === "gallery" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {projects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="bg-[var(--canvas)] border border-[var(--hairline)] rounded-lg overflow-hidden flex flex-col shadow-sm hover:border-[var(--ink)] transition-colors group"
-                  >
-                    {/* Top cover banner strip representing status or platform */}
-                    <div
-                      className="h-16 w-full border-b border-[var(--hairline)] flex items-end p-3"
-                      style={{
-                        backgroundColor: platformColors[project.platform]?.bg ?? "var(--surface-soft)",
-                      }}
-                    >
-                      <span
-                        className="px-2 py-0.5 rounded-[var(--rounded-sm)] text-[9px] font-semibold font-mono tracking-wider border bg-[var(--canvas)]"
-                        style={{
-                          color: platformColors[project.platform]?.text ?? "#5d5b54",
-                          borderColor: platformColors[project.platform]?.border ?? "var(--hairline)",
-                        }}
-                      >
-                        {project.platform.toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-sm text-[var(--ink)] leading-snug group-hover:text-[var(--primary)] transition-colors">
-                          {project.title}
-                        </h4>
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          <span
-                            className="px-1.5 py-0.2 rounded-[var(--rounded-sm)] text-[9px] font-semibold font-mono border"
-                            style={{
-                              backgroundColor: statusColors[project.status]?.bg ?? "#f0eeec",
-                              color: statusColors[project.status]?.text ?? "#5d5b54",
-                              borderColor: statusColors[project.status]?.border ?? "var(--hairline)",
-                            }}
-                          >
-                            {statusLabels[project.status]?.toUpperCase()}
-                          </span>
-                          <span
-                            className="px-1.5 py-0.2 rounded-[var(--rounded-sm)] text-[9px] font-semibold font-mono border"
-                            style={{
-                              backgroundColor: formatColors[project.format]?.bg ?? "#f0eeec",
-                              color: formatColors[project.format]?.text ?? "#5d5b54",
-                              borderColor: formatColors[project.format]?.border ?? "var(--hairline)",
-                            }}
-                          >
-                            {project.format.toUpperCase()}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-[var(--hairline)] flex items-center justify-between text-[10px] text-[var(--muted)] font-mono">
-                        <span>Assets: {project.assetCount}</span>
-                        <span>Updated {new Date(project.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                      </div>
-
-                      <div className="flex gap-2 pt-1">
-                        <Link href={`/projects/${project.id}`} className="flex-1">
-                          <Button variant="secondary" className="w-full h-8 text-[10px]">
-                            Workspace
-                          </Button>
-                        </Link>
-                        <Link href={`/projects/${project.id}/chat`} className="flex-1">
-                          <Button variant="secondary" className="w-full h-8 text-[10px]">
-                            Chat
-                          </Button>
-                        </Link>
-                        <Link href={`/editor/${project.id}`} className="flex-1">
-                          <Button variant="primary" className="w-full h-8 text-[10px]">
-                            Editor
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+            </Panel>
+          )}
+        </section>
+      )}
     </div>
   );
 }
