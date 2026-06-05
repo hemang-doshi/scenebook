@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, test, vi } from "vitest";
 
@@ -75,7 +75,8 @@ describe("AgentComposer", () => {
     renderControlledComposer({ onChangeSpy: onChange, onSubmit });
 
     fireEvent.click(screen.getByRole("button", { name: /open action menu/i }));
-    fireEvent.click(screen.getByRole("button", { name: /\/script/i }));
+    const menu = screen.getByRole("menu", { name: /agent actions/i });
+    fireEvent.click(within(menu).getAllByRole("button", { name: /script/i })[0]);
 
     expect(screen.getByLabelText("Agent prompt")).toHaveValue("");
     expect(onChange).toHaveBeenCalledWith("/script ");
@@ -125,9 +126,7 @@ describe("AgentComposer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /model routing/i }));
     fireEvent.click(screen.getByRole("button", { name: /video/i }));
-    fireEvent.change(screen.getByLabelText("video model"), {
-      target: { value: "Wan-AI/Wan2.2-TI2V-5B" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Wan 2\.2 TI2V/i }));
 
     expect(onModelsChange).toHaveBeenCalledWith({
       ...baseModels,

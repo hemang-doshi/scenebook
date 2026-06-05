@@ -189,6 +189,12 @@ textarea {
   outline-offset: 3px;
 }
 
+[data-agent-composer="true"] :is(textarea, button):focus,
+[data-agent-composer="true"] :is(textarea, button):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 ::selection {
   background: rgba(105,167,255,.32);
   color: var(--ink);

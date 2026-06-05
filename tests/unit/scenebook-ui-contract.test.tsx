@@ -285,7 +285,7 @@ describe("SceneBook UI contract", () => {
     fireEvent.click(screen.getByRole("button", { name: /expand projectmind/i }));
     expect(island).toHaveAttribute("data-state", "expanded");
 
-    fireEvent.click(screen.getByRole("button", { name: /edit projectmind/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     const hook = screen.getByLabelText("ProjectMind hook");
     fireEvent.change(hook, { target: { value: "Updated hook" } });
     fireEvent.click(screen.getByRole("button", { name: /save projectmind/i }));

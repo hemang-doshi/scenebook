@@ -13,14 +13,8 @@ import {
   Film,
   BarChart3,
   Settings2,
-  Link2,
-  Plus,
-  UserCircle2,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -38,7 +32,6 @@ export function WorkspaceShell({
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isActionRailExpanded, setIsActionRailExpanded] = useState(false);
   const [currentProject, setCurrentProject] = useState<{
     id: string;
     title: string;
@@ -123,13 +116,6 @@ export function WorkspaceShell({
   return (
     <div
       className="relative flex min-h-screen flex-col bg-transparent text-[var(--ink)] font-sans"
-      style={
-        {
-          "--workspace-rail-width": isActionRailExpanded
-            ? "var(--workspace-rail-expanded)"
-            : "var(--workspace-rail-collapsed)",
-        } as React.CSSProperties
-      }
     >
       <header className="sticky top-0 z-40 grid h-[72px] w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[var(--line)] bg-[rgba(7,8,11,.74)] px-4 backdrop-blur-[18px] lg:px-6">
         <div className="flex min-w-0 items-center gap-4">
@@ -265,101 +251,7 @@ export function WorkspaceShell({
         </div>
       )}
 
-      <aside
-        aria-label="Workspace actions"
-        data-side="left"
-        data-state={isActionRailExpanded ? "expanded" : "collapsed"}
-        className="fixed left-0 top-[72px] z-30 hidden h-[calc(100vh-72px)] border-r border-[var(--line)] bg-[rgba(7,8,11,.82)] backdrop-blur-[18px] transition-[width] duration-[var(--sb-motion-standard)] md:flex"
-        style={{ width: "var(--workspace-rail-width)" }}
-      >
-        <div className="flex w-full flex-col gap-2 px-2 py-4">
-          <Link href="/home?create=1" aria-label="Create project" className="w-full">
-            <Button
-              variant="ghost"
-              className={cn("h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
-              aria-label="Create project"
-            >
-              <Plus className="h-4 w-4" />
-              {isActionRailExpanded ? <span className="ml-2 text-xs">New project</span> : null}
-            </Button>
-          </Link>
-          <Link href="/settings?tab=integrations" aria-label="Integrations" className="w-full">
-            <Button
-              variant="ghost"
-              className={cn("h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
-              aria-label="Integrations"
-            >
-              <Link2 className="h-4 w-4" />
-              {isActionRailExpanded ? <span className="ml-2 text-xs">Integrations</span> : null}
-            </Button>
-          </Link>
-          <Link href="/settings" aria-label="Settings" className="w-full">
-            <Button
-              variant="ghost"
-              className={cn("h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
-              aria-label="Settings"
-            >
-              <Settings2 className="h-4 w-4" />
-              {isActionRailExpanded ? <span className="ml-2 text-xs">Settings</span> : null}
-            </Button>
-          </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            className={cn("mt-auto h-10 w-full justify-start px-3", !isActionRailExpanded && "justify-center px-0")}
-            aria-label={isActionRailExpanded ? "Collapse workspace actions" : "Expand workspace actions"}
-            onClick={() => setIsActionRailExpanded((open) => !open)}
-          >
-            {isActionRailExpanded ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-            {isActionRailExpanded ? <span className="ml-2 text-xs">Collapse</span> : null}
-          </Button>
-
-          {isActionRailExpanded ? (
-            <Panel variant="floating" className="mt-3 flex min-h-0 flex-1 flex-col p-4 shadow-none">
-              <div className="flex items-center gap-3 border-b border-[var(--line)] pb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,.04)]">
-                  <UserCircle2 className="h-5 w-5 text-[var(--ink)]" />
-                </div>
-                <div className="min-w-0">
-                  <Badge variant="runtime">Account</Badge>
-                  <p className="truncate text-sm font-semibold text-[var(--ink)]">{accountEmail ?? "Signed in"}</p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-2">
-                <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] px-3 py-2">
-                  <span className="text-[10px] font-mono uppercase tracking-[.08em] text-[var(--muted)]">
-                    Theme
-                  </span>
-                  <ThemeToggle />
-                </div>
-                <Link href="/home?create=1">
-                  <Button variant="secondary" className="w-full justify-start text-xs">New project</Button>
-                </Link>
-                <Link href="/settings">
-                  <Button variant="secondary" className="w-full justify-start text-xs">Settings</Button>
-                </Link>
-                <Link href="/settings?tab=integrations">
-                  <Button variant="secondary" className="w-full justify-start text-xs">Integrations</Button>
-                </Link>
-              </div>
-
-              <div className="mt-auto pt-5">
-                <Button
-                  variant="secondary"
-                  className="w-full justify-start text-xs"
-                  disabled={isSigningOut}
-                  onClick={handleSignOut}
-                >
-                  {isSigningOut ? "Signing out..." : "Sign out"}
-                </Button>
-              </div>
-            </Panel>
-          ) : null}
-        </div>
-      </aside>
-
-      <main className="w-full flex-1 bg-transparent transition-[padding] duration-[var(--sb-motion-standard)] md:pl-[var(--workspace-rail-width)]">
+      <main className="w-full flex-1 bg-transparent">
         {children}
       </main>
     </div>

@@ -5,7 +5,10 @@ import { Card } from "@/components/ui/card";
 
 export const commandCatalog = [
   { command: "/script", label: "Script", description: "Turn a rough idea into hook, script, caption, and CTA." },
+  { command: "/plan", label: "Plan", description: "Shape a production plan, beats, shots, and next action." },
+  { command: "/readiness-check", label: "Readiness", description: "Ask the agent to analyze blockers, confidence, and next action." },
   { command: "/form-json-prompt", label: "Prompt JSON", description: "Build a detailed generation-ready prompt package." },
+  { command: "/package", label: "Package", description: "Create a complete script, shoot, asset, and publish package." },
   { command: "/generate", label: "Generate", description: "Create image, video, or audio from text or JSON." },
   { command: "/generate-image", label: "Image", description: "Generate an image concept." },
   { command: "/generate-video", label: "Video", description: "Generate a video concept." },
@@ -44,27 +47,22 @@ export function SlashCommandMenu({
   }
 
   return (
-    <Card className="absolute bottom-[calc(100%+0.5rem)] left-0 z-30 w-full max-w-[24rem] rounded-[var(--rounded-md)] border border-[var(--hairline)] bg-[var(--canvas)] p-2 shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
-      <div className="grid gap-1">
+    <Card className="absolute bottom-[calc(100%+0.6rem)] left-0 z-40 w-[min(16rem,calc(100vw-1.5rem))] rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(20,24,33,.96)] p-1.5 shadow-[var(--shadow-soft)] backdrop-blur-[18px] animate-[ed-fadeIn_0.15s_ease-out]">
+      <div className="grid max-h-72 gap-0.5 overflow-y-auto pr-1 scrollbar-thin">
         {commands.map((item) => (
           <Button
             key={item.command}
             type="button"
             variant="ghost"
-            className="h-auto w-full rounded-[var(--rounded-md)] px-2.5 py-2 text-left normal-case tracking-[0] hover:bg-[var(--surface-soft)]"
+            className="h-8 min-h-8 w-full justify-start rounded-[var(--radius-sm)] px-2 text-left normal-case tracking-[0] hover:bg-[rgba(255,255,255,.055)] focus-visible:ring-0"
             onClick={() => onSelect(item.command)}
           >
-            <span className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 shrink-0 rounded-md border border-[var(--hairline)] bg-[var(--canvas)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[var(--ink)] font-bold">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="w-16 shrink-0 truncate font-mono text-[10px] font-semibold text-[var(--ink)]">
                 {item.label}
               </span>
-              <span className="min-w-0">
-                <span className="block truncate font-mono text-[10px] uppercase tracking-wider text-[var(--ink)] font-bold">
-                  {item.command}
-                </span>
-                <span className="block text-xs text-[var(--muted)] leading-relaxed mt-0.5">
-                  {item.description}
-                </span>
+              <span className="truncate text-[11px] leading-none text-[var(--muted)]">
+                {item.description}
               </span>
             </span>
           </Button>

@@ -141,7 +141,10 @@ describe("agent UI components", () => {
   test("visible slash tray commands match the backend command surface", () => {
     expect(getVisibleCommands("/").map((item) => item.command)).toEqual([
       "/script",
+      "/plan",
+      "/readiness-check",
       "/form-json-prompt",
+      "/package",
       "/generate",
       "/generate-image",
       "/generate-video",
@@ -301,6 +304,48 @@ describe("agent UI components", () => {
     const newConversationOptions = await screen.findAllByText("+ New Conversation");
     expect(newConversationOptions.at(-1)?.closest("button")).toHaveClass("text-muted");
     expect(screen.getByText("Studio Product")).toBeInTheDocument();
+  });
+
+  test("agent center header avoids duplicated Hub and Editor navigation", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    expect(await screen.findByText("Empty")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /editor/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /project hub/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Goa Reel \/ Strategic Agent/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/New conversation/i).length).toBeGreaterThan(0);
+  });
+
+  test("ProjectMind readiness CTA prefills the composer from the Agent cockpit", async () => {
+    fetchJson.mockImplementation(async (url: string) => {
+      if (url.includes("listThreads=true")) {
+        return { threads: [] };
+      }
+      if (url.includes("/assets")) {
+        return { folders: [], looseAssets: [] };
+      }
+      return { threadId: null, messages: [], toolCalls: [] };
+    });
+
+    render(React.createElement(AgentChatIsland, { project }));
+
+    await screen.findByText("Empty");
+    fireEvent.click(screen.getByRole("button", { name: /expand projectmind/i }));
+    fireEvent.click(screen.getByRole("button", { name: /run readiness check/i }));
+
+    expect((screen.getByLabelText("composer") as HTMLInputElement).value).toMatch(
+      /^\/readiness-check Analyze this project's readiness/,
+    );
   });
 
   test("new conversation stays empty when no persisted thread exists", async () => {

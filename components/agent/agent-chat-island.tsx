@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import Link from "next/link";
 import { Archive, Bot, Library } from "lucide-react";
 
 import { AgentComposer, type Attachment } from "@/components/agent/agent-composer";
@@ -184,6 +183,10 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
     void loadAssets();
     void loadProject();
   }, [loadAssets, loadProject]);
+
+  const prefillCommand = useCallback((command: string) => {
+    setDraft(command.includes(" ") ? command : `${command} `);
+  }, []);
 
   const archiveThread = useCallback(async (thread: ThreadInfo) => {
     await fetchJson(`/api/projects/${project.id}/agent`, {
@@ -600,16 +603,20 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   }, [project.id, threadId, historyVersion, project]);
 
   const hasMessages = entries.length > 0;
-  const editorHref = `/editor/${project.id}`;
   const totalAssets =
     (library?.folders?.reduce((acc, folder) => acc + folder.assets.length, 0) || 0) +
     (library?.looseAssets?.length || 0);
+  const currentThreadTitle =
+    threadId && threadId !== "new-chat"
+      ? threads.find((thread) => thread.id === threadId)?.title || `Thread ${threadId.slice(0, 8)}`
+      : "New conversation";
+  const hasRecentAgentOutput = entries.some((entry) => entry.kind === "message" && entry.role === "assistant");
 
   return (
     <div className="flex h-[calc(100vh-72px)] w-full overflow-hidden bg-transparent">
       
       {/* Left Sidebar for History */}
-      <div className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--line)] bg-[rgba(255,255,255,.035)] p-4 md:flex">
+      <div className="hidden h-full w-56 shrink-0 flex-col border-r border-[var(--line)] bg-[rgba(255,255,255,.032)] p-3 md:flex">
         <div className="flex flex-col flex-1 min-h-0">
           <Button
             variant="secondary"
@@ -618,14 +625,14 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               setEntries([]);
             }}
             className={cn(
-              "mb-4 h-9 min-h-9 w-full shrink-0 px-3 py-1 text-xs font-mono uppercase tracking-[.07em]",
+              "mb-3 h-8 min-h-8 w-full shrink-0 justify-center overflow-hidden px-2 py-1 text-[10px] font-mono uppercase tracking-[.04em]",
               threadId !== "new-chat" && "text-muted"
             )}
           >
-            + New Conversation
+            + New chat
           </Button>
 
-          <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2 shrink-0">Recent Conversations</span>
+          <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--muted)] px-1 font-bold block mb-2 shrink-0">Threads</span>
           <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
             {threads.map((t) => (
               <div
@@ -640,7 +647,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                 <button
                   type="button"
                   onClick={() => setThreadId(t.id)}
-                  className="min-w-0 flex-1 truncate px-3 py-2 text-left text-xs font-mono uppercase tracking-wider"
+                  className="min-w-0 flex-1 truncate px-2.5 py-2 text-left text-[11px] font-mono uppercase tracking-wider"
                 >
                   <span className="truncate">{t.title || `Thread ${t.id.slice(0, 8)}`}</span>
                 </button>
@@ -668,39 +675,46 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
       {/* Right Main Conversational Workspace */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         
-        {/* Navigation Bar */}
-        <header className="z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] bg-[rgba(255,255,255,.025)] px-3 py-3 sm:px-6">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <Bot className="h-4 w-full max-w-4 shrink-0 text-[var(--blue)]" />
-            <div className="min-w-0">
-              <h2 className="truncate text-xs font-bold font-mono uppercase tracking-[.07em] text-[var(--ink)]">
-                {activeProject.title} / Strategic Agent
-              </h2>
+        {/* Agent cockpit header */}
+        <header className="z-10 shrink-0 px-3 pt-4 sm:px-6">
+          <div className="flex min-h-12 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <Bot className="h-4 w-full max-w-4 shrink-0 text-[var(--blue)]" />
+              <div className="min-w-0">
+                <h2 className="truncate text-xs font-bold font-mono uppercase tracking-[.07em] text-[var(--ink)]">
+                  {activeProject.title} / Strategic Agent
+                </h2>
+                <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">
+                  {currentThreadTitle}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href={editorHref}>
-              <Button variant="secondary" className="h-8 px-3 text-[10px] font-mono">
-                Editor
-              </Button>
-            </Link>
-            <Link href={`/projects/${project.id}`}>
-              <Button variant="secondary" className="hidden h-8 px-3 text-[10px] font-mono sm:inline-flex">
-                Project Hub
-              </Button>
-            </Link>
-            <div className="relative">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setIsAssetDrawerOpen((current) => !current)}
-                className="flex h-8 min-h-8 items-center gap-1.5 border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-1 text-[10px] font-mono"
-              >
-                <Library className="h-3.5 w-3.5 text-[var(--blue-2)]" />
-                <span>Assets:</span>
-                <span className="rounded-md border border-[var(--line)] bg-[rgba(255,255,255,.055)] px-1.5 py-0.5 font-bold font-mono">{library ? totalAssets : "-"}</span>
-              </Button>
-              <AssetDrawer projectId={project.id} open={isAssetDrawerOpen} onOpenChange={setIsAssetDrawerOpen} />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Badge className={cn(
+                "border text-[9px] px-2 py-0.5 rounded-[var(--rounded-sm)]",
+                activity.tone === "error"
+                  ? "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]"
+                  : activity.tone === "warning"
+                    ? "border-[var(--amber)]/40 bg-[var(--amber)]/10 text-[var(--amber)]"
+                    : "border-[var(--line)] bg-[rgba(255,255,255,.045)] text-[var(--muted)]"
+              )}>
+                {activity.label.toUpperCase()}
+              </Badge>
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setIsAssetDrawerOpen((current) => !current)}
+                  className="flex h-8 min-h-8 items-center gap-1.5 border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-1 text-[10px] font-mono shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-[14px] focus-visible:ring-0"
+                >
+                  <Library className="h-3.5 w-3.5 text-[var(--blue-2)]" />
+                  <span>Assets</span>
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-xs)] bg-[rgba(255,255,255,.075)] px-1 font-mono text-[9px] font-bold leading-none text-[var(--ink)]/85">
+                    {library ? totalAssets : "-"}
+                  </span>
+                </Button>
+                <AssetDrawer projectId={project.id} open={isAssetDrawerOpen} onOpenChange={setIsAssetDrawerOpen} />
+              </div>
             </div>
           </div>
         </header>
@@ -716,25 +730,12 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               
               {error ? <p className="pb-3 text-xs text-[var(--danger)]">{error}</p> : null}
               
-              <div className="mb-4 flex w-full justify-start">
-                <Badge className={cn(
-                  "border text-[9px] px-2 py-0.5 rounded-[var(--rounded-sm)]",
-                  activity.tone === "error"
-                    ? "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]"
-                    : activity.tone === "warning"
-                      ? "border-[var(--amber)]/40 bg-[var(--amber)]/10 text-[var(--amber)]"
-                      : "border-[var(--line)] bg-[rgba(255,255,255,.045)] text-[var(--muted)]"
-                )}>
-                  {activity.label.toUpperCase()}
-                </Badge>
-              </div>
-
               {isLoadingHistory ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--ink)] border-t-transparent" />
                 </div>
               ) : !hasMessages ? (
-                <EmptyAgentState />
+                <EmptyAgentState onQuickCommand={prefillCommand} />
               ) : (
                 <div className="space-y-6 pb-40">
                   {entries.map((entry, index) => {
@@ -796,7 +797,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
                               onRefresh={() => setHistoryVersion((v) => v + 1)}
                             />
                           ) : (
-                            <ToolCallCard toolCall={entry} onQuickCommand={setDraft} />
+                            <ToolCallCard toolCall={entry} onQuickCommand={prefillCommand} />
                           )}
                         </div>
                       </div>
@@ -819,7 +820,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               isSending={isSending}
               models={models}
               onModelsChange={setModels}
-              onQuickCommand={(command) => setDraft(`${command} `)}
+              onQuickCommand={prefillCommand}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
             />
@@ -827,7 +828,13 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </div>
       </div>
 
-      <ProjectMindPanel project={activeProject} />
+      <ProjectMindPanel
+        project={activeProject}
+        assetCount={totalAssets}
+        modelLabel={models.chat}
+        hasRecentAgentOutput={hasRecentAgentOutput}
+        onQuickCommand={prefillCommand}
+      />
     </div>
   );
 }

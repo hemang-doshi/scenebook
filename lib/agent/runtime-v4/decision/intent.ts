@@ -70,6 +70,36 @@ function commandPrompt(input: DecisionEngineInput) {
   return input.commandInput?.trim() || input.message.trim();
 }
 
+function hasConversationalGreeting(message: string) {
+  return /^(hey|hi|hello|yo|sup|what'?s up|wassup|namaste)\b[!.?\s]*$/i.test(message.trim())
+    || /^(hey|hi|hello|yo)\b.*\bwhat'?s up\b[!.?\s]*$/i.test(message.trim());
+}
+
+function recentConversationWithoutCurrent(input: DecisionEngineInput) {
+  const current = input.message.trim();
+  return input.snapshot.conversation.recentMessages
+    .map((message) => message.content.trim())
+    .filter((content) => content && content !== current)
+    .slice(-6);
+}
+
+function recentConversationHasScriptIntent(input: DecisionEngineInput) {
+  return recentConversationWithoutCurrent(input).some((content) => (
+    /\b(script|voiceover|hook|caption|write|draft)\b/i.test(content)
+  ));
+}
+
+function isDirectScriptRequest(message: string) {
+  return /^\s*(write|make|create|draft|rewrite)\b.*\bscript\b/i.test(message)
+    || /^\s*let'?s\s+(make|write|create|draft)\b.*\bscript\b/i.test(message)
+    || /\b(make|write|create|draft)\s+(the\s+)?script\b/i.test(message);
+}
+
+function isConcreteReelIdea(message: string) {
+  return /\b(reel|short|video)\b.*\b(about|on|for)\b/i.test(message)
+    || /\b(it'?s|its|this is)\s+(a\s+)?(reel|short|video)\b/i.test(message);
+}
+
 function buildFallbackPlan(input: DecisionEngineInput): Extract<AgentDecision, { type: "propose_plan" }> {
   const prompt = commandPrompt(input);
   const topic = input.snapshot.project.title || "this project";
@@ -162,6 +192,14 @@ function fallbackForGeneralChat(input: DecisionEngineInput): AgentDecision | nul
   const message = input.message.trim();
   const lower = message.toLowerCase();
 
+  if (hasConversationalGreeting(message)) {
+    return {
+      type: "final_response",
+      response: "Hey, I'm here. Tell me what you're shaping and I can think with you or turn it into a SceneBook output when you're ready.",
+      confidence: 0.65,
+    };
+  }
+
   if (/^who are you\??$/.test(lower)) {
     return {
       type: "final_response",
@@ -186,8 +224,8 @@ function fallbackForGeneralChat(input: DecisionEngineInput): AgentDecision | nul
 
 export function createGracefulDecisionFallback(input: DecisionEngineInput): AgentDecision {
   return fallbackForCommand(input)
-    ?? createDeterministicSafetyDecision(input)
     ?? fallbackForGeneralChat(input)
+    ?? createDeterministicSafetyDecision(input)
     ?? buildFallbackPlan(input);
 }
 
@@ -235,12 +273,21 @@ export function createDeterministicSafetyDecision(input: DecisionEngineInput): A
     };
   }
 
-  if (/^\s*(write|make|create|draft|rewrite)\b.*\bscript\b/i.test(message)) {
+  if (isDirectScriptRequest(message) || (recentConversationHasScriptIntent(input) && isConcreteReelIdea(message))) {
     return {
       type: "workflow_call",
       workflowName: "create_script_package",
       input: { prompt: message },
-      reason: "Safety fallback detected a direct script request after model decisioning failed.",
+      reason: "Safety fallback detected a script request or script-context continuation after model decisioning failed.",
+    };
+  }
+
+  if (isConcreteReelIdea(message)) {
+    return {
+      type: "workflow_call",
+      workflowName: "plan_reel",
+      input: { prompt: message },
+      reason: "Safety fallback detected a concrete reel idea after model decisioning failed.",
     };
   }
 

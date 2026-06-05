@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { agentWorkflowNames } from "@/lib/agent/runtime-v3/types";
 import { projectPatchSchema } from "@/lib/agent/runtime-v4/patch/project-patch";
-import { runtimeV4WorkflowNames } from "@/lib/agent/runtime-v4/workflows/types";
+import { runtimeV4WorkflowNames, type RuntimeV4WorkflowName } from "@/lib/agent/runtime-v4/workflows/types";
 
 const workflowNameMap = {
   script_workflow: "create_script_package",
@@ -20,7 +20,9 @@ const acceptedWorkflowNames = [
 
 const normalizedWorkflowNameSchema = z
   .enum(acceptedWorkflowNames)
-  .transform((workflowName) => workflowNameMap[workflowName as keyof typeof workflowNameMap] ?? workflowName);
+  .transform((workflowName): RuntimeV4WorkflowName => (
+    workflowNameMap[workflowName as keyof typeof workflowNameMap] ?? workflowName as RuntimeV4WorkflowName
+  ));
 
 export const agentPlanSchema = z.object({
   title: z.string(),

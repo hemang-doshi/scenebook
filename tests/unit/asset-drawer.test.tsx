@@ -36,10 +36,11 @@ describe("AssetDrawer", () => {
     });
 
     const panel = screen.getByTestId("asset-library-panel");
-    expect(panel.className).toContain("left-0");
+    expect(panel.className).toContain("right-0");
     expect(panel.className).toContain("top-full");
-    expect(panel.className).not.toContain("right-0");
+    expect(panel.className).toContain("w-[min(20rem,calc(100vw-1.5rem))]");
     expect(panel.className).not.toContain("inset-y-0");
+    expect(screen.getByRole("region", { name: /asset library popover/i })).toBeInTheDocument();
   });
 
   test("renders a view link for visible assets", async () => {

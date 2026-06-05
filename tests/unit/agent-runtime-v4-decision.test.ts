@@ -272,6 +272,87 @@ describe("runtime-v4 decision engine", () => {
     expect(decision.response).not.toContain("I can still help with that");
   });
 
+  test("greeting fallback stays conversational instead of proposing a reel plan", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "Hey! what's up",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toMatchObject({
+      type: "final_response",
+    });
+    if (decision.type !== "final_response") {
+      throw new Error(`Expected final_response, received ${decision.type}.`);
+    }
+    expect(decision.response).toMatch(/hey|here/i);
+    expect(decision.response).not.toMatch(/Plan a reel|Clarify the core point/i);
+  });
+
+  test("script-making fallback handles casual lets-make phrasing", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "let's make the script for the reel",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toEqual({
+      type: "workflow_call",
+      workflowName: "create_script_package",
+      input: { prompt: "let's make the script for the reel" },
+      reason: expect.stringMatching(/script/i),
+    });
+  });
+
+  test("fallback uses recent script context for follow-up reel details", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes",
+      snapshot: snapshot({
+        conversation: {
+          recentMessages: [
+            { role: "user", content: "let's make the script for the reel" },
+            { role: "user", content: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes" },
+          ],
+        },
+      }),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toEqual({
+      type: "workflow_call",
+      workflowName: "create_script_package",
+      input: { prompt: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes" },
+      reason: expect.stringMatching(/script-context/i),
+    });
+  });
+
+  test("concrete reel idea fallback runs the reel planning workflow", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "make a reel about my Goa trip",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toEqual({
+      type: "workflow_call",
+      workflowName: "plan_reel",
+      input: { prompt: "make a reel about my Goa trip" },
+      reason: expect.stringMatching(/concrete reel idea/i),
+    });
+  });
+
   test("slash-command fallback maps script requests to the v4 script workflow", async () => {
     const gateway = repairableMalformedGateway("not json", "still not json");
 

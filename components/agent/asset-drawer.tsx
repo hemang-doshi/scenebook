@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { FolderOpen, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty } from "@/components/ui/empty";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,13 +18,13 @@ function AssetRow({ asset, projectId }: { asset: CardAsset; projectId: string })
   const provenance = assetProvenance(asset);
 
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-3">
+    <div className="flex gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] p-2">
       {showImagePreview ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={asset.url}
           alt={asset.title}
-          className="mb-3 aspect-video w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel-2)] object-cover"
+          className="h-12 w-14 shrink-0 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--panel-2)] object-cover"
         />
       ) : null}
       {showVideoPreview ? (
@@ -33,27 +32,29 @@ function AssetRow({ asset, projectId }: { asset: CardAsset; projectId: string })
           src={asset.url}
           controls
           preload="metadata"
-          className="mb-3 aspect-video w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel-2)] object-cover"
+          className="h-12 w-14 shrink-0 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--panel-2)] object-cover"
         />
       ) : null}
       {showAudioPreview ? (
-        <audio
-          src={asset.url}
-          controls
-          preload="metadata"
-          className="mb-3 w-full rounded-[var(--rounded-md)]"
-        />
+        <div className="flex h-12 w-14 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--panel-2)] text-[10px] font-mono uppercase text-[var(--muted)]">
+          Audio
+        </div>
       ) : null}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-[var(--ink)] truncate" title={asset.title}>{asset.title}</p>
+      {!showImagePreview && !showVideoPreview && !showAudioPreview ? (
+        <div className="flex h-12 w-14 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--panel-2)] text-[10px] font-mono uppercase text-[var(--muted)]">
+          File
+        </div>
+      ) : null}
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-semibold text-[var(--ink)]" title={asset.title}>{asset.title}</p>
           <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)]">{asset.type}</p>
-          <p className="mt-1 text-[10px] font-mono uppercase tracking-wider text-[var(--blue-2)]">{provenance}</p>
+          <p className="mt-1 line-clamp-2 text-[10px] font-mono uppercase tracking-wider text-[var(--blue-2)]">{provenance}</p>
         </div>
         <div className="flex shrink-0 flex-col gap-2">
           <a
             href={`/editor/${projectId}?asset=${asset.id}`}
-            className="inline-flex h-7 items-center rounded-[var(--radius-pill)] border border-[var(--blue)]/40 bg-[var(--blue)]/12 px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--blue-2)] transition-colors hover:border-[var(--blue)]"
+            className="inline-flex h-6 items-center rounded-[var(--radius-pill)] border border-[var(--blue)]/40 bg-[var(--blue)]/12 px-2 text-[9px] font-mono uppercase tracking-wider text-[var(--blue-2)] transition-colors hover:border-[var(--blue)]"
             aria-label={`Import ${asset.title} to editor`}
           >
             Import
@@ -62,7 +63,7 @@ function AssetRow({ asset, projectId }: { asset: CardAsset; projectId: string })
             href={asset.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-7 items-center rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--ink)] transition-colors hover:border-[var(--line-strong)]"
+            className="inline-flex h-6 items-center rounded-[var(--radius-pill)] border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-2 text-[9px] font-mono uppercase tracking-wider text-[var(--ink)] transition-colors hover:border-[var(--line-strong)]"
             aria-label={`Open ${asset.title}`}
           >
             Open
@@ -134,24 +135,26 @@ export function AssetDrawer({
       {open ? (
         <div
           data-testid="asset-library-panel"
-          className="absolute left-0 top-full z-30 mt-2 w-[min(24rem,calc(100vw-2rem))]"
+          role="region"
+          aria-label="Asset library popover"
+          className="absolute right-0 top-full z-40 mt-2 w-[min(20rem,calc(100vw-1.5rem))] animate-[ed-fadeIn_0.15s_ease-out]"
         >
-          <Card className="flex max-h-[min(32rem,calc(100vh-10rem))] flex-col rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--panel)] shadow-[var(--shadow-soft)]">
-            <CardHeader className="flex-row items-center justify-between border-b border-[var(--line)] py-3 px-5">
-              <CardTitle className="text-sm font-bold text-[var(--ink)]">Asset Library</CardTitle>
+          <div className="flex max-h-[min(64vh,calc(100vh-12rem))] flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(20,24,33,.96)] shadow-[var(--shadow-soft)] backdrop-blur-[18px]">
+            <div className="flex items-center justify-between border-b border-[var(--line)] px-3 py-2">
+              <p className="text-xs font-bold text-[var(--ink)]">Assets</p>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 min-h-8 w-8 rounded-full px-0 py-0"
+                className="h-7 min-h-7 w-7 rounded-full px-0 py-0 focus-visible:ring-0"
                 aria-label="Close asset menu"
                 onClick={() => onOpenChange(false)}
               >
                 <X className="h-4 w-4 text-[var(--ink)]" />
               </Button>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 p-4">
-              <ScrollArea className="h-full pr-3 scrollbar-thin">
-                <div className="grid gap-4">
+            </div>
+            <div className="min-h-0 flex-1 p-2.5">
+              <ScrollArea className="h-full max-h-[calc(64vh-4rem)] pr-3 scrollbar-thin">
+                <div className="grid gap-2">
                   {loading ? (
                     <>
                       <Skeleton className="h-24 w-full" />
@@ -164,45 +167,45 @@ export function AssetDrawer({
                       {library.folders.length === 0 ? (
                         <Empty className="items-start text-left">
                           <p className="text-sm text-[var(--ink)]">No folders yet.</p>
-                          <p className="mt-1 text-xs text-[var(--muted)] leading-relaxed">Generated assets will show placeholder folders here once they exist.</p>
+                          <p className="mt-1 text-xs text-[var(--muted)] leading-relaxed">Assets can be generated through the Agent and attached here when they exist.</p>
                         </Empty>
                       ) : (
                         library.folders.map((folder) => (
-                          <Card key={folder.id} className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] shadow-none">
-                            <CardHeader className="py-3 px-4 border-b border-[var(--line)]">
+                          <section key={folder.id} className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[rgba(255,255,255,.035)]">
+                            <div className="border-b border-[var(--line)] px-3 py-2">
                               <div className="flex items-center gap-2">
                                 <FolderOpen className="h-4 w-4 text-[var(--blue-2)]" />
-                                <CardTitle className="text-xs font-bold text-[var(--ink)]">{folder.name}</CardTitle>
+                                <p className="text-xs font-bold text-[var(--ink)]">{folder.name}</p>
                               </div>
-                            </CardHeader>
-                            <CardContent className="grid gap-2 bg-transparent p-3">
+                            </div>
+                            <div className="grid gap-2 bg-transparent p-2">
                               {folder.assets.length === 0 ? (
                                 <p className="text-xs text-[var(--muted)]">Empty folder</p>
                               ) : (
                                 folder.assets.map((asset) => <AssetRow key={asset.id} asset={asset} projectId={projectId} />)
                               )}
-                            </CardContent>
-                          </Card>
+                            </div>
+                          </section>
                         ))
                       )}
-                      <Card className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[rgba(255,255,255,.035)] shadow-none">
-                        <CardHeader className="py-3 px-4 border-b border-[var(--line)]">
-                          <CardTitle className="text-xs font-bold text-[var(--ink)]">Loose Assets</CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid gap-2 bg-transparent p-3">
+                      <section className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[rgba(255,255,255,.035)]">
+                        <div className="border-b border-[var(--line)] px-3 py-2">
+                          <p className="text-xs font-bold text-[var(--ink)]">Loose Assets</p>
+                        </div>
+                        <div className="grid gap-2 bg-transparent p-2">
                           {library.looseAssets.length === 0 ? (
                             <p className="text-xs text-[var(--muted)]">No loose assets.</p>
                           ) : (
                             library.looseAssets.map((asset) => <AssetRow key={asset.id} asset={asset} projectId={projectId} />)
                           )}
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </section>
                     </>
                   ) : null}
                 </div>
               </ScrollArea>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       ) : null}
     </>

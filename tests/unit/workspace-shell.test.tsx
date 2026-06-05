@@ -71,7 +71,7 @@ describe("WorkspaceShell", () => {
     expect(screen.getByRole("link", { name: /projects/i })).toBeInTheDocument();
   });
 
-  test("moves account actions into an elastic left rail", async () => {
+  test("does not render the redundant desktop action rail", () => {
     const { container } = render(
       <WorkspaceShell>
         <div>Workspace</div>
@@ -79,23 +79,12 @@ describe("WorkspaceShell", () => {
     );
 
     const shell = container.firstElementChild as HTMLElement;
-    expect(shell.style.getPropertyValue("--workspace-rail-width")).toBe("var(--workspace-rail-collapsed)");
+    expect(shell.style.getPropertyValue("--workspace-rail-width")).toBe("");
 
-    const rail = screen.getByRole("complementary", { name: /workspace actions/i });
-    expect(rail).toHaveAttribute("data-side", "left");
-    expect(rail).toHaveAttribute("data-state", "collapsed");
-
+    expect(screen.queryByRole("complementary", { name: /workspace actions/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New project" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.queryByText("owner@scenebook.test")).not.toBeInTheDocument();
-
-    fireEvent.click(await screen.findByRole("button", { name: /expand workspace actions/i }));
-
-    expect(await screen.findByText("owner@scenebook.test")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "New project" })).toHaveAttribute("href", "/home?create=1");
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(rail).toHaveAttribute("data-state", "expanded");
-    expect(shell.style.getPropertyValue("--workspace-rail-width")).toBe("var(--workspace-rail-expanded)");
   });
 
   test("renders active project context without duplicate nav pills", async () => {
@@ -137,7 +126,7 @@ describe("WorkspaceShell", () => {
       </WorkspaceShell>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /expand workspace actions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /toggle navigation/i }));
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => {
