@@ -742,6 +742,7 @@ describe("agent tools", () => {
           action: "apply",
         }),
       }),
+      { params: Promise.resolve({ id: "project-1" }) },
     );
 
     expect(response.status).toBe(200);
@@ -788,6 +789,7 @@ describe("agent tools", () => {
           action: "apply",
         }),
       }),
+      { params: Promise.resolve({ id: "project-1" }) },
     );
 
     expect(response.status).toBe(200);

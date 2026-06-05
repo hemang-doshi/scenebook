@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Archive, Bot, Library } from "lucide-react";
+import { Archive, Bot } from "lucide-react";
 
 import { AgentComposer, type Attachment } from "@/components/agent/agent-composer";
 import { ApprovalCard } from "@/components/agent/approval-card";
 import { ArtifactPreviewCard } from "@/components/agent/artifact-preview-card";
-import { AssetDrawer } from "@/components/agent/asset-drawer";
 import { ChatMessage } from "@/components/agent/chat-message";
 import { EmptyAgentState } from "@/components/agent/empty-agent-state";
 import { useChatAutoscroll } from "@/components/agent/use-chat-autoscroll";
@@ -16,7 +15,7 @@ import { WorkflowCard } from "@/components/agent/workflow-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { AgentModelSelection } from "@/components/agent/model-accordion";
-import { ProjectMindPanel } from "@/components/agent/project-mind-panel";
+import { ProjectCockpit } from "@/components/agent/project-cockpit";
 import type {
   AgentTimelineEntry,
   AgentUiEntry,
@@ -145,7 +144,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const [library, setLibrary] = useState<ProjectAssetLibrary | null>(null);
-  const [isAssetDrawerOpen, setIsAssetDrawerOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const lastFetchedThreadId = useRef<string | "new-chat" | null>(null);
   const lastFetchedVersion = useRef(0);
@@ -700,21 +698,6 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
               )}>
                 {activity.label.toUpperCase()}
               </Badge>
-              <div className="relative">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setIsAssetDrawerOpen((current) => !current)}
-                  className="flex h-8 min-h-8 items-center gap-1.5 border border-[var(--line)] bg-[rgba(255,255,255,.045)] px-3 py-1 text-[10px] font-mono shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-[14px] focus-visible:ring-0"
-                >
-                  <Library className="h-3.5 w-3.5 text-[var(--blue-2)]" />
-                  <span>Assets</span>
-                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-xs)] bg-[rgba(255,255,255,.075)] px-1 font-mono text-[9px] font-bold leading-none text-[var(--ink)]/85">
-                    {library ? totalAssets : "-"}
-                  </span>
-                </Button>
-                <AssetDrawer projectId={project.id} open={isAssetDrawerOpen} onOpenChange={setIsAssetDrawerOpen} />
-              </div>
             </div>
           </div>
         </header>
@@ -828,7 +811,7 @@ export function AgentChatIsland({ project }: { project: ProjectWorkspace }) {
         </div>
       </div>
 
-      <ProjectMindPanel
+      <ProjectCockpit
         project={activeProject}
         assetCount={totalAssets}
         modelLabel={models.chat}

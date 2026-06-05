@@ -117,6 +117,9 @@ describe("runtime-v4 creative workflows", () => {
         reason: "test",
       });
 
+      if (decision.type !== "workflow_call") {
+        throw new Error("Expected workflow_call decision.");
+      }
       expect(decision.workflowName).toBe(workflowName);
       expect(registered.has(decision.workflowName)).toBe(true);
     }

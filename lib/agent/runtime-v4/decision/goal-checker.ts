@@ -42,6 +42,15 @@ function deterministicGoalFallback(input: GoalCheckerInput): GoalCheck {
     };
   }
 
+  if (latest?.status === "completed" && latest.output?.kind === "creative_workflow") {
+    const title = typeof latest.output.title === "string" ? latest.output.title : latest.toolName;
+    return {
+      status: "satisfied",
+      response: `${title}: ${latest.message}`,
+      reason: "The creative workflow completed the requested production step.",
+    };
+  }
+
   return {
     status: "continue",
     reason: "The latest observation completed, but goal satisfaction was not established.",

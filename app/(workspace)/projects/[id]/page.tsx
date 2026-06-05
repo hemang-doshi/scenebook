@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { CreatorProgress } from "@/components/workspace/creator-progress";
 import { useProjectWorkspace } from "@/components/workspace/hooks";
+import type { AiReadinessAnalysis } from "@/lib/agent/readiness/readiness-schema";
 import type { ProjectAssetLibrary } from "@/lib/assets/asset-folders";
 import { statusLabels } from "@/lib/domain/content";
 import { fetchJson } from "@/lib/fetcher";
@@ -112,6 +113,8 @@ export default function ProjectHubPage() {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [aiReadiness, setAiReadiness] = useState<AiReadinessAnalysis | null>(null);
+  const [isCheckingReadiness, setIsCheckingReadiness] = useState(false);
 
   const [hookVal, setHookVal] = useState("");
   const [scriptVal, setScriptVal] = useState("");
@@ -167,8 +170,22 @@ export default function ProjectHubPage() {
       }
     }
 
+    async function loadReadiness() {
+      try {
+        const response = await fetchJson<{ analysis: AiReadinessAnalysis }>(`/api/projects/${params.id}/readiness`);
+        if (active) {
+          setAiReadiness(response.analysis);
+        }
+      } catch {
+        if (active) {
+          setAiReadiness(null);
+        }
+      }
+    }
+
     void loadAssets();
     void loadHistory();
+    void loadReadiness();
 
     return () => {
       active = false;
@@ -381,6 +398,20 @@ export default function ProjectHubPage() {
     }
   }
 
+  async function runReadinessCheck() {
+    if (!project) return;
+    setIsCheckingReadiness(true);
+    try {
+      const response = await fetchJson<{ analysis: AiReadinessAnalysis }>(`/api/projects/${project.id}/readiness`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setAiReadiness(response.analysis);
+    } finally {
+      setIsCheckingReadiness(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[var(--container)] space-y-8 px-4 py-6 pb-20 md:px-6">
       <Panel className="overflow-hidden p-0" role="region" aria-label="Project Hub hero">
@@ -583,6 +614,41 @@ export default function ProjectHubPage() {
         </div>
 
         <aside className="space-y-6" role="complementary" aria-label="Project operations">
+          <Panel variant="floating" className="space-y-4 p-6 shadow-none" role="region" aria-label="AI Readiness">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">AI Readiness</p>
+                <h2 className="mt-1 font-display text-xl font-bold text-[var(--ink)]">
+                  {aiReadiness ? `${aiReadiness.label} · ${aiReadiness.score}` : "Not checked"}
+                </h2>
+              </div>
+              <Badge variant={aiReadiness?.fallbackUsed ? "warning" : "creative"}>
+                {aiReadiness?.fallbackUsed ? "Fallback" : "AI"}
+              </Badge>
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              {aiReadiness?.summary ?? "Run a readiness check to get the next production-aware recommendation."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="runtime"
+                disabled={isCheckingReadiness}
+                onClick={() => void runReadinessCheck()}
+                className="h-9 px-3 text-[11px]"
+              >
+                {isCheckingReadiness ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                Run check
+              </Button>
+              <Link href={`/projects/${project.id}/chat`}>
+                <Button variant="secondary" className="h-9 px-3 text-[11px]">
+                  <Bot className="mr-1.5 h-3.5 w-3.5" />
+                  Open Agent
+                </Button>
+              </Link>
+            </div>
+          </Panel>
+
           <Panel className="space-y-5 p-6" role="region" aria-label="Shoot checklist readiness">
             <div className="flex items-center justify-between gap-4">
               <div>

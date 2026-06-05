@@ -134,7 +134,7 @@ describe("agent UI components", () => {
     render(React.createElement(SlashCommandMenu, { input: "/sto", onSelect }));
 
     expect(screen.queryByText("slash")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /\/storyboard/i }));
+    fireEvent.click(screen.getByRole("button", { name: /storyboard/i }));
     expect(onSelect).toHaveBeenCalledWith("/storyboard");
   });
 
@@ -178,7 +178,7 @@ describe("agent UI components", () => {
     expect(screen.getByRole("button", { name: /image/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /video/i }));
-    expect(screen.getByLabelText("video model")).toBeInTheDocument();
+    expect(screen.getAllByText("HunyuanVideo").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("chat model")).not.toBeInTheDocument();
   });
 
@@ -301,7 +301,7 @@ describe("agent UI components", () => {
     await screen.findByText("hello");
     fireEvent.click(screen.getByRole("button", { name: "Beach Sunset" }));
 
-    const newConversationOptions = await screen.findAllByText("+ New Conversation");
+    const newConversationOptions = await screen.findAllByText("+ New chat");
     expect(newConversationOptions.at(-1)?.closest("button")).toHaveClass("text-muted");
     expect(screen.getByText("Studio Product")).toBeInTheDocument();
   });
@@ -326,13 +326,32 @@ describe("agent UI components", () => {
     expect(screen.getAllByText(/New conversation/i).length).toBeGreaterThan(0);
   });
 
-  test("ProjectMind readiness CTA prefills the composer from the Agent cockpit", async () => {
+  test("ProjectMind readiness CTA runs from the Agent cockpit without touching the composer", async () => {
     fetchJson.mockImplementation(async (url: string) => {
       if (url.includes("listThreads=true")) {
         return { threads: [] };
       }
       if (url.includes("/assets")) {
         return { folders: [], looseAssets: [] };
+      }
+      if (url.includes("/readiness")) {
+        return {
+          analysis: {
+            score: 78,
+            label: "Shoot-ready",
+            confidence: 0.8,
+            summary: "Script is strong enough, but the shoot plan needs B-roll.",
+            stage: "shoot",
+            blockers: [],
+            nextActions: [],
+            evidence: {
+              scriptSignals: [],
+              shootSignals: [],
+              assetSignals: [],
+              publishSignals: [],
+            },
+          },
+        };
       }
       return { threadId: null, messages: [], toolCalls: [] };
     });
@@ -343,9 +362,13 @@ describe("agent UI components", () => {
     fireEvent.click(screen.getByRole("button", { name: /expand projectmind/i }));
     fireEvent.click(screen.getByRole("button", { name: /run readiness check/i }));
 
-    expect((screen.getByLabelText("composer") as HTMLInputElement).value).toMatch(
-      /^\/readiness-check Analyze this project's readiness/,
+    await waitFor(() =>
+      expect(fetchJson).toHaveBeenCalledWith(
+        "/api/projects/project-1/readiness",
+        expect.objectContaining({ method: "POST" }),
+      ),
     );
+    expect((screen.getByLabelText("composer") as HTMLInputElement).value).toBe("");
   });
 
   test("new conversation stays empty when no persisted thread exists", async () => {

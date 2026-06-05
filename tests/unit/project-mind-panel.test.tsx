@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
-import { ProjectMindPanel, READINESS_CHECK_PROMPT } from "@/components/agent/project-mind-panel";
+import { ProjectMindPanel } from "@/components/agent/project-mind-panel";
 import type { ProjectWorkspace } from "@/lib/data/repository";
 
 const { fetchJson } = vi.hoisted(() => ({
@@ -103,13 +103,33 @@ describe("ProjectMindPanel", () => {
     expect(screen.queryByText(/Assets:\s*\d+%/i)).not.toBeInTheDocument();
   });
 
-  test("readiness CTA prefills the AI readiness command", () => {
-    const onQuickCommand = vi.fn();
-    render(<ProjectMindPanel project={project} onQuickCommand={onQuickCommand} />);
+  test("readiness CTA runs a user-triggered AI readiness check", async () => {
+    fetchJson.mockResolvedValue({
+      analysis: {
+        score: 78,
+        label: "Shoot-ready",
+        confidence: 0.8,
+        summary: "Script is strong enough, but the shoot plan needs B-roll.",
+        stage: "shoot",
+        blockers: [],
+        nextActions: [],
+        evidence: {
+          scriptSignals: [],
+          shootSignals: [],
+          assetSignals: [],
+          publishSignals: [],
+        },
+      },
+    });
+    render(<ProjectMindPanel project={project} />);
 
     fireEvent.click(screen.getByRole("button", { name: /expand projectmind/i }));
     fireEvent.click(screen.getByRole("button", { name: /run readiness check/i }));
 
-    expect(onQuickCommand).toHaveBeenCalledWith(READINESS_CHECK_PROMPT);
+    expect(fetchJson).toHaveBeenCalledWith(
+      "/api/projects/project-1/readiness",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(await screen.findByText("Shoot-ready")).toBeInTheDocument();
   });
 });

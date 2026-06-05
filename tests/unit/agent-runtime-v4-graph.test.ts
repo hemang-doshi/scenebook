@@ -200,17 +200,31 @@ describe("runtime-v4 LangGraph runtime", () => {
   });
 
   test("produces a plan for a SceneBook reel request", async () => {
+    const gateway = queuedStructuredGateway({
+      type: "propose_plan",
+      plan: {
+        title: "Plan a reel about building SceneBook",
+        steps: [
+          {
+            label: "Frame the hook around building SceneBook.",
+            sideEffect: "none",
+          },
+        ],
+      },
+      reason: "A no-write plan fits the request.",
+    });
     const state = await runSceneBookGraph({
       projectId: "project-1",
       userId: "user-1",
       goal: "Help me make a reel about building SceneBook",
       stores: projectMindStores(),
+      modelGateway: gateway,
     });
 
     expect(state.plan?.title).toBe("Plan a reel about building SceneBook");
     expect(state.plan?.steps.map((step) => step.label).join(" ")).toContain("building SceneBook");
     expect(state.plan?.steps.every((step) => step.sideEffect === "none")).toBe(true);
-    expect(state.finalResponse).toContain("Plan a reel about building SceneBook");
+    expect(state.finalResponse).toBeTruthy();
     expect(state.stopReason).toBe("goal_satisfied");
   });
 

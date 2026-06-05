@@ -98,7 +98,7 @@ export function createRuntimeV4ModelGateway(options: RuntimeV4ModelGatewayOption
     return createModelGateway(options);
   }
 
-  if (options.provider && options.provider !== "fake") {
+  if (options.provider) {
     return createModelGateway(options);
   }
 
