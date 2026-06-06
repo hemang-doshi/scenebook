@@ -152,6 +152,36 @@ export async function getLatestAgentHistory(projectId: string): Promise<AgentHis
   return getAgentHistory(projectId);
 }
 
+export async function listRecentProjectMessages(projectId: string, limit = 24) {
+  const { supabase, user } = await requireUser();
+  const boundedLimit = Math.max(1, Math.min(48, limit));
+  const { data, error } = await supabase
+    .from("agent_messages")
+    .select("role,content,created_at,thread_id")
+    .eq("owner_id", user.id)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(boundedLimit);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Array<{
+    role: string;
+    content: string;
+    created_at?: string;
+    thread_id?: string | null;
+  }>)
+    .reverse()
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+      threadId: message.thread_id ?? null,
+    }));
+}
+
 export async function appendAgentMessage(input: {
   projectId: string;
   threadId: string;

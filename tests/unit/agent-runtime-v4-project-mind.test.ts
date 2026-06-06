@@ -124,6 +124,7 @@ function runSummary(overrides: Partial<ProjectRunSummary> = {}): ProjectRunSumma
 function stores(input: {
   memories?: ProjectMemoryRecord[];
   runSummaries?: ProjectRunSummary[];
+  recentProjectMessages?: Array<{ role: string; content: string; createdAt?: string; threadId?: string | null }>;
 } = {}): ProjectMindStores {
   return {
     getProjectWorkspace: vi.fn(async () => baseProject()),
@@ -168,6 +169,7 @@ function stores(input: {
     ]),
     listProjectMemories: vi.fn(async () => input.memories ?? []),
     listRecentRunSummaries: vi.fn(async () => input.runSummaries ?? []),
+    listRecentProjectMessages: vi.fn(async () => input.recentProjectMessages ?? []),
   };
 }
 
@@ -207,6 +209,66 @@ describe("runtime-v4 ProjectMind", () => {
     expect(snapshot.durableProjectMemories[0].summary).toContain("premium");
     expect(snapshot.recentRunSummaries[0].openNextSteps).toContain("Plan supporting assets");
     expect(snapshot.integrationState).toMatchObject({ available: false, connections: [] });
+  });
+
+  test("builds compact cross-thread conversation context for follow-up decisions", async () => {
+    const snapshot = await buildProjectMind({
+      projectId: "project-1",
+      threadId: "thread-1",
+      stores: stores({
+        memories: [
+          memory({
+            memoryType: "creative_direction",
+            summary: "Keep it chaotic, emotional, and college-ending nostalgic.",
+            content: { deliverables: ["script", "narration", "shot list", "caption"] },
+          }),
+        ],
+        runSummaries: [
+          runSummary({
+            userGoal: "Plan out the script, emotional arc, Goa boys trip hype, narration, and music direction.",
+            summary: "User wants a Goa boys trip reel with chaos energy, emotional ending, narration, and Avicii Nights style music.",
+            openNextSteps: ["Draft script", "Create shot list", "Prepare caption"],
+          }),
+        ],
+        recentProjectMessages: [
+          {
+            role: "user",
+            content: "plan out the script for me, emotional arc, goa boys trip, hype, energy, narration with bg music maybe nights by avicii",
+            createdAt: "2026-06-01T00:35:00.000Z",
+            threadId: "thread-older",
+          },
+          {
+            role: "assistant",
+            content: "I can shape the Goa trip reel into script, visuals, narration, and caption.",
+            createdAt: "2026-06-01T00:36:00.000Z",
+            threadId: "thread-older",
+          },
+        ],
+      }),
+    });
+
+    const context = snapshot.conversationContext;
+    expect(context).toBeDefined();
+    if (!context) {
+      throw new Error("Expected ProjectMind to build conversation context.");
+    }
+
+    expect(context.latestUserIntent).toContain("Goa boys trip");
+    expect(context.recentUserGoals[0]).toContain("Plan out the script");
+    expect(context.openDeliverables).toEqual(expect.arrayContaining(["script", "shot list", "caption"]));
+    expect(context.followUpHints.join(" ")).toMatch(/all of them|everything/i);
+    expect(context.recentProjectMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("goa boys trip"),
+        threadId: "thread-older",
+      }),
+      expect.objectContaining({
+        role: "assistant",
+        content: expect.stringContaining("script, visuals"),
+        threadId: "thread-older",
+      }),
+    ]));
   });
 
   test("selected output is present in the next snapshot", async () => {

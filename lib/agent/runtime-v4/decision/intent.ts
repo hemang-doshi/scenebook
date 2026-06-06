@@ -42,6 +42,7 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
       "Use project_patch for grouped durable workspace updates that should apply as one reviewed ProjectPatch.",
       "Use final_response only when no workspace action is needed or when the goal is already satisfied.",
       "Do not finalize only because a previous tool observation exists. Consider whether the original user goal is complete.",
+      "Resolve short follow-ups, pronouns, and phrases like 'all of them', 'do it', 'make that', or 'draft everything' against ProjectMind conversationContext before asking clarification or proposing a fresh plan.",
       commandHint,
       `Project snapshot:\n${compactJson(input.snapshot)}`,
       `Available tools:\n${compactJson(input.toolSummaries)}`,
@@ -98,6 +99,69 @@ function isDirectScriptRequest(message: string) {
 function isConcreteReelIdea(message: string) {
   return /\b(reel|short|video)\b.*\b(about|on|for)\b/i.test(message)
     || /\b(it'?s|its|this is)\s+(a\s+)?(reel|short|video)\b/i.test(message);
+}
+
+function isDraftAllFollowUp(message: string) {
+  return /\b(draft|write|make|create|generate|do|finish)\b.*\b(all of them|all of it|everything|all)\b/i.test(message)
+    || /\b(all of them|all of it|everything)\b.*\b(draft|write|make|create|generate|do|finish)\b/i.test(message);
+}
+
+function isLowInformationFollowUp(message: string) {
+  return isDraftAllFollowUp(message)
+    || /^(do it|make that|draft that|write that|finish that|generate that|make this|draft this|write this)\s*[.!?]*$/i.test(message.trim());
+}
+
+function isShotListFollowUp(message: string) {
+  return /\b(make|draft|write|create|do)\b.*\b(shot list|shots?|storyboard|b-roll|broll)\b.*\b(too|also)?\b/i.test(message)
+    || /\b(shot list|shots?|storyboard|b-roll|broll)\b.*\b(too|also)\b/i.test(message);
+}
+
+function contextMessages(input: DecisionEngineInput) {
+  const current = input.message.trim();
+  const projectMessages = input.snapshot.conversationContext?.recentProjectMessages ?? [];
+  const activeMessages = input.snapshot.conversation.recentMessages.map((message) => ({
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt,
+  }));
+
+  return [...projectMessages, ...activeMessages]
+    .filter((message) => message.content.trim() && message.content.trim() !== current)
+    .slice(-12);
+}
+
+function hasUsableConversationContext(input: DecisionEngineInput) {
+  const context = input.snapshot.conversationContext;
+  return Boolean(
+    context?.latestUserIntent?.trim()
+    || context?.recentUserGoals?.some((goal) => goal.trim())
+    || context?.openDeliverables?.length
+    || contextMessages(input).some((message) => message.role === "user"),
+  );
+}
+
+function projectMindPrompt(input: DecisionEngineInput) {
+  const context = input.snapshot.conversationContext;
+  const recentUserMessage = [...contextMessages(input)]
+    .reverse()
+    .find((message) => message.role === "user")?.content;
+  const intent = context?.latestUserIntent?.trim()
+    || context?.recentUserGoals?.find((goal) => goal.trim())
+    || recentUserMessage
+    || input.snapshot.project.title;
+  const deliverables = context?.openDeliverables?.length
+    ? ` Requested deliverables: ${context.openDeliverables.join(", ")}.`
+    : "";
+
+  return `${input.snapshot.project.title}: ${intent}.${deliverables}`.trim();
+}
+
+function scriptFallbackPrompt(input: DecisionEngineInput) {
+  const message = commandPrompt(input);
+  if (isConcreteReelIdea(message)) {
+    return message;
+  }
+  return hasUsableConversationContext(input) ? projectMindPrompt(input) : message;
 }
 
 function buildFallbackPlan(input: DecisionEngineInput): Extract<AgentDecision, { type: "propose_plan" }> {
@@ -259,8 +323,35 @@ export function createDeterministicSafetyDecision(input: DecisionEngineInput): A
     return {
       type: "workflow_call",
       workflowName: "create_full_production_package",
-      input: { prompt: message },
+      input: { prompt: hasUsableConversationContext(input) ? projectMindPrompt(input) : message },
       reason: "Safety fallback detected a request for a complete production package.",
+    };
+  }
+
+  if (isDraftAllFollowUp(message)) {
+    if (!hasUsableConversationContext(input)) {
+      return {
+        type: "ask_question",
+        questions: ["What should I draft, and what prior idea should I use as the source?"],
+        reason: "The user sent a short follow-up, but ProjectMind does not have enough prior creative context to resolve it safely.",
+        expectedFieldTargets: ["creativeContext"],
+      };
+    }
+
+    return {
+      type: "workflow_call",
+      workflowName: "create_full_production_package",
+      input: { prompt: projectMindPrompt(input) },
+      reason: "Safety fallback resolved a draft-all follow-up from ProjectMind context.",
+    };
+  }
+
+  if (isShotListFollowUp(message) && hasUsableConversationContext(input)) {
+    return {
+      type: "workflow_call",
+      workflowName: "create_shoot_pack",
+      input: { prompt: projectMindPrompt(input) },
+      reason: "Safety fallback resolved a shot-list follow-up from ProjectMind context.",
     };
   }
 
@@ -277,8 +368,17 @@ export function createDeterministicSafetyDecision(input: DecisionEngineInput): A
     return {
       type: "workflow_call",
       workflowName: "create_script_package",
-      input: { prompt: message },
+      input: { prompt: scriptFallbackPrompt(input) },
       reason: "Safety fallback detected a script request or script-context continuation after model decisioning failed.",
+    };
+  }
+
+  if (isLowInformationFollowUp(message) && !hasUsableConversationContext(input)) {
+    return {
+      type: "ask_question",
+      questions: ["What should I draft, and what prior idea should I use as the source?"],
+      reason: "The user sent a short follow-up, but ProjectMind does not have enough prior creative context to resolve it safely.",
+      expectedFieldTargets: ["creativeContext"],
     };
   }
 

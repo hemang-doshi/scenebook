@@ -1,6 +1,8 @@
 import type {
   AgentGoalState,
   CreativeBriefState,
+  ProjectConversationContext,
+  ProjectConversationMessage,
   ProjectSnapshot,
   ScriptVersionSummary,
 } from "@/lib/agent/runtime-v3/types";
@@ -92,6 +94,7 @@ export type ProjectMindSnapshot = Omit<ProjectSnapshot, "project" | "memory"> & 
   recentRunSummaries: ProjectRunSummary[];
   integrationState: ProjectIntegrationState;
   memory: Array<{ summary: string; createdAt?: string; metadata?: Record<string, JsonValue> }>;
+  conversationContext?: ProjectConversationContext;
 };
 
 export type CompactProjectMind = {
@@ -120,6 +123,7 @@ export type CompactProjectMind = {
   rejectedOutputs: Array<Pick<ProjectOutputMemory, "id" | "summary" | "outputType" | "outputId" | "title" | "createdAt">>;
   durableMemories: Array<Pick<ProjectMemoryRecord, "id" | "memoryType" | "summary" | "confidence" | "userApproved" | "createdAt">>;
   recentRunSummaries: Array<Pick<ProjectRunSummary, "id" | "userGoal" | "summary" | "actionsTaken" | "openNextSteps" | "createdAt">>;
+  conversationContext: ProjectConversationContext;
   integrationState: ProjectIntegrationState;
   readiness: ProjectSnapshot["readiness"];
 };
@@ -164,6 +168,7 @@ export type ProjectMindStores = {
     toolCalls: Array<{ id: string; tool_name: string; status: string; command?: string | null; created_at?: string }>;
     thread?: unknown;
   }>;
+  listRecentProjectMessages?: (projectId: string, limit?: number) => Promise<ProjectConversationMessage[]>;
   getProjectAssetLibrary?: (projectId: string) => Promise<{
     folders: Array<{ id: string; name: string; assets: CardAsset[] }>;
     looseAssets: CardAsset[];

@@ -272,6 +272,41 @@ describe("runtime-v4 decision engine", () => {
     expect(decision.response).not.toContain("I can still help with that");
   });
 
+  test("decision prompt tells the model to resolve short follow-ups from ProjectMind context", async () => {
+    const gateway = queuedStructuredGateway({
+      type: "workflow_call",
+      workflowName: "create_full_production_package",
+      input: { prompt: "Goa Reel: draft the requested script, narration, shot list, asset prompts, and caption." },
+      reason: "The user asked to draft all previously requested Goa reel deliverables.",
+    });
+
+    await decideNextStep({
+      message: "draft all of them for me",
+      snapshot: snapshot({
+        conversationContext: {
+          latestUserIntent: "Goa boys trip reel with emotional college ending, chaos energy, narration, and Avicii Nights style music.",
+          recentUserGoals: ["Plan the script, emotional arc, narration, and background music for the Goa boys trip reel."],
+          openDeliverables: ["script", "emotional arc", "narration", "shot list", "caption"],
+          followUpHints: ["Resolve 'all of them' as all open deliverables for the latest user intent."],
+          recentProjectMessages: [
+            {
+              role: "user",
+              content: "plan out the script for me, emotional arc, goa boys trip, hype, energy, narration with bg music maybe nights by avicii",
+              createdAt: "2026-06-01T00:35:00.000Z",
+            },
+          ],
+        },
+      } as Partial<ProjectSnapshot>),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    const prompt = gateway.generateStructured.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Resolve short follow-ups");
+    expect(prompt).toContain("all of them");
+    expect(prompt).toContain("Goa boys trip reel");
+  });
+
   test("greeting fallback stays conversational instead of proposing a reel plan", async () => {
     const gateway = repairableMalformedGateway("not json", "still not json");
 
@@ -332,6 +367,66 @@ describe("runtime-v4 decision engine", () => {
       workflowName: "create_script_package",
       input: { prompt: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes" },
       reason: expect.stringMatching(/script-context/i),
+    });
+  });
+
+  test("fallback resolves draft-all follow-up from ProjectMind conversation context", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "draft all of them for me",
+      snapshot: snapshot({
+        project: {
+          id: "project-1",
+          title: "Goa Reel",
+          platform: "instagram",
+          format: "reel",
+          status: "idea",
+        },
+        conversationContext: {
+          latestUserIntent: "Goa boys trip reel with emotional college ending, chaos energy, narration, and Avicii Nights style music.",
+          recentUserGoals: ["Plan the script, emotional arc, narration, and background music for the Goa boys trip reel."],
+          openDeliverables: ["script", "emotional arc", "narration", "shot list", "caption"],
+          followUpHints: ["Resolve 'all of them' as all open deliverables for the latest user intent."],
+          recentProjectMessages: [
+            {
+              role: "user",
+              content: "plan out the script for me, emotional arc, goa boys trip, hype, energy, narration with bg music maybe nights by avicii",
+              createdAt: "2026-06-01T00:35:00.000Z",
+            },
+          ],
+        },
+      } as Partial<ProjectSnapshot>),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toEqual({
+      type: "workflow_call",
+      workflowName: "create_full_production_package",
+      input: {
+        prompt: expect.stringContaining("Goa boys trip reel"),
+      },
+      reason: expect.stringMatching(/ProjectMind context/i),
+    });
+    expect(JSON.stringify(decision)).not.toContain("about draft all of them for me");
+  });
+
+  test("fallback asks a clarifying question for draft-all follow-up without ProjectMind context", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "draft all of them for me",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toEqual({
+      type: "ask_question",
+      questions: [expect.stringMatching(/what should I draft/i)],
+      reason: expect.stringMatching(/short follow-up/i),
+      expectedFieldTargets: ["creativeContext"],
     });
   });
 

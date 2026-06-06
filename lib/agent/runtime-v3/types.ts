@@ -122,6 +122,21 @@ export type ConversationSummary = {
   recentMessages: Array<{ role: string; content: string; createdAt?: string }>;
 };
 
+export type ProjectConversationMessage = {
+  role: string;
+  content: string;
+  createdAt?: string;
+  threadId?: string | null;
+};
+
+export type ProjectConversationContext = {
+  latestUserIntent: string | null;
+  recentUserGoals: string[];
+  openDeliverables: string[];
+  followUpHints: string[];
+  recentProjectMessages: ProjectConversationMessage[];
+};
+
 export type ToolCallSummary = {
   id: string;
   toolName: string;
@@ -148,6 +163,7 @@ export type ProjectSnapshot = {
   publish: { ready: boolean; integrationAvailable: boolean; caption?: string | null } | null;
   analytics: Record<string, JsonValue> | null;
   conversation: ConversationSummary;
+  conversationContext?: ProjectConversationContext;
   toolHistory: ToolCallSummary[];
   memory: Array<{ summary: string; createdAt?: string; metadata?: Record<string, JsonValue> }>;
   readiness: ProjectReadiness;

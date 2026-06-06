@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getProjectAssetLibrary as getDefaultProjectAssetLibrary } from "@/lib/assets/asset-folders";
-import { getAgentHistory as getDefaultAgentHistory } from "@/lib/agent/runtime";
+import {
+  getAgentHistory as getDefaultAgentHistory,
+  listRecentProjectMessages as listDefaultRecentProjectMessages,
+} from "@/lib/agent/runtime";
 import { loadCreativeBrief as loadDefaultCreativeBrief } from "@/lib/agent/runtime-v3/memory/creative-brief-store";
 import { loadActiveGoal as loadDefaultActiveGoal } from "@/lib/agent/runtime-v3/memory/goal-store";
 import { getProjectWorkspace as getDefaultProjectWorkspace } from "@/lib/data/repository";
@@ -8,6 +11,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   AgentGoalStage,
   CreativeBriefState,
+  ProjectConversationContext,
+  ProjectConversationMessage,
   ProjectReadiness,
   ScriptVersionSummary,
 } from "@/lib/agent/runtime-v3/types";
@@ -333,6 +338,151 @@ function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
   return promise.catch(() => fallback);
 }
 
+function compactMessage(message: ProjectConversationMessage): ProjectConversationMessage {
+  return {
+    role: message.role,
+    content: message.content.trim().slice(0, 500),
+    createdAt: message.createdAt,
+    threadId: message.threadId ?? null,
+  };
+}
+
+function messageKey(message: ProjectConversationMessage) {
+  return `${message.threadId ?? ""}:${message.createdAt ?? ""}:${message.role}:${message.content}`;
+}
+
+function uniqueMessages(messages: ProjectConversationMessage[]) {
+  const seen = new Set<string>();
+  const result: ProjectConversationMessage[] = [];
+
+  for (const message of messages) {
+    const compacted = compactMessage(message);
+    if (!compacted.content) {
+      continue;
+    }
+
+    const key = messageKey(compacted);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(compacted);
+  }
+
+  return result.slice(-24);
+}
+
+const deliverableMatchers: Array<[string, RegExp]> = [
+  ["script", /\b(script|screenplay)\b/i],
+  ["emotional arc", /\b(emotional arc|emotion|emo|nostalg)\w*\b/i],
+  ["narration", /\b(narration|voiceover|voice over|vo\b)\b/i],
+  ["shot list", /\b(shot list|shots?|b-roll|broll|a-roll|aroll|visuals?|storyboard)\b/i],
+  ["asset prompts", /\b(asset prompts?|image prompts?|video prompts?|prompt pack)\b/i],
+  ["caption", /\b(caption|hashtags?|first comment)\b/i],
+  ["music direction", /\b(music|bgm|background music|soundtrack|song)\b/i],
+  ["publish prep", /\b(publish|posting|cta)\b/i],
+];
+
+function deliverablesFromText(text: string) {
+  return deliverableMatchers
+    .filter(([, matcher]) => matcher.test(text))
+    .map(([label]) => label);
+}
+
+function uniqueStrings(values: string[], limit = 8) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed.toLowerCase())) {
+      continue;
+    }
+    seen.add(trimmed.toLowerCase());
+    result.push(trimmed.slice(0, 240));
+    if (result.length >= limit) {
+      break;
+    }
+  }
+
+  return result;
+}
+
+function emptyConversationContext(): ProjectConversationContext {
+  return {
+    latestUserIntent: null,
+    recentUserGoals: [],
+    openDeliverables: [],
+    followUpHints: [],
+    recentProjectMessages: [],
+  };
+}
+
+function buildConversationContext(input: {
+  activeMessages: ProjectConversationMessage[];
+  projectMessages: ProjectConversationMessage[];
+  memories: ProjectMemoryRecord[];
+  runSummaries: ProjectRunSummary[];
+  activeGoal: ProjectMindSnapshot["activeGoal"];
+}): ProjectConversationContext {
+  const recentProjectMessages = uniqueMessages([
+    ...input.projectMessages,
+    ...input.activeMessages,
+  ]);
+  const recentProjectUserMessages = recentProjectMessages.filter((message) => message.role === "user");
+  const recentRunGoals = input.runSummaries.map((summary) => summary.userGoal);
+  const recentMessageGoals = recentProjectUserMessages.map((message) => message.content);
+  const recentUserGoals = uniqueStrings([...recentRunGoals, ...recentMessageGoals], 8);
+  const latestUserIntent = recentRunGoals.find((goal) => goal.trim())
+    ?? [...recentProjectUserMessages].reverse().find((message) => message.content.trim())?.content
+    ?? null;
+  const memoryDeliverables = input.memories.flatMap((memory) => {
+    const contentDeliverables = Array.isArray(memory.content.deliverables)
+      ? memory.content.deliverables.filter((item): item is string => typeof item === "string")
+      : [];
+    return [
+      ...contentDeliverables,
+      ...deliverablesFromText(memory.summary),
+    ];
+  });
+  const summaryDeliverables = input.runSummaries.flatMap((summary) => [
+    ...deliverablesFromText(summary.userGoal),
+    ...deliverablesFromText(summary.summary),
+    ...summary.openNextSteps.flatMap(deliverablesFromText),
+  ]);
+  const messageDeliverables = recentProjectUserMessages.flatMap((message) => deliverablesFromText(message.content));
+  const goalDeliverables = input.activeGoal
+    ? [
+        ...deliverablesFromText(input.activeGoal.title),
+        ...input.activeGoal.nextActions.flatMap(deliverablesFromText),
+        ...input.activeGoal.blockers.flatMap(deliverablesFromText),
+      ]
+    : [];
+  const openDeliverables = uniqueStrings([
+    ...summaryDeliverables,
+    ...memoryDeliverables,
+    ...goalDeliverables,
+    ...messageDeliverables,
+  ], 10);
+  const followUpHints = latestUserIntent || openDeliverables.length > 0
+    ? [
+        "Resolve short follow-ups like 'all of them', 'do it', 'make that', and 'draft everything' against the latest user intent.",
+        openDeliverables.length > 1
+          ? `Treat 'all of them' as these open deliverables: ${openDeliverables.join(", ")}.`
+          : "",
+      ].filter(Boolean)
+    : [];
+
+  return {
+    latestUserIntent,
+    recentUserGoals,
+    openDeliverables,
+    followUpHints,
+    recentProjectMessages,
+  };
+}
+
 export async function buildProjectMind(input: {
   projectId: string;
   threadId?: string;
@@ -347,6 +497,7 @@ export async function buildProjectMind(input: {
   }
 
   const getAgentHistory = stores.getAgentHistory ?? getDefaultAgentHistory;
+  const listRecentProjectMessages = stores.listRecentProjectMessages ?? listDefaultRecentProjectMessages;
   const getProjectAssetLibrary = stores.getProjectAssetLibrary ?? getDefaultProjectAssetLibrary;
   const loadCreativeBrief = stores.loadCreativeBrief ?? loadDefaultCreativeBrief;
   const loadActiveGoal = stores.loadActiveGoal ?? loadDefaultActiveGoal;
@@ -354,11 +505,12 @@ export async function buildProjectMind(input: {
   const loadMemories = stores.listProjectMemories ?? listProjectMemories;
   const loadRunSummaries = stores.listRecentRunSummaries ?? listProjectRunSummaries;
 
-  const [history, library, creativeBrief, activeGoal, scriptVersions, projectMemories, recentRunSummaries] =
+  const [history, recentProjectMessages, library, creativeBrief, activeGoal, scriptVersions, projectMemories, recentRunSummaries] =
     await Promise.all([
       input.threadId
         ? safe(getAgentHistory(input.projectId, input.threadId), { messages: [], toolCalls: [], thread: null })
         : Promise.resolve({ messages: [], toolCalls: [], thread: null }),
+      safe(listRecentProjectMessages(input.projectId, 24), []),
       safe(getProjectAssetLibrary(input.projectId), { folders: [], looseAssets: project.assets }),
       safe(loadCreativeBrief(input.projectId), null),
       safe(loadActiveGoal(input.projectId), null),
@@ -403,6 +555,19 @@ export async function buildProjectMind(input: {
   const durableProjectMemories = projectMemories.filter(
     (memory) => memory.memoryType !== "selected_output" && memory.memoryType !== "rejected_output" && memory.memoryType !== "agent_summary",
   );
+  const activeMessages = history.messages.slice(-8).map((message) => ({
+    role: message.role,
+    content: message.content,
+    createdAt: message.created_at,
+    threadId: input.threadId ?? null,
+  }));
+  const conversationContext = buildConversationContext({
+    activeMessages,
+    projectMessages: recentProjectMessages,
+    memories: durableProjectMemories,
+    runSummaries: recentRunSummaries,
+    activeGoal,
+  });
 
   return {
     project: {
@@ -451,6 +616,7 @@ export async function buildProjectMind(input: {
         createdAt: message.created_at,
       })),
     },
+    conversationContext,
     toolHistory: history.toolCalls.slice(-8).map((toolCall) => ({
       id: toolCall.id,
       toolName: toolCall.tool_name,
@@ -524,6 +690,7 @@ export function compactProjectMindForModel(snapshot: ProjectMindSnapshot): Compa
       openNextSteps: summary.openNextSteps.slice(0, 5),
       createdAt: summary.createdAt,
     })),
+    conversationContext: snapshot.conversationContext ?? emptyConversationContext(),
     integrationState: snapshot.integrationState,
     readiness: snapshot.readiness,
   };
