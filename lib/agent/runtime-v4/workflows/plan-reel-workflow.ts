@@ -4,8 +4,7 @@ import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow, JsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
-import { fallbackPlanReel } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import { planReelOutputSchema, type PlanReelOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
@@ -81,11 +80,13 @@ export const planReelWorkflow: CreativeWorkflow<PlanReelInput, PlanReelOutput> =
         "Generate a reel plan that is specific to this project. If essential context is missing, list only the essential openQuestions.",
       ].join("\n\n"),
       context,
-      fallback: () => fallbackPlanReel(input, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("plan_reel", generated.metadata);
+    }
     const output = generated.output;
 
-    if (output.openQuestions.length > 0 && context.projectMind.readiness.briefCompleteness < 30 && !generated.metadata.fallbackUsed) {
+    if (output.openQuestions.length > 0 && context.projectMind.readiness.briefCompleteness < 30) {
       return {
         status: "needs_input",
         workflowName: "plan_reel",

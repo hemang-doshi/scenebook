@@ -3,6 +3,7 @@ import { Annotation } from "@langchain/langgraph";
 import type { AgentPlan, ToolObservation } from "@/lib/agent/runtime-v3/types";
 import type { AgentDecision, GoalCheck } from "@/lib/agent/runtime-v4/decision/schemas";
 import type { RuntimeV4Event } from "@/lib/agent/runtime-v4/events";
+import type { AgentCommand, AgentIntentHint } from "@/lib/agent/types";
 import type {
   CompactProjectMind,
   ProjectMindSnapshot,
@@ -92,6 +93,18 @@ export const SceneBookGraphAnnotation = Annotation.Root({
   threadId: Annotation<string | undefined>(),
   runId: Annotation<string | undefined>(),
   goal: Annotation<string>(),
+  effectivePrompt: Annotation<string | undefined>({
+    reducer: replaceValue,
+  }),
+  commandHint: Annotation<AgentCommand | null | undefined>({
+    reducer: replaceValue,
+  }),
+  commandInput: Annotation<string | null | undefined>({
+    reducer: replaceValue,
+  }),
+  intentHint: Annotation<AgentIntentHint | null | undefined>({
+    reducer: replaceValue,
+  }),
   currentGoal: Annotation<SceneBookGraphGoal | undefined>({
     reducer: replaceValue,
   }),
@@ -169,6 +182,10 @@ export type SceneBookGraphInput = {
   threadId?: string;
   runId?: string;
   goal: string;
+  effectivePrompt?: string | null;
+  commandHint?: AgentCommand | null;
+  commandInput?: string | null;
+  intentHint?: AgentIntentHint | null;
   messages?: SceneBookGraphMessage[];
   maxSteps?: number;
 };

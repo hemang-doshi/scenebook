@@ -359,6 +359,17 @@ describe("runtime-v4 LangGraph runtime", () => {
         reason: "A creative planning workflow fits the request.",
       },
       {
+        angle: "Build SceneBook from the scattered creator workflow.",
+        audience: "indie builders",
+        emotionalPromise: "Feel the production workflow become concrete.",
+        contentStructure: ["Messy idea", "SceneBook workflow", "Ready package"],
+        visualStyle: "screen recordings with founder narration",
+        productionChecklist: ["Record UI", "Film hook", "Capture checklist"],
+        nextBestAction: "Draft the script package.",
+        assumptions: [],
+        openQuestions: [],
+      },
+      {
         status: "satisfied",
         response: "Workflow produced a production plan.",
         reason: "The reel plan was generated.",

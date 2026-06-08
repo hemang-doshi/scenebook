@@ -33,10 +33,41 @@ function topicFromGoal(goal: string) {
   return null;
 }
 
+function effectiveGoal(state: SceneBookGraphState) {
+  return state.effectivePrompt?.trim() || state.goal.trim();
+}
+
+function isConversationalGreeting(goal: string) {
+  const trimmed = goal.trim();
+  return /^(hey|hi|hello|yo|sup|what'?s up|wassup|namaste)\b[!.?\s]*$/i.test(trimmed)
+    || /^(hey|hi|hello|yo)\b.*\b(what'?s up|how'?s it going|how (are|ya|you|u)( doing| doin| going)?|how ya doin|how you doing|what'?s good)\b[!.?\s]*$/i.test(trimmed);
+}
+
+function hasCreativeSignal(goal: string) {
+  return /\b(reel|short|video|script|shoot pack|shot list|storyboard|b-roll|broll|caption|hook|production package)\b/i.test(goal);
+}
+
 function deterministicIntent(state: SceneBookGraphState): SceneBookGraphIntent {
-  const goal = state.goal.trim();
+  const goal = effectiveGoal(state);
   const format = requestedFormat(goal, state.projectMind?.project.format);
   const topic = topicFromGoal(goal) ?? state.projectMind?.project.title ?? null;
+
+  if (!goal || isConversationalGreeting(goal) || !hasCreativeSignal(goal)) {
+    return {
+      intentType: "general_chat",
+      summary: goal
+        ? "The user wants a conversational SceneBook response."
+        : "The user has not provided enough input yet.",
+      requestedFormat: null,
+      topic: null,
+      confidence: goal ? 0.55 : 0.2,
+      creativeMode: undefined,
+      needsClarification: false,
+      inferredGoal: goal || undefined,
+      needsWorkspaceMutation: false,
+    };
+  }
+
   const summary = [
     "The user wants help shaping",
     format ? `a ${format}` : "a short-form content asset",
@@ -70,6 +101,7 @@ export function createUnderstandIntentNode(options: UnderstandIntentNodeOptions 
     try {
       const result = await generateIntentUnderstanding({
         goal: state.goal,
+        effectiveGoal: effectiveGoal(state),
         projectTitle: state.projectMind?.project.title,
         projectFormat: state.projectMind?.project.format,
         model: options.model,

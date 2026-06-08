@@ -15,6 +15,10 @@ export const agentCommands = [
   "export",
 ] as const;
 
+export const agentIntentHints = [
+  "plan",
+] as const;
+
 export const agentMessageRoles = ["user", "assistant", "system", "tool"] as const;
 export const agentRunStatuses = ["queued", "running", "completed", "failed"] as const;
 export const agentToolCallStatuses = [
@@ -28,6 +32,7 @@ export const agentToolCallStatuses = [
 ] as const;
 
 export type AgentCommand = (typeof agentCommands)[number];
+export type AgentIntentHint = (typeof agentIntentHints)[number];
 export const streamingAgentCommands = [
   "script",
   "form-json-prompt",
@@ -180,6 +185,8 @@ export type AgentHistory = {
 
 export type ParsedSlashCommand = {
   command: AgentCommand | null;
+  intentHint: AgentIntentHint | null;
   input: string;
   isCommand: boolean;
+  isIntentHint: boolean;
 };

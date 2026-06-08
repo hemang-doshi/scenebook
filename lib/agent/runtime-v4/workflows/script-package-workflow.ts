@@ -4,8 +4,7 @@ import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
-import { fallbackScriptPackage } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import { scriptPackageOutputSchema, type ScriptPackageOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
@@ -85,7 +84,7 @@ export const scriptPackageWorkflow: CreativeWorkflow<ScriptPackageInput, ScriptP
     const angle = input.selectedAngle
       ?? context.projectMind.creativeBrief?.coreAngle
       ?? `a specific short-form story about ${context.projectMind.project.title}`;
-    const { output } = await generateWorkflowStructured({
+    const generated = await generateWorkflowStructured({
       workflowName: "create_script_package",
       schema: scriptPackageOutputSchema,
       schemaName: "ScriptPackageOutput",
@@ -97,8 +96,11 @@ export const scriptPackageWorkflow: CreativeWorkflow<ScriptPackageInput, ScriptP
         "Write a script package that adapts to the existing brief, rejected outputs, current script state, platform, and creator preferences.",
       ].join("\n\n"),
       context,
-      fallback: () => fallbackScriptPackage(input, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("create_script_package", generated.metadata);
+    }
+    const output = generated.output;
 
     return {
       status: "completed",

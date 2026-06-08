@@ -36,7 +36,6 @@ import {
 } from "@/lib/agent/runtime-v4/tools/registry";
 import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 import type { JsonValue } from "@/lib/types";
-import type { ProjectSnapshot } from "@/lib/agent/runtime-v3/types";
 
 function responseForQuestions(decision: Extract<AgentDecision, { type: "ask_question" }>) {
   return [
@@ -57,43 +56,6 @@ function responseForGoalQuestions(progress: Extract<GoalCheck, { status: "ask_us
     "I need one thing before I continue:",
     ...progress.questions.map((question, index) => `${index + 1}. ${question}`),
   ].join("\n");
-}
-
-function isLowConfidenceFallback(decision: AgentDecision) {
-  return decision.type === "final_response"
-    && decision.confidence <= 0.35
-    && /^I can still help\b/i.test(decision.response);
-}
-
-function createNoWritePlanDecision(snapshot: ProjectSnapshot, message: string): Extract<AgentDecision, { type: "propose_plan" }> {
-  const topic = message.trim() || snapshot.project.title || "this project";
-  const format = snapshot.project.format || "short-form video";
-  const platform = snapshot.project.platform || "the target platform";
-
-  return {
-    type: "propose_plan",
-    plan: {
-      title: `Plan a ${format} about ${topic}`,
-      steps: [
-        { label: `Anchor the ${format} in one specific story angle.`, sideEffect: "none", requiresApproval: false },
-        { label: "Draft the hook, three-beat outline, and payoff before making workspace edits.", sideEffect: "none", requiresApproval: false },
-        { label: `Map A-roll, B-roll, and screen captures that make the ${platform} story concrete.`, sideEffect: "none", requiresApproval: false },
-      ],
-    },
-    reason: "The custom runtime used deterministic no-write planning after low-confidence fallback text.",
-  };
-}
-
-function maybeReplaceLowConfidenceFallback(snapshot: ProjectSnapshot, message: string, previousObservations: ToolObservation[], decision: AgentDecision) {
-  if (
-    isLowConfidenceFallback(decision)
-    && previousObservations.length === 0
-    && Boolean(snapshot.project.format)
-  ) {
-    return createNoWritePlanDecision(snapshot, message);
-  }
-
-  return decision;
 }
 
 export type AgentOrchestrator = "custom" | "langgraph";
@@ -138,11 +100,18 @@ function createRuntimeV4Execution(options: { modelGateway?: ModelGateway } = {})
   };
 }
 
+function effectivePromptForRequest(request: AgentRunRequest) {
+  return request.effectivePrompt?.trim()
+    || request.commandInput?.trim()
+    || request.message.trim();
+}
+
 function runLangGraphRuntime(request: AgentRunRequest) {
   return createAgentSseResponse(async (stream) => {
     let runId: string | null = null;
 
     try {
+      const effectivePrompt = effectivePromptForRequest(request);
       const thread = await createOrLoadThread(request.projectId, request.threadId);
       await appendAgentMessage({
         projectId: request.projectId,
@@ -150,7 +119,11 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         role: "user",
         content: request.message,
         model: request.selectedModels?.chat ?? null,
-        metadata: request.attachments ? { attachments: request.attachments } : {},
+        metadata: {
+          ...(request.intentHint ? { intentHint: request.intentHint, effectivePrompt } : {}),
+          ...(request.commandHint ? { command: request.commandHint, commandInput: request.commandInput ?? null } : {}),
+          ...(request.attachments ? { attachments: request.attachments } : {}),
+        },
       });
 
       const run = await createAgentRun({
@@ -161,6 +134,8 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         metadata: {
           runtime: "v4",
           orchestrator: "langgraph",
+          ...(request.intentHint ? { intentHint: request.intentHint, effectivePrompt } : {}),
+          ...(request.commandHint ? { command: request.commandHint, commandInput: request.commandInput ?? null } : {}),
         },
       });
       runId = run.id;
@@ -170,7 +145,10 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         runId: run.id,
       });
 
-      const runtimeV4Execution = createRuntimeV4Execution();
+      const modelGateway = createRuntimeV4ModelGateway({
+        model: request.selectedModels?.chat,
+      });
+      const runtimeV4Execution = createRuntimeV4Execution({ modelGateway });
       const graphState = await runSceneBookGraph({
         projectId: request.projectId,
         threadId: thread.id,
@@ -179,8 +157,13 @@ function runLangGraphRuntime(request: AgentRunRequest) {
         permissions: request.permissions,
         runId: run.id,
         goal: request.message,
+        effectivePrompt,
+        commandHint: request.commandHint,
+        commandInput: request.commandInput,
+        intentHint: request.intentHint,
         messages: [{ role: "user", content: request.message }],
         model: request.selectedModels?.chat,
+        modelGateway,
         toolSummaries: summarizeRuntimeV4Tools(),
         toolExecutor: runtimeV4Execution.toolExecutor,
         patchExecutor: runtimeV4Execution.patchExecutor,
@@ -254,6 +237,7 @@ export class AgentKernel {
       let runId: string | null = null;
 
       try {
+        const effectivePrompt = effectivePromptForRequest(request);
         const thread = await createOrLoadThread(request.projectId, request.threadId);
         await appendAgentMessage({
           projectId: request.projectId,
@@ -261,7 +245,11 @@ export class AgentKernel {
           role: "user",
           content: request.message,
           model: request.selectedModels?.chat ?? null,
-          metadata: request.attachments ? { attachments: request.attachments } : {},
+          metadata: {
+            ...(request.intentHint ? { intentHint: request.intentHint, effectivePrompt } : {}),
+            ...(request.commandHint ? { command: request.commandHint, commandInput: request.commandInput ?? null } : {}),
+            ...(request.attachments ? { attachments: request.attachments } : {}),
+          },
         });
 
         const run = await createAgentRun({
@@ -271,6 +259,8 @@ export class AgentKernel {
           selectedModels: request.selectedModels,
           metadata: {
             runtime: "v4",
+            ...(request.intentHint ? { intentHint: request.intentHint, effectivePrompt } : {}),
+            ...(request.commandHint ? { command: request.commandHint, commandInput: request.commandInput ?? null } : {}),
           },
         });
         runId = run.id;
@@ -342,15 +332,17 @@ export class AgentKernel {
 
           const decision = await decideNextStep({
             message: request.message,
+            effectivePrompt,
             commandHint: request.commandHint,
             commandInput: request.commandInput,
+            intentHint: request.intentHint,
             snapshot,
             toolSummaries,
             previousObservations,
             model: request.selectedModels?.chat,
             modelGateway,
           });
-          const resolvedDecision = maybeReplaceLowConfidenceFallback(snapshot, request.commandInput ?? request.message, previousObservations, decision);
+          const resolvedDecision = decision;
 
           stream.emit("decision", {
             decision: JSON.parse(JSON.stringify(resolvedDecision)),
@@ -481,6 +473,29 @@ export class AgentKernel {
           }
 
           previousObservations.push(...newObservations);
+          const workflowObservation = resolvedDecision.type === "workflow_call" ? newObservations[0] : undefined;
+          if (workflowObservation?.output?.kind === "creative_workflow_failed") {
+            await finish(workflowObservation.message, {
+              decisionType: resolvedDecision.type,
+              goalStatus: "workflow_failed",
+            });
+            return;
+          }
+
+          if (workflowObservation?.output?.kind === "creative_workflow_needs_input") {
+            const questions = Array.isArray(workflowObservation.output.questions)
+              ? workflowObservation.output.questions.filter((question): question is string => typeof question === "string").slice(0, 3)
+              : [];
+            await finish([
+              workflowObservation.message,
+              ...questions.map((question, index) => `${index + 1}. ${question}`),
+            ].join("\n"), {
+              decisionType: resolvedDecision.type,
+              goalStatus: "ask_user",
+            }, true);
+            return;
+          }
+
           const awaitingApproval = newObservations.find((observation) => observation.status === "awaiting_approval");
           if (awaitingApproval) {
             await finish(awaitingApproval.message, {

@@ -1,5 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
+import type { ModelGateway } from "@/lib/ai/model-gateway";
 import type { ProjectMindSnapshot } from "@/lib/agent/runtime-v4/memory/memory-types";
 import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
 
@@ -77,8 +78,89 @@ const context = {
   source: "agent",
 };
 
+const outputs: Record<string, unknown> = {
+  PlanReelOutput: {
+    angle: "Build SceneBook from the messy creator workflow.",
+    audience: "indie builders",
+    emotionalPromise: "Feel the workflow become shoot-ready.",
+    contentStructure: ["Messy idea", "SceneBook workspace", "Ready package"],
+    visualStyle: "screen recordings with founder narration",
+    productionChecklist: ["Record UI", "Capture notes", "Film hook"],
+    nextBestAction: "Draft the script package.",
+    assumptions: [],
+    openQuestions: [],
+  },
+  ScriptPackageOutput: {
+    hookOptions: ["The idea should not die between notes and edit."],
+    selectedHook: "The idea should not die between notes and edit.",
+    script: "SceneBook helps creators move from idea to script to shoot pack.",
+    voiceover: "Candid founder narration.",
+    onScreenText: "Idea -> script -> shoot pack",
+    cta: "Follow the build.",
+    captionSeed: "Building SceneBook from the messy middle.",
+    structure: ["Hook", "Problem", "Proof", "CTA"],
+    pacingNotes: "Keep proof cuts tight.",
+    estimatedDurationSeconds: 30,
+  },
+  ShootPackOutput: {
+    scenes: ["Desk hook", "UI proof", "Shoot checklist"],
+    aRoll: ["Record hook"],
+    bRoll: ["Notes beside laptop"],
+    screenCaptures: ["Script Lab"],
+    props: ["Laptop"],
+    missingAssets: ["Thumbnail frame"],
+    visualNotes: "screen recordings with founder narration",
+    locationNotes: "quiet desk",
+    editingNotes: "Cut on proof moments.",
+    feasibilityNotes: "Ready after screen capture.",
+  },
+  AssetPromptPackOutput: {
+    cinematicJsonPrompts: [{ scene: "creator desk" }],
+    imagePrompts: ["SceneBook open on a creator desk."],
+    brollPrompts: ["Hands arranging shoot notes."],
+    thumbnailPrompt: "Idea to shoot pack.",
+    voiceoverDirection: "Plain founder tone.",
+    musicDirection: "Light optimistic bed.",
+    negativePrompts: ["fake UI"],
+    modelNotes: "Prompt artifacts only.",
+  },
+  ReviewOutput: {
+    scorecard: { clarity: 8, specificity: 8, momentum: 8, fitToGoal: 9 },
+    strengths: ["Specific workflow problem"],
+    weaknesses: ["Needs faster visual proof"],
+    specificImprovements: ["Show the workspace sooner"],
+    improvedVersion: "Improved script: SceneBook takes the idea to a shoot pack.",
+    keep: ["Specificity"],
+    cut: ["Generic claims"],
+    riskNotes: ["No auto-publish claims."],
+  },
+  PublishPrepOutput: {
+    caption: "Building SceneBook from idea to shoot pack.",
+    hashtags: ["#buildinpublic", "#creatorworkflow"],
+    postingChecklist: ["Check first frame"],
+    thumbnailText: "Idea to shoot pack",
+    description: "SceneBook build reel.",
+    firstComment: "Where does your idea get stuck?",
+    readinessWarnings: ["No external publishing was performed."],
+    platformNotes: "Prepared for Instagram manual posting.",
+  },
+};
+
+function gateway(): ModelGateway {
+  return {
+    provider: "fake",
+    generateStructured: vi.fn(async (input) => ({
+      object: input.schema.parse(outputs[input.schemaName ?? ""]),
+      rawText: JSON.stringify(outputs[input.schemaName ?? ""]),
+      finishReason: "stop",
+    })),
+    generateText: vi.fn(),
+    streamText: vi.fn(),
+  } as unknown as ModelGateway;
+}
+
 async function run(workflowName: string, input: unknown) {
-  return new WorkflowExecutor({ applyPatch: false }).execute({
+  return new WorkflowExecutor({ applyPatch: false, modelGateway: gateway() }).execute({
     workflowName,
     input,
     projectMind: projectMind(),

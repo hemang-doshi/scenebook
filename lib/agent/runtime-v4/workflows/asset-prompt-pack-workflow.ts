@@ -4,8 +4,7 @@ import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
-import { fallbackAssetPromptPack } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import { assetPromptPackOutputSchema, type AssetPromptPackOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const assetTypes = ["image", "broll", "voiceover", "music", "thumbnail"] as const;
@@ -61,7 +60,7 @@ export const assetPromptPackWorkflow: CreativeWorkflow<AssetPromptPackInput, Ass
     const visualStyle = input.visualStyle
       ?? context.projectMind.creativeBrief?.visualStyle
       ?? "honest founder-devlog with real product surfaces";
-    const { output } = await generateWorkflowStructured({
+    const generated = await generateWorkflowStructured({
       workflowName: "create_asset_prompt_pack",
       schema: assetPromptPackOutputSchema,
       schemaName: "AssetPromptPackOutput",
@@ -73,8 +72,11 @@ export const assetPromptPackWorkflow: CreativeWorkflow<AssetPromptPackInput, Ass
         `Visual style: ${visualStyle}`,
       ].join("\n\n"),
       context,
-      fallback: () => fallbackAssetPromptPack(input, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("create_asset_prompt_pack", generated.metadata);
+    }
+    const output = generated.output;
 
     return {
       status: "completed",

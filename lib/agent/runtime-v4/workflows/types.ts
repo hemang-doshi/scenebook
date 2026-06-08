@@ -51,6 +51,7 @@ export type CreativeWorkflowResult =
         code: string;
         message: string;
         recoverable: boolean;
+        details?: Record<string, JsonValue>;
       };
     };
 

@@ -444,6 +444,8 @@ describe("runtime-v4 run summaries", () => {
       userId: "user-1",
       runId: "run-1",
       goal: "Help me make a reel about building SceneBook.",
+      effectivePrompt: "Help me make a reel about building SceneBook.",
+      modelGateway: {},
       toolSummaries: [{ name: "update_script_lab" }],
       toolExecutor: expect.objectContaining({
         execute: toolExecutorExecute,
@@ -757,14 +759,16 @@ describe("runtime-v4 run summaries", () => {
     expect(decideNextStep).toHaveBeenCalledWith(expect.objectContaining({
       commandHint: "script",
       commandInput: "generate a script about a reel talking about AI taking over humans",
+      effectivePrompt: "generate a script about a reel talking about AI taking over humans",
+      intentHint: undefined,
     }));
   });
 
-  test("custom runtime replaces low-confidence fallback text with a no-write plan", async () => {
+  test("custom runtime preserves transparent low-confidence fallback text", async () => {
     process.env.AGENT_ORCHESTRATOR = "custom";
     decideNextStep.mockResolvedValueOnce({
       type: "final_response",
-      response: "I can still help with that. Tell me the outcome you want for \"help me plan a reel about SceneBook\", and I will turn it into a concrete next step.",
+      response: "I couldn't get a reliable model decision for this request, so I won't fake it with a canned workflow.",
       confidence: 0.2,
     });
 
@@ -779,10 +783,60 @@ describe("runtime-v4 run summaries", () => {
 
     const text = await response.text();
 
-    expect(text).not.toContain("I can still help with that");
-    expect(text).toContain("Plan a reel");
+    expect(text).toContain("I couldn't get a reliable model decision");
+    expect(text).not.toContain("Plan a reel");
     expect(completeAgentRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
-      decisionType: "propose_plan",
+      decisionType: "final_response",
+    }));
+  });
+
+  test("custom runtime passes /plan intent hints and clean prompt into decisioning", async () => {
+    process.env.AGENT_ORCHESTRATOR = "custom";
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "/plan make a Goa shoot pack",
+      effectivePrompt: "make a Goa shoot pack",
+      commandInput: "make a Goa shoot pack",
+      intentHint: "plan",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(decideNextStep).toHaveBeenCalledWith(expect.objectContaining({
+      message: "/plan make a Goa shoot pack",
+      effectivePrompt: "make a Goa shoot pack",
+      commandHint: undefined,
+      commandInput: "make a Goa shoot pack",
+      intentHint: "plan",
+    }));
+  });
+
+  test("langgraph runtime passes /plan intent hints and clean prompt into SceneBookGraph", async () => {
+    process.env.AGENT_ORCHESTRATOR = "langgraph";
+    const { AgentKernel } = await import("@/lib/agent/runtime-v4/kernel");
+    const response = AgentKernel.run({
+      projectId: "project-1",
+      threadId: "thread-1",
+      userId: "user-1",
+      message: "/plan make a Goa shoot pack",
+      effectivePrompt: "make a Goa shoot pack",
+      commandInput: "make a Goa shoot pack",
+      intentHint: "plan",
+      selectedModels: {},
+    });
+
+    await response.text();
+
+    expect(runSceneBookGraph).toHaveBeenCalledWith(expect.objectContaining({
+      goal: "/plan make a Goa shoot pack",
+      effectivePrompt: "make a Goa shoot pack",
+      commandHint: undefined,
+      commandInput: "make a Goa shoot pack",
+      intentHint: "plan",
     }));
   });
 });

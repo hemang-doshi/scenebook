@@ -64,6 +64,7 @@ function selectChain(data: unknown) {
 describe("agent route auth boundary", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.clearAllMocks();
     process.env.AGENT_HARNESS_RUNTIME_ENABLED = "true";
     process.env.AGENT_HARNESS_RUNTIME_VERSION = "v4";
     supabaseMock.authUser = { id: "user-1" };
@@ -172,6 +173,42 @@ describe("agent route auth boundary", () => {
       message: "/script generate a script about AI taking over humans",
       commandHint: "script",
       commandInput: "generate a script about AI taking over humans",
+      intentHint: null,
     }));
+  });
+
+  test("agent POST runtime-v4 passes /plan as an intent hint with a clean effective prompt", async () => {
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+
+    await POST(new Request("http://localhost/api/projects/project-1/agent", {
+      method: "POST",
+      body: JSON.stringify({ message: "/plan make a Goa shoot pack" }),
+    }), {
+      params: Promise.resolve({ id: "project-1" }),
+    });
+
+    expect(kernelMock.run).toHaveBeenCalledWith(expect.objectContaining({
+      message: "/plan make a Goa shoot pack",
+      effectivePrompt: "make a Goa shoot pack",
+      commandHint: null,
+      commandInput: "make a Goa shoot pack",
+      intentHint: "plan",
+    }));
+  });
+
+  test("agent POST runtime-v4 rejects unsupported slash commands before invoking AgentKernel", async () => {
+    const { POST } = await import("@/app/api/projects/[id]/agent/route");
+
+    const response = await POST(new Request("http://localhost/api/projects/project-1/agent", {
+      method: "POST",
+      body: JSON.stringify({ message: "/unknown do something" }),
+    }), {
+      params: Promise.resolve({ id: "project-1" }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toMatch(/Unsupported slash command/);
+    expect(kernelMock.run).not.toHaveBeenCalled();
   });
 });

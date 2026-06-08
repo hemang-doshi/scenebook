@@ -4,8 +4,7 @@ import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
-import { fallbackShootPack } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import { shootPackOutputSchema, type ShootPackOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
@@ -63,7 +62,7 @@ export const shootPackWorkflow: CreativeWorkflow<ShootPackInput, ShootPackOutput
   async handler(input, context) {
     const visualStyle = context.projectMind.creativeBrief?.visualStyle
       ?? "screen recordings, desk footage, and clean on-screen labels";
-    const { output } = await generateWorkflowStructured({
+    const generated = await generateWorkflowStructured({
       workflowName: "create_shoot_pack",
       schema: shootPackOutputSchema,
       schemaName: "ShootPackOutput",
@@ -75,8 +74,11 @@ export const shootPackWorkflow: CreativeWorkflow<ShootPackInput, ShootPackOutput
         `Script override, if provided:\n${input.script ?? ""}`,
       ].join("\n\n"),
       context,
-      fallback: () => fallbackShootPack(input, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("create_shoot_pack", generated.metadata);
+    }
+    const output = generated.output;
 
     return {
       status: "completed",

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, test, vi } from "vitest";
 
+import type { ModelGateway } from "@/lib/ai/model-gateway";
 import { agentDecisionSchema } from "@/lib/agent/runtime-v4/decision/schemas";
 import { listRuntimeV4Workflows } from "@/lib/agent/runtime-v4/workflows/workflow-registry";
 import { WorkflowExecutor } from "@/lib/agent/runtime-v4/workflows/workflow-executor";
@@ -101,6 +102,91 @@ const context = {
   source: "agent",
 };
 
+const workflowOutputs: Record<string, unknown> = {
+  PlanReelOutput: {
+    angle: "Build from the scattered creator workflow problem.",
+    audience: "indie builders",
+    emotionalPromise: "Feel the workflow snap into place.",
+    contentStructure: ["Messy notes", "SceneBook system", "Ready package"],
+    visualStyle: "screen recordings with candid founder narration",
+    productionChecklist: ["Film UI", "Record hook", "Capture notes"],
+    nextBestAction: "Draft the script package.",
+    assumptions: [],
+    openQuestions: [],
+  },
+  ScriptPackageOutput: {
+    hookOptions: ["Your video idea should not disappear between notes and edit."],
+    selectedHook: "Your video idea should not disappear between notes and edit.",
+    script: "SceneBook keeps the idea, script, and shoot pack connected.",
+    voiceover: "Conversational founder narration.",
+    onScreenText: "Idea -> script -> shoot pack",
+    cta: "Follow the build.",
+    captionSeed: "Building SceneBook from real creator workflow mess.",
+    structure: ["Hook", "Problem", "Proof", "CTA"],
+    pacingNotes: "Keep proof beats under five seconds.",
+    estimatedDurationSeconds: 35,
+  },
+  ShootPackOutput: {
+    scenes: ["Desk hook", "SceneBook UI", "Shoot checklist"],
+    aRoll: ["Record the hook", "Explain the workflow change"],
+    bRoll: ["Notes beside laptop", "Timeline scroll"],
+    screenCaptures: ["Creative brief", "Script Lab"],
+    props: ["Laptop", "Microphone"],
+    missingAssets: ["Thumbnail-safe frame"],
+    visualNotes: "screen recordings with candid founder narration",
+    locationNotes: "quiet desk setup",
+    editingNotes: "Cut on UI proof moments.",
+    feasibilityNotes: "Shootable in one afternoon.",
+  },
+  AssetPromptPackOutput: {
+    cinematicJsonPrompts: [{ scene: "creator desk", style: "documentary" }],
+    imagePrompts: ["Founder desk with SceneBook open."],
+    brollPrompts: ["Hands organizing a shoot checklist."],
+    thumbnailPrompt: "SceneBook workflow proof frame.",
+    voiceoverDirection: "Plainspoken founder tone.",
+    musicDirection: "Low-key optimistic bed.",
+    negativePrompts: ["fake UI", "stock photo"],
+    modelNotes: "Prompt artifacts only.",
+  },
+  ReviewOutput: {
+    scorecard: { clarity: 8, specificity: 8, momentum: 8, fitToGoal: 9 },
+    strengths: ["Clear workflow problem"],
+    weaknesses: ["Needs a faster proof beat"],
+    specificImprovements: ["Show the UI in the first five seconds"],
+    improvedVersion: "SceneBook keeps the idea, script, and shoot pack connected.",
+    keep: ["Founder specificity"],
+    cut: ["Generic productivity claims"],
+    riskNotes: ["Do not imply publishing is automatic."],
+  },
+  PublishPrepOutput: {
+    caption: "Building SceneBook from the messy middle of creator workflow.",
+    hashtags: ["#buildinpublic", "#creatorworkflow"],
+    postingChecklist: ["Check first frame", "Review captions"],
+    thumbnailText: "Idea to shoot pack",
+    description: "A SceneBook build reel package.",
+    firstComment: "Where do your video ideas get stuck?",
+    readinessWarnings: ["No external publishing was performed."],
+    platformNotes: "Prepared for Instagram manual posting.",
+  },
+};
+
+function workflowGateway(): ModelGateway {
+  return {
+    provider: "fake",
+    generateStructured: vi.fn(async (input) => ({
+      object: input.schema.parse(workflowOutputs[input.schemaName ?? ""]),
+      rawText: JSON.stringify(workflowOutputs[input.schemaName ?? ""]),
+      finishReason: "stop",
+    })),
+    generateText: vi.fn(),
+    streamText: vi.fn(),
+  } as unknown as ModelGateway;
+}
+
+function workflowExecutor(options: ConstructorParameters<typeof WorkflowExecutor>[0] = {}) {
+  return new WorkflowExecutor({ applyPatch: false, modelGateway: workflowGateway(), ...options });
+}
+
 describe("runtime-v4 creative workflows", () => {
   test("registry contains all v4 workflows", () => {
     expect(listRuntimeV4Workflows().map((workflow) => workflow.name)).toEqual([...runtimeV4WorkflowNames]);
@@ -154,7 +240,7 @@ describe("runtime-v4 creative workflows", () => {
   });
 
   test("normalized legacy workflows execute through the registered v4 executor", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const parsedDecision = agentDecisionSchema.parse({
       type: "workflow_call",
       workflowName: "script_workflow",
@@ -177,7 +263,7 @@ describe("runtime-v4 creative workflows", () => {
   });
 
   test("plan_reel returns structured plan and ProjectPatch", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const result = await executor.execute({
       workflowName: "plan_reel",
       input: { prompt: "Help me make a reel about building SceneBook" },
@@ -195,7 +281,7 @@ describe("runtime-v4 creative workflows", () => {
   });
 
   test("create_script_package returns hooks/script and ProjectPatch", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const result = await executor.execute({
       workflowName: "create_script_package",
       input: { prompt: "Write the script for the SceneBook launch reel" },
@@ -209,7 +295,7 @@ describe("runtime-v4 creative workflows", () => {
   });
 
   test("create_shoot_pack returns checklist and ProjectPatch", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const result = await executor.execute({
       workflowName: "create_shoot_pack",
       input: { prompt: "Turn this into a shot list" },
@@ -225,7 +311,7 @@ describe("runtime-v4 creative workflows", () => {
   });
 
   test("create_asset_prompt_pack returns prompt artifact and ProjectPatch", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const result = await executor.execute({
       workflowName: "create_asset_prompt_pack",
       input: { prompt: "Make prompts for the assets" },
@@ -238,7 +324,7 @@ describe("runtime-v4 creative workflows", () => {
   });
 
   test("review_content returns critique and improved version", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const result = await executor.execute({
       workflowName: "review_content",
       input: { target: "script", content: "SceneBook helps me make reels." },
@@ -247,11 +333,11 @@ describe("runtime-v4 creative workflows", () => {
     });
 
     expect(result.workflowResult.status).toBe("completed");
-    expect(result.observation.message).toContain("Improved script");
+    expect(result.observation.message).toContain("SceneBook keeps the idea");
   });
 
   test("prepare_publish_package returns caption and does not publish", async () => {
-    const executor = new WorkflowExecutor({ applyPatch: false });
+    const executor = workflowExecutor();
     const result = await executor.execute({
       workflowName: "prepare_publish_package",
       input: { prompt: "Prepare captions and hashtags", platform: "instagram" },
@@ -276,7 +362,7 @@ describe("runtime-v4 creative workflows", () => {
         events: [],
       })),
     };
-    const executor = new WorkflowExecutor({ patchExecutor });
+    const executor = workflowExecutor({ patchExecutor, applyPatch: true });
 
     const result = await executor.execute({
       workflowName: "plan_reel",

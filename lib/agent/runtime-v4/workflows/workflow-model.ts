@@ -1,5 +1,7 @@
 import type { ModelProfileName, ModelUsage } from "@/lib/ai/model-gateway";
+import type { CreativeWorkflowResult, RuntimeV4WorkflowName } from "@/lib/agent/runtime-v4/workflows/types";
 import type { CreativeWorkflowContext } from "@/lib/agent/runtime-v4/workflows/types";
+import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import type { z } from "zod";
 
 export type WorkflowModelMetadata = {
@@ -14,6 +16,16 @@ export type WorkflowModelMetadata = {
   usage?: ModelUsage;
 };
 
+export type WorkflowModelResult<TOutput> =
+  | { status: "completed"; output: TOutput; metadata: WorkflowModelMetadata }
+  | { status: "failed"; metadata: WorkflowModelMetadata };
+
+function errorMetadata(caught: unknown) {
+  return caught instanceof Error
+    ? { name: caught.name, message: caught.message }
+    : { name: "UnknownError", message: String(caught) };
+}
+
 export async function generateWorkflowStructured<TOutput>(input: {
   workflowName: string;
   profile?: ModelProfileName;
@@ -23,14 +35,20 @@ export async function generateWorkflowStructured<TOutput>(input: {
   system: string;
   prompt: string;
   context: CreativeWorkflowContext;
-  fallback: () => TOutput;
-}): Promise<{ output: TOutput; metadata: WorkflowModelMetadata }> {
+}): Promise<WorkflowModelResult<TOutput>> {
   const gateway = input.context.modelGateway;
 
   if (!gateway) {
     return {
-      output: input.fallback(),
-      metadata: { modelUsed: false, fallbackUsed: true },
+      status: "failed",
+      metadata: {
+        modelUsed: false,
+        fallbackUsed: true,
+        modelError: {
+          name: "ModelGatewayUnavailable",
+          message: "No model gateway was available for creative workflow generation.",
+        },
+      },
     };
   }
 
@@ -46,6 +64,7 @@ export async function generateWorkflowStructured<TOutput>(input: {
     });
 
     return {
+      status: "completed",
       output: result.object,
       metadata: {
         modelUsed: true,
@@ -56,17 +75,34 @@ export async function generateWorkflowStructured<TOutput>(input: {
       },
     };
   } catch (caught) {
-    const error = caught instanceof Error
-      ? { name: caught.name, message: caught.message }
-      : { name: "UnknownError", message: String(caught) };
-
     return {
-      output: input.fallback(),
+      status: "failed",
       metadata: {
         modelUsed: true,
         fallbackUsed: true,
-        modelError: error,
+        modelError: errorMetadata(caught),
       },
     };
   }
+}
+
+export function workflowModelFailureResult(
+  workflowName: RuntimeV4WorkflowName,
+  metadata: WorkflowModelMetadata,
+): CreativeWorkflowResult {
+  const modelError = metadata.modelError;
+  const reason = modelError?.message
+    ? `Model error: ${modelError.message}`
+    : "The model did not return a usable structured response.";
+
+  return {
+    status: "failed",
+    workflowName,
+    error: {
+      code: metadata.modelUsed ? "WORKFLOW_MODEL_GENERATION_FAILED" : "WORKFLOW_MODEL_UNAVAILABLE",
+      message: `I couldn't generate ${workflowName} reliably, so I did not create artifacts or workspace changes. ${reason}`,
+      recoverable: true,
+      details: toJsonObject({ model: metadata }),
+    },
+  };
 }

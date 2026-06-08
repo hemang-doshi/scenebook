@@ -137,17 +137,20 @@ export function streamRuntimeV4Text(
 
 export async function generateIntentUnderstanding(input: {
   goal: string;
+  effectiveGoal?: string;
   projectTitle?: string | null;
   projectFormat?: string | null;
   model?: string;
   modelGateway?: ModelGateway;
 }) {
+  const effectiveGoal = input.effectiveGoal?.trim() || input.goal.trim();
   const prompt = [
     "Classify the user's SceneBook runtime intent.",
     "Return a compact object with intentType, confidence, creativeMode, needsClarification, and inferredGoal.",
     `Current project title:\n${input.projectTitle ?? ""}`,
     `Current project format:\n${input.projectFormat ?? ""}`,
-    `User goal:\n${input.goal.trim()}`,
+    `Raw user goal:\n${input.goal.trim()}`,
+    `Effective user goal:\n${effectiveGoal}`,
   ].join("\n\n");
 
   return gatewayFor(input).generateStructured({

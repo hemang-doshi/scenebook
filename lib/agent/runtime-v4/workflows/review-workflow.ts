@@ -4,8 +4,7 @@ import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
-import { fallbackReview } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import { reviewOutputSchema, type ReviewOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
@@ -61,7 +60,7 @@ export const reviewWorkflow: CreativeWorkflow<ReviewInput, ReviewOutput> = {
   outputSchema: reviewOutputSchema,
   async handler(input, context) {
     const content = sourceContent(input, context);
-    const { output } = await generateWorkflowStructured({
+    const generated = await generateWorkflowStructured({
       workflowName: "review_content",
       profile: "critique",
       schema: reviewOutputSchema,
@@ -75,8 +74,11 @@ export const reviewWorkflow: CreativeWorkflow<ReviewInput, ReviewOutput> = {
         "Use a real critique rubric. Preserve what works, identify what to cut, and avoid generic advice.",
       ].join("\n\n"),
       context,
-      fallback: () => fallbackReview(input, content, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("review_content", generated.metadata);
+    }
+    const output = generated.output;
 
     return {
       status: "completed",

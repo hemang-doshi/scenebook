@@ -221,7 +221,7 @@ describe("model-backed runtime-v4 creative workflows", () => {
     expect(gateway.generateStructured).toHaveBeenCalledTimes(workflowInputs.length);
   });
 
-  test("workflows fall back deterministically when model generation fails", async () => {
+  test("workflows fail transparently when model generation fails", async () => {
     const gateway = failingGateway();
 
     for (const [workflowName, input] of workflowInputs) {
@@ -232,11 +232,25 @@ describe("model-backed runtime-v4 creative workflows", () => {
         context,
       });
 
-      expect(result.workflowResult.status).toBe("completed");
+      expect(result.workflowResult.status).toBe("failed");
+      expect(result.workflowResult.status === "failed" ? result.workflowResult.error.message : "").toMatch(/did not create artifacts or workspace changes/i);
+      expect(result.workflowResult.status === "failed" ? result.workflowResult.error.details : undefined).toMatchObject({
+        model: {
+          fallbackUsed: true,
+          modelError: expect.objectContaining({
+            message: "model unavailable",
+          }),
+        },
+      });
+      expect(result.observation.output).toMatchObject({
+        kind: "creative_workflow_failed",
+        workflowName,
+      });
+      expect(result.events.map((event) => event.type)).toContain("workflow_failed");
     }
   });
 
-  test("fallbacks adapt to a non-SceneBook project", async () => {
+  test("workflow failure does not create fallback artifacts or patches", async () => {
     const result = await new WorkflowExecutor({ applyPatch: false, modelGateway: failingGateway() }).execute({
       workflowName: "create_script_package",
       input: { prompt: "Write the script" },
@@ -244,12 +258,25 @@ describe("model-backed runtime-v4 creative workflows", () => {
       context,
     });
 
-    expect(result.observation.message).toContain("Composting for city balconies");
-    expect(result.observation.message).not.toContain("SceneBook launch");
+    expect(result.workflowResult.status).toBe("failed");
+    expect(result.workflowResult.status === "failed" ? result.workflowResult.error.message : "").toMatch(/did not create artifacts or workspace changes/i);
+    expect("artifacts" in result.workflowResult).toBe(false);
+    expect("patch" in result.workflowResult).toBe(false);
   });
 
   test("full production package returns expected sections and ProjectPatch operations", async () => {
-    const result = await new WorkflowExecutor({ applyPatch: false, modelGateway: failingGateway() }).execute({
+    const gateway = modelGateway({
+      ProductionPackageOutput: {
+        plan,
+        scriptPackage,
+        shootPack,
+        assetPromptPack,
+        publishPrep,
+        packageSummary: "Complete balcony composting production package.",
+        nextBestAction: "Shoot the kitchen setup.",
+      },
+    });
+    const result = await new WorkflowExecutor({ applyPatch: false, modelGateway: gateway }).execute({
       workflowName: "create_full_production_package",
       input: { prompt: "Make me the complete video package" },
       projectMind: projectMind(),
@@ -295,7 +322,19 @@ describe("model-backed runtime-v4 creative workflows", () => {
       })),
     };
 
-    const executor = new WorkflowExecutor({ patchExecutor, plannedPatchStore, modelGateway: failingGateway() });
+    const gateway = modelGateway({
+      PlanReelOutput: plan,
+      ProductionPackageOutput: {
+        plan,
+        scriptPackage,
+        shootPack,
+        assetPromptPack,
+        publishPrep,
+        packageSummary: "Complete balcony composting production package.",
+        nextBestAction: "Shoot the kitchen setup.",
+      },
+    });
+    const executor = new WorkflowExecutor({ patchExecutor, plannedPatchStore, modelGateway: gateway });
     const safe = await executor.execute({
       workflowName: "plan_reel",
       input: { prompt: "Plan a reel" },

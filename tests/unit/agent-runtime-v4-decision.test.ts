@@ -58,6 +58,27 @@ function repairableMalformedGateway(rawText: string, repairedResponse: unknown):
   };
 }
 
+function failingStructuredGatewayWithText(text: string): ModelGateway & {
+  generateStructured: ReturnType<typeof vi.fn>;
+  generateText: ReturnType<typeof vi.fn>;
+} {
+  return {
+    provider: "fake",
+    generateStructured: vi.fn(async () => {
+      throw new Error("decision model unavailable");
+    }),
+    generateText: vi.fn(async () => ({
+      text,
+      finishReason: "stop",
+    })),
+    streamText: vi.fn(async () => ({
+      textStream: (async function* stream() {
+        yield "";
+      })(),
+    })),
+  };
+}
+
 function snapshot(overrides: Partial<ProjectSnapshot> = {}): ProjectSnapshot {
   const base: ProjectSnapshot = {
     project: {
@@ -303,6 +324,7 @@ describe("runtime-v4 decision engine", () => {
 
     const prompt = gateway.generateStructured.mock.calls[0][0].prompt as string;
     expect(prompt).toContain("Resolve short follow-ups");
+    expect(prompt).toContain("A final_response can contain complete generated creative output");
     expect(prompt).toContain("all of them");
     expect(prompt).toContain("Goa boys trip reel");
   });
@@ -327,7 +349,55 @@ describe("runtime-v4 decision engine", () => {
     expect(decision.response).not.toMatch(/Plan a reel|Clarify the core point/i);
   });
 
-  test("script-making fallback handles casual lets-make phrasing", async () => {
+  test("casual check-in fallback stays conversational", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "Hey, how ya doin?",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toMatchObject({
+      type: "final_response",
+    });
+    if (decision.type !== "final_response") {
+      throw new Error(`Expected final_response, received ${decision.type}.`);
+    }
+    expect(decision.response).toMatch(/hey|here/i);
+    expect(decision.response).not.toMatch(/trouble generating|canned workflow|clean prompt/i);
+  });
+
+  test("non-command creative fallback asks the text model to generate in chat", async () => {
+    const gateway = failingStructuredGatewayWithText([
+      "Absolutely. For the Goa reel, build the shoot pack around proof you probably already have:",
+      "1. party chaos as the opening texture",
+      "2. prank aftermaths as the comedy spine",
+      "3. messy travel clips as transitions",
+      "4. one quiet beach or room clip as the emotional landing",
+    ].join("\n"));
+
+    const decision = await decideNextStep({
+      message: "can you plan out the shoot pack for my Goa reel with parties chaos pranks and pics?",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toMatchObject({ type: "final_response" });
+    if (decision.type !== "final_response") {
+      throw new Error(`Expected final_response, received ${decision.type}.`);
+    }
+    expect(decision.response).toMatch(/Goa reel|shoot pack|party chaos/i);
+    expect(gateway.generateText).toHaveBeenCalledWith(expect.objectContaining({
+      profile: "final_response",
+    }));
+    expect(decision.response).not.toMatch(/trouble generating|canned workflow|clean prompt/i);
+    expect(decision.response).not.toMatch(/Plan a reel|Clarify the core point|workflow_call/i);
+  });
+
+  test("unusable text fallback remains transparent instead of routing by regex", async () => {
     const gateway = repairableMalformedGateway("not json", "still not json");
 
     const decision = await decideNextStep({
@@ -337,115 +407,12 @@ describe("runtime-v4 decision engine", () => {
       modelGateway: gateway,
     });
 
-    expect(decision).toEqual({
-      type: "workflow_call",
-      workflowName: "create_script_package",
-      input: { prompt: "let's make the script for the reel" },
-      reason: expect.stringMatching(/script/i),
-    });
-  });
-
-  test("fallback uses recent script context for follow-up reel details", async () => {
-    const gateway = repairableMalformedGateway("not json", "still not json");
-
-    const decision = await decideNextStep({
-      message: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes",
-      snapshot: snapshot({
-        conversation: {
-          recentMessages: [
-            { role: "user", content: "let's make the script for the reel" },
-            { role: "user", content: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes" },
-          ],
-        },
-      }),
-      toolSummaries: [],
-      modelGateway: gateway,
-    });
-
-    expect(decision).toEqual({
-      type: "workflow_call",
-      workflowName: "create_script_package",
-      input: { prompt: "it's a reel about my trip to goa, emotional college ending boys trip full chaos vibes" },
-      reason: expect.stringMatching(/script-context/i),
-    });
-  });
-
-  test("fallback resolves draft-all follow-up from ProjectMind conversation context", async () => {
-    const gateway = repairableMalformedGateway("not json", "still not json");
-
-    const decision = await decideNextStep({
-      message: "draft all of them for me",
-      snapshot: snapshot({
-        project: {
-          id: "project-1",
-          title: "Goa Reel",
-          platform: "instagram",
-          format: "reel",
-          status: "idea",
-        },
-        conversationContext: {
-          latestUserIntent: "Goa boys trip reel with emotional college ending, chaos energy, narration, and Avicii Nights style music.",
-          recentUserGoals: ["Plan the script, emotional arc, narration, and background music for the Goa boys trip reel."],
-          openDeliverables: ["script", "emotional arc", "narration", "shot list", "caption"],
-          followUpHints: ["Resolve 'all of them' as all open deliverables for the latest user intent."],
-          recentProjectMessages: [
-            {
-              role: "user",
-              content: "plan out the script for me, emotional arc, goa boys trip, hype, energy, narration with bg music maybe nights by avicii",
-              createdAt: "2026-06-01T00:35:00.000Z",
-            },
-          ],
-        },
-      } as Partial<ProjectSnapshot>),
-      toolSummaries: [],
-      modelGateway: gateway,
-    });
-
-    expect(decision).toEqual({
-      type: "workflow_call",
-      workflowName: "create_full_production_package",
-      input: {
-        prompt: expect.stringContaining("Goa boys trip reel"),
-      },
-      reason: expect.stringMatching(/ProjectMind context/i),
-    });
-    expect(JSON.stringify(decision)).not.toContain("about draft all of them for me");
-  });
-
-  test("fallback asks a clarifying question for draft-all follow-up without ProjectMind context", async () => {
-    const gateway = repairableMalformedGateway("not json", "still not json");
-
-    const decision = await decideNextStep({
-      message: "draft all of them for me",
-      snapshot: snapshot(),
-      toolSummaries: [],
-      modelGateway: gateway,
-    });
-
-    expect(decision).toEqual({
-      type: "ask_question",
-      questions: [expect.stringMatching(/what should I draft/i)],
-      reason: expect.stringMatching(/short follow-up/i),
-      expectedFieldTargets: ["creativeContext"],
-    });
-  });
-
-  test("concrete reel idea fallback runs the reel planning workflow", async () => {
-    const gateway = repairableMalformedGateway("not json", "still not json");
-
-    const decision = await decideNextStep({
-      message: "make a reel about my Goa trip",
-      snapshot: snapshot(),
-      toolSummaries: [],
-      modelGateway: gateway,
-    });
-
-    expect(decision).toEqual({
-      type: "workflow_call",
-      workflowName: "plan_reel",
-      input: { prompt: "make a reel about my Goa trip" },
-      reason: expect.stringMatching(/concrete reel idea/i),
-    });
+    expect(decision).toMatchObject({ type: "final_response" });
+    if (decision.type !== "final_response") {
+      throw new Error(`Expected final_response, received ${decision.type}.`);
+    }
+    expect(decision.response).toMatch(/trouble generating a reliable/i);
+    expect(decision.response).not.toMatch(/Plan a reel|Clarify the core point|workflow_call/i);
   });
 
   test("slash-command fallback maps script requests to the v4 script workflow", async () => {
@@ -466,6 +433,27 @@ describe("runtime-v4 decision engine", () => {
       input: { prompt: "generate a script about a reel talking about AI taking over humans" },
       reason: expect.stringMatching(/script/i),
     });
+  });
+
+  test("/plan fallback strips the hint and stays transparent when decisioning fails", async () => {
+    const gateway = repairableMalformedGateway("not json", "still not json");
+
+    const decision = await decideNextStep({
+      message: "/plan make a Goa shoot pack with parties chaos pranks and pics",
+      effectivePrompt: "make a Goa shoot pack with parties chaos pranks and pics",
+      intentHint: "plan",
+      snapshot: snapshot(),
+      toolSummaries: [],
+      modelGateway: gateway,
+    });
+
+    expect(decision).toMatchObject({ type: "final_response" });
+    if (decision.type !== "final_response") {
+      throw new Error(`Expected final_response, received ${decision.type}.`);
+    }
+    expect(decision.response).toContain("make a Goa shoot pack with parties chaos pranks and pics");
+    expect(decision.response).not.toContain("/plan");
+    expect(decision.response).not.toMatch(/Plan a reel about|Clarify the core point|Map the visuals/);
   });
 });
 

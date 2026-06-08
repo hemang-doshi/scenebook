@@ -4,8 +4,7 @@ import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import type { CreativeWorkflow } from "@/lib/agent/runtime-v4/workflows/types";
 import { toJsonObject } from "@/lib/agent/runtime-v4/workflows/types";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
-import { fallbackPublishPrep } from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import { publishPrepOutputSchema, type PublishPrepOutput } from "@/lib/agent/runtime-v4/workflows/workflow-schemas";
 
 const inputSchema = z.object({
@@ -50,7 +49,7 @@ export const publishPrepWorkflow: CreativeWorkflow<PublishPrepInput, PublishPrep
   inputSchema,
   outputSchema: publishPrepOutputSchema,
   async handler(input, context) {
-    const { output } = await generateWorkflowStructured({
+    const generated = await generateWorkflowStructured({
       workflowName: "prepare_publish_package",
       schema: publishPrepOutputSchema,
       schemaName: "PublishPrepOutput",
@@ -62,8 +61,11 @@ export const publishPrepWorkflow: CreativeWorkflow<PublishPrepInput, PublishPrep
         "Prepare a manual publish package. Include readiness warnings for missing script, shoot pack, caption, or assets.",
       ].join("\n\n"),
       context,
-      fallback: () => fallbackPublishPrep(input, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("prepare_publish_package", generated.metadata);
+    }
+    const output = generated.output;
 
     return {
       status: "completed",

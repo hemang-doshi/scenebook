@@ -373,6 +373,18 @@ export async function POST(
     const { id: projectId } = await params;
     const body = requestSchema.parse(await request.json());
     const parsed = parseSlashCommand(body.message);
+    const effectivePrompt = parsed.isCommand || parsed.isIntentHint
+      ? parsed.input
+      : body.message;
+
+    if (body.message.trim().startsWith("/") && !parsed.isCommand && !parsed.isIntentHint) {
+      return NextResponse.json(
+        {
+          error: `Unsupported slash command. Try one of: ${listSupportedAgentCommands().join(", ")}.`,
+        },
+        { status: 400 },
+      );
+    }
 
     if (isRuntimeV3Enabled()) {
       const runtimeVersion = agentHarnessRuntimeVersion();
@@ -393,20 +405,13 @@ export async function POST(
         account,
         permissions: account?.permissions,
         message: body.message,
+        effectivePrompt,
         commandHint: parsed.command,
         commandInput: parsed.input || null,
+        intentHint: parsed.intentHint,
         selectedModels: body.models,
         attachments: body.attachments,
       });
-    }
-
-    if (body.message.trim().startsWith("/") && !parsed.isCommand) {
-      return NextResponse.json(
-        {
-          error: `Unsupported slash command. Try one of: ${listSupportedAgentCommands().join(", ")}.`,
-        },
-        { status: 400 },
-      );
     }
 
     const project = await getProjectWorkspace(projectId);

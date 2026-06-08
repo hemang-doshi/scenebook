@@ -272,11 +272,73 @@ function projectMind(title = "Composting for city balconies"): ProjectMindSnapsh
   };
 }
 
-function failingGateway(): ModelGateway {
+function productionGateway(): ModelGateway {
+  const output = {
+    plan: {
+      angle: "Balcony composting without smell or overwhelm.",
+      audience: "apartment gardeners",
+      emotionalPromise: "Feel ready to start with one countertop habit.",
+      contentStructure: ["Smell myth", "Tiny setup", "First week routine"],
+      visualStyle: "bright kitchen counter demos",
+      productionChecklist: ["Film the bin", "Show scraps", "Label the first week"],
+      nextBestAction: "Shoot the kitchen setup.",
+      assumptions: ["Viewer has limited space."],
+      openQuestions: [],
+    },
+    scriptPackage: {
+      hookOptions: ["Your balcony can handle composting."],
+      selectedHook: "Your balcony can handle composting.",
+      script: "Start small: jar, browns, scraps, and a weekly reset.",
+      voiceover: "Warm practical narration.",
+      onScreenText: "Small-space composting",
+      cta: "Save this setup.",
+      captionSeed: "Balcony composting can start tiny.",
+      structure: ["Hook", "Demo", "Routine", "CTA"],
+      pacingNotes: "Keep each demo beat under five seconds.",
+      estimatedDurationSeconds: 32,
+    },
+    shootPack: {
+      scenes: ["Countertop setup", "Balcony placement"],
+      aRoll: ["Explain the no-smell rule"],
+      bRoll: ["Scraps going into jar"],
+      screenCaptures: [],
+      props: ["Jar", "paper", "scraps"],
+      missingAssets: ["Final thumbnail frame"],
+      visualNotes: "Bright kitchen counter demos",
+      locationNotes: "Kitchen and balcony",
+      editingNotes: "Use quick labels.",
+      feasibilityNotes: "Shootable in one afternoon.",
+    },
+    assetPromptPack: {
+      cinematicJsonPrompts: [{ scene: "kitchen compost setup", style: "natural light" }],
+      imagePrompts: ["Small balcony compost setup in natural light."],
+      brollPrompts: ["Close-up of scraps and paper layers."],
+      thumbnailPrompt: "Tiny balcony compost setup, readable label.",
+      voiceoverDirection: "Friendly neighbor tone.",
+      musicDirection: "Light acoustic bed.",
+      negativePrompts: ["messy landfill", "stock photo"],
+      modelNotes: "Prompt artifacts only.",
+    },
+    publishPrep: {
+      caption: "Small-space composting can start with one jar and one habit.",
+      hashtags: ["#balconygarden", "#composting"],
+      postingChecklist: ["Review captions", "Check first frame"],
+      thumbnailText: "Compost in a tiny space",
+      description: "A beginner reel for apartment composting.",
+      firstComment: "What would stop you from trying this?",
+      readinessWarnings: ["No external publishing was performed."],
+      platformNotes: "Prepared for Instagram manual posting.",
+    },
+    packageSummary: "Complete balcony composting production package.",
+    nextBestAction: "Shoot the kitchen setup.",
+  };
+
   return {
-    generateStructured: vi.fn(async () => {
-      throw new Error("model unavailable");
-    }),
+    generateStructured: vi.fn(async (input) => ({
+      object: input.schema.parse(output),
+      rawText: JSON.stringify(output),
+      finishReason: "stop",
+    })),
     generateText: vi.fn(),
     streamText: vi.fn(),
   } as unknown as ModelGateway;
@@ -305,7 +367,7 @@ describe("runtime-v4 planned workflow patches", () => {
     const executor = new WorkflowExecutor({
       patchExecutor,
       plannedPatchStore: new SupabasePatchAuditStore(),
-      modelGateway: failingGateway(),
+      modelGateway: productionGateway(),
     });
 
     const result = await executor.execute({
@@ -365,7 +427,7 @@ describe("runtime-v4 planned workflow patches", () => {
     };
     const executor = new WorkflowExecutor({
       patchExecutor,
-      modelGateway: failingGateway(),
+      modelGateway: productionGateway(),
     });
 
     const result = await executor.execute({
@@ -408,7 +470,7 @@ describe("runtime-v4 planned workflow patches", () => {
     const executor = new WorkflowExecutor({
       patchExecutor,
       plannedPatchStore: new SupabasePatchAuditStore(),
-      modelGateway: failingGateway(),
+      modelGateway: productionGateway(),
     });
 
     const result = await executor.execute({

@@ -76,6 +76,18 @@ export function createCheckGoalNode(options: CheckGoalNodeOptions = {}) {
       return {};
     }
 
+    if (latest.output?.kind === "creative_workflow_failed") {
+      return {
+        finalResponse: latest.message,
+        stopReason: "final_response",
+        currentGoal: {
+          originalRequest: state.goal,
+          status: "blocked",
+          reason: latest.message,
+        },
+      };
+    }
+
     const progress = await checkGoalProgress({
       message: state.goal,
       snapshot: state.projectMind,

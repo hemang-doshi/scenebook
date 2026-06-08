@@ -2,14 +2,7 @@ import { z } from "zod";
 
 import type { ProjectPatch } from "@/lib/agent/runtime-v4/patch/project-patch";
 import { buildWorkflowContextBlock } from "@/lib/agent/runtime-v4/workflows/prompt-builders";
-import {
-  fallbackAssetPromptPack,
-  fallbackPlanReel,
-  fallbackPublishPrep,
-  fallbackScriptPackage,
-  fallbackShootPack,
-} from "@/lib/agent/runtime-v4/workflows/workflow-fallbacks";
-import { generateWorkflowStructured } from "@/lib/agent/runtime-v4/workflows/workflow-model";
+import { generateWorkflowStructured, workflowModelFailureResult } from "@/lib/agent/runtime-v4/workflows/workflow-model";
 import {
   productionPackageOutputSchema,
   type ProductionPackageOutput,
@@ -26,29 +19,6 @@ const inputSchema = z.object({
 });
 
 type ProductionPackageInput = z.infer<typeof inputSchema>;
-
-function fallbackPackage(input: ProductionPackageInput, context: Parameters<CreativeWorkflow<ProductionPackageInput>["handler"]>[1]): ProductionPackageOutput {
-  const plan = fallbackPlanReel(input, context);
-  const scriptPackage = fallbackScriptPackage({
-    prompt: input.prompt,
-    selectedAngle: plan.angle,
-    tone: input.tone,
-    targetDurationSeconds: input.targetDurationSeconds,
-  }, context);
-  const shootPack = fallbackShootPack({ prompt: input.prompt, script: scriptPackage.script, visualStyle: plan.visualStyle }, context);
-  const assetPromptPack = fallbackAssetPromptPack({ prompt: input.prompt, visualStyle: plan.visualStyle }, context);
-  const publishPrep = fallbackPublishPrep({ prompt: input.prompt, platform: input.platform as "instagram" | "youtube_shorts" | "tiktok" | undefined }, context);
-
-  return {
-    plan,
-    scriptPackage,
-    shootPack,
-    assetPromptPack,
-    publishPrep,
-    packageSummary: `Complete production package for ${context.projectMind.project.title}.`,
-    nextBestAction: "Review the package, then collect missing shoot assets before manual publishing.",
-  };
-}
 
 function patchFor(input: ProductionPackageInput, output: ProductionPackageOutput, context: Parameters<CreativeWorkflow<ProductionPackageInput>["handler"]>[1]): ProjectPatch {
   return {
@@ -174,7 +144,7 @@ export const productionPackageWorkflow: CreativeWorkflow<ProductionPackageInput,
   inputSchema,
   outputSchema: productionPackageOutputSchema,
   async handler(input, context) {
-    const { output } = await generateWorkflowStructured({
+    const generated = await generateWorkflowStructured({
       workflowName: "create_full_production_package",
       schema: productionPackageOutputSchema,
       schemaName: "ProductionPackageOutput",
@@ -185,8 +155,11 @@ export const productionPackageWorkflow: CreativeWorkflow<ProductionPackageInput,
         "Create the full bounded package: plan, script package, shoot pack, asset prompt pack, and manual publish prep.",
       ].join("\n\n"),
       context,
-      fallback: () => fallbackPackage(input, context),
     });
+    if (generated.status === "failed") {
+      return workflowModelFailureResult("create_full_production_package", generated.metadata);
+    }
+    const output = generated.output;
 
     return {
       status: "completed",

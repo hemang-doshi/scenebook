@@ -1,11 +1,13 @@
 import type { ProjectSnapshot, ToolObservation } from "@/lib/agent/runtime-v3/types";
-import type { AgentCommand } from "@/lib/agent/types";
+import type { AgentCommand, AgentIntentHint } from "@/lib/agent/types";
 import type { AgentDecision } from "@/lib/agent/runtime-v4/decision/schemas";
 
 export type DecisionEngineInput = {
   message: string;
+  effectivePrompt?: string | null;
   commandHint?: AgentCommand | null;
   commandInput?: string | null;
+  intentHint?: AgentIntentHint | null;
   snapshot: ProjectSnapshot;
   toolSummaries: unknown;
   previousObservations?: ToolObservation[];
@@ -26,6 +28,10 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
   const commandHint = input.commandHint
     ? `Slash command hint: /${input.commandHint}${input.commandInput?.trim() ? `\nCommand input:\n${input.commandInput.trim()}` : ""}`
     : "Slash command hint: none";
+  const intentHint = input.intentHint
+    ? `Intent hint: /${input.intentHint}. Treat this as guidance, not a command. Strip the hint from the effective user prompt before deciding.`
+    : "Intent hint: none";
+  const effectivePrompt = commandPrompt(input);
   return {
     model: input.model,
     system: "You are SceneBook's runtime-v4 model-first decision engine. Return structured output only.",
@@ -33,6 +39,10 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
       "Return exactly one JSON object for the next SceneBook agent action.",
       "Choose the decision with the best next step for the user's goal.",
       "Allowed decision types: ask_question, propose_plan, tool_call, project_patch, workflow_call, final_response, stop_with_error.",
+      "SceneBook's primary job is to be a conversational creative partner. Treat normal conversation, creative brainstorming, critique, advice, and requested drafts as real work.",
+      "Use final_response whenever you can satisfy the user by talking, reasoning, drafting, listing ideas, writing hooks, captions, scripts, shot ideas, shoot packs, or recommendations directly in chat.",
+      "A final_response can contain complete generated creative output. It is not a failure path.",
+      "Do not choose a workflow or tool merely because one exists. Use tools/workflows only when they materially help or when the user asks to save, stage, update, generate external media, or create durable workspace artifacts.",
       "Prefer model reasoning over hard-coded intent rules.",
       "Use ask_question when the request is too vague to produce a useful result.",
       "Use workflow_call for v4 creative workflows: plan_reel, create_script_package, create_shoot_pack, create_asset_prompt_pack, review_content, prepare_publish_package, and create_full_production_package.",
@@ -40,14 +50,15 @@ export function createDecisionPrompt(input: DecisionEngineInput): DecisionPrompt
       "Prefer narrower workflows for specific requests: plan_reel for vague early creative requests, create_script_package for writing scripts, create_shoot_pack for shot lists, create_asset_prompt_pack for asset prompts, review_content for critique, and prepare_publish_package for captions/hashtags.",
       "Use tool_call for one focused runtime tool when a workflow is unnecessary.",
       "Use project_patch for grouped durable workspace updates that should apply as one reviewed ProjectPatch.",
-      "Use final_response only when no workspace action is needed or when the goal is already satisfied.",
       "Do not finalize only because a previous tool observation exists. Consider whether the original user goal is complete.",
       "Resolve short follow-ups, pronouns, and phrases like 'all of them', 'do it', 'make that', or 'draft everything' against ProjectMind conversationContext before asking clarification or proposing a fresh plan.",
       commandHint,
+      intentHint,
       `Project snapshot:\n${compactJson(input.snapshot)}`,
       `Available tools:\n${compactJson(input.toolSummaries)}`,
       `Previous observations:\n${compactJson(input.previousObservations ?? [])}`,
-      `User message:\n${input.message.trim()}`,
+      `Raw user message:\n${input.message.trim()}`,
+      `Effective user prompt:\n${effectivePrompt}`,
     ].join("\n\n"),
   };
 }
@@ -68,119 +79,13 @@ function summarizedToolNames(toolSummaries: unknown) {
 }
 
 function commandPrompt(input: DecisionEngineInput) {
-  return input.commandInput?.trim() || input.message.trim();
+  return input.effectivePrompt?.trim() || input.commandInput?.trim() || input.message.trim();
 }
 
 function hasConversationalGreeting(message: string) {
-  return /^(hey|hi|hello|yo|sup|what'?s up|wassup|namaste)\b[!.?\s]*$/i.test(message.trim())
-    || /^(hey|hi|hello|yo)\b.*\bwhat'?s up\b[!.?\s]*$/i.test(message.trim());
-}
-
-function recentConversationWithoutCurrent(input: DecisionEngineInput) {
-  const current = input.message.trim();
-  return input.snapshot.conversation.recentMessages
-    .map((message) => message.content.trim())
-    .filter((content) => content && content !== current)
-    .slice(-6);
-}
-
-function recentConversationHasScriptIntent(input: DecisionEngineInput) {
-  return recentConversationWithoutCurrent(input).some((content) => (
-    /\b(script|voiceover|hook|caption|write|draft)\b/i.test(content)
-  ));
-}
-
-function isDirectScriptRequest(message: string) {
-  return /^\s*(write|make|create|draft|rewrite)\b.*\bscript\b/i.test(message)
-    || /^\s*let'?s\s+(make|write|create|draft)\b.*\bscript\b/i.test(message)
-    || /\b(make|write|create|draft)\s+(the\s+)?script\b/i.test(message);
-}
-
-function isConcreteReelIdea(message: string) {
-  return /\b(reel|short|video)\b.*\b(about|on|for)\b/i.test(message)
-    || /\b(it'?s|its|this is)\s+(a\s+)?(reel|short|video)\b/i.test(message);
-}
-
-function isDraftAllFollowUp(message: string) {
-  return /\b(draft|write|make|create|generate|do|finish)\b.*\b(all of them|all of it|everything|all)\b/i.test(message)
-    || /\b(all of them|all of it|everything)\b.*\b(draft|write|make|create|generate|do|finish)\b/i.test(message);
-}
-
-function isLowInformationFollowUp(message: string) {
-  return isDraftAllFollowUp(message)
-    || /^(do it|make that|draft that|write that|finish that|generate that|make this|draft this|write this)\s*[.!?]*$/i.test(message.trim());
-}
-
-function isShotListFollowUp(message: string) {
-  return /\b(make|draft|write|create|do)\b.*\b(shot list|shots?|storyboard|b-roll|broll)\b.*\b(too|also)?\b/i.test(message)
-    || /\b(shot list|shots?|storyboard|b-roll|broll)\b.*\b(too|also)\b/i.test(message);
-}
-
-function contextMessages(input: DecisionEngineInput) {
-  const current = input.message.trim();
-  const projectMessages = input.snapshot.conversationContext?.recentProjectMessages ?? [];
-  const activeMessages = input.snapshot.conversation.recentMessages.map((message) => ({
-    role: message.role,
-    content: message.content,
-    createdAt: message.createdAt,
-  }));
-
-  return [...projectMessages, ...activeMessages]
-    .filter((message) => message.content.trim() && message.content.trim() !== current)
-    .slice(-12);
-}
-
-function hasUsableConversationContext(input: DecisionEngineInput) {
-  const context = input.snapshot.conversationContext;
-  return Boolean(
-    context?.latestUserIntent?.trim()
-    || context?.recentUserGoals?.some((goal) => goal.trim())
-    || context?.openDeliverables?.length
-    || contextMessages(input).some((message) => message.role === "user"),
-  );
-}
-
-function projectMindPrompt(input: DecisionEngineInput) {
-  const context = input.snapshot.conversationContext;
-  const recentUserMessage = [...contextMessages(input)]
-    .reverse()
-    .find((message) => message.role === "user")?.content;
-  const intent = context?.latestUserIntent?.trim()
-    || context?.recentUserGoals?.find((goal) => goal.trim())
-    || recentUserMessage
-    || input.snapshot.project.title;
-  const deliverables = context?.openDeliverables?.length
-    ? ` Requested deliverables: ${context.openDeliverables.join(", ")}.`
-    : "";
-
-  return `${input.snapshot.project.title}: ${intent}.${deliverables}`.trim();
-}
-
-function scriptFallbackPrompt(input: DecisionEngineInput) {
-  const message = commandPrompt(input);
-  if (isConcreteReelIdea(message)) {
-    return message;
-  }
-  return hasUsableConversationContext(input) ? projectMindPrompt(input) : message;
-}
-
-function buildFallbackPlan(input: DecisionEngineInput): Extract<AgentDecision, { type: "propose_plan" }> {
-  const prompt = commandPrompt(input);
-  const topic = input.snapshot.project.title || "this project";
-  const format = input.snapshot.project.format || "short-form video";
-
-  return {
-    type: "propose_plan",
-    plan: {
-      title: `Plan a ${format} about ${prompt || topic}`,
-      steps: [
-        { label: `Clarify the core point of view for the ${format}.`, sideEffect: "none", requiresApproval: false },
-        { label: "Draft the hook, structure, and payoff before writing workspace changes.", sideEffect: "none", requiresApproval: false },
-        { label: "Map the visuals, proof points, and CTA needed to make the idea usable.", sideEffect: "none", requiresApproval: false },
-      ],
-    },
-    reason: "Model decisioning failed, so the runtime fell back to a safe no-write plan.",
-  };
+  const trimmed = message.trim();
+  return /^(hey|hi|hello|yo|sup|what'?s up|wassup|namaste)\b[!.?\s]*$/i.test(trimmed)
+    || /^(hey|hi|hello|yo)\b.*\b(what'?s up|how'?s it going|how (are|ya|you|u)( doing| doin| going)?|how ya doin|how you doing|what'?s good)\b[!.?\s]*$/i.test(trimmed);
 }
 
 function fallbackForCommand(input: DecisionEngineInput): AgentDecision | null {
@@ -286,15 +191,28 @@ function fallbackForGeneralChat(input: DecisionEngineInput): AgentDecision | nul
   return null;
 }
 
+function transparentModelDecisionFailure(input: DecisionEngineInput): AgentDecision {
+  const prompt = commandPrompt(input);
+  const planningContext = input.intentHint === "plan" ? " planning" : "";
+
+  return {
+    type: "final_response",
+    response: [
+      `I'm having trouble generating a reliable${planningContext} answer right now, so I won't fake it with canned output.`,
+      prompt ? `The clean prompt I would use next is: "${prompt}".` : "Send the brief again and I can retry from the clean prompt.",
+    ].join(" "),
+    confidence: 0.3,
+  };
+}
+
 export function createGracefulDecisionFallback(input: DecisionEngineInput): AgentDecision {
-  return fallbackForCommand(input)
+  return createDeterministicSafetyDecision(input)
+    ?? fallbackForCommand(input)
     ?? fallbackForGeneralChat(input)
-    ?? createDeterministicSafetyDecision(input)
-    ?? buildFallbackPlan(input);
+    ?? transparentModelDecisionFailure(input);
 }
 
 export function createDeterministicSafetyDecision(input: DecisionEngineInput): AgentDecision | null {
-  const message = commandPrompt(input);
   const latestObservation = input.previousObservations?.at(-1);
 
   if (latestObservation?.status === "awaiting_approval") {
@@ -319,75 +237,12 @@ export function createDeterministicSafetyDecision(input: DecisionEngineInput): A
     };
   }
 
-  if (/whole|entire|everything|complete|full package|production package/i.test(message)) {
-    return {
-      type: "workflow_call",
-      workflowName: "create_full_production_package",
-      input: { prompt: hasUsableConversationContext(input) ? projectMindPrompt(input) : message },
-      reason: "Safety fallback detected a request for a complete production package.",
-    };
-  }
-
-  if (isDraftAllFollowUp(message)) {
-    if (!hasUsableConversationContext(input)) {
-      return {
-        type: "ask_question",
-        questions: ["What should I draft, and what prior idea should I use as the source?"],
-        reason: "The user sent a short follow-up, but ProjectMind does not have enough prior creative context to resolve it safely.",
-        expectedFieldTargets: ["creativeContext"],
-      };
-    }
-
-    return {
-      type: "workflow_call",
-      workflowName: "create_full_production_package",
-      input: { prompt: projectMindPrompt(input) },
-      reason: "Safety fallback resolved a draft-all follow-up from ProjectMind context.",
-    };
-  }
-
-  if (isShotListFollowUp(message) && hasUsableConversationContext(input)) {
-    return {
-      type: "workflow_call",
-      workflowName: "create_shoot_pack",
-      input: { prompt: projectMindPrompt(input) },
-      reason: "Safety fallback resolved a shot-list follow-up from ProjectMind context.",
-    };
-  }
-
   if (latestObservation?.status === "blocked" || latestObservation?.status === "failed") {
     return {
       type: "ask_question",
       questions: ["Do you want me to try a different approach?"],
       reason: latestObservation.message,
       expectedFieldTargets: ["nextAction"],
-    };
-  }
-
-  if (isDirectScriptRequest(message) || (recentConversationHasScriptIntent(input) && isConcreteReelIdea(message))) {
-    return {
-      type: "workflow_call",
-      workflowName: "create_script_package",
-      input: { prompt: scriptFallbackPrompt(input) },
-      reason: "Safety fallback detected a script request or script-context continuation after model decisioning failed.",
-    };
-  }
-
-  if (isLowInformationFollowUp(message) && !hasUsableConversationContext(input)) {
-    return {
-      type: "ask_question",
-      questions: ["What should I draft, and what prior idea should I use as the source?"],
-      reason: "The user sent a short follow-up, but ProjectMind does not have enough prior creative context to resolve it safely.",
-      expectedFieldTargets: ["creativeContext"],
-    };
-  }
-
-  if (isConcreteReelIdea(message)) {
-    return {
-      type: "workflow_call",
-      workflowName: "plan_reel",
-      input: { prompt: message },
-      reason: "Safety fallback detected a concrete reel idea after model decisioning failed.",
     };
   }
 
